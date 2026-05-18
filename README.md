@@ -7,13 +7,12 @@
 
 ## Tech Stack
 
-| Component | Technology |
-|---|---|
-| Framework | [Svelte](https://svelte.dev/) |
+| Component | Technology                                               |
+|---|----------------------------------------------------------|
+| Framework | [SvelteKit](https://svelte.dev/)                         |
 | UI Library | [Sveltestrap](https://sveltestrap.js.org/) (Bootstrap 5) |
-| Language | TypeScript |
-| HTTP Client | Fetch API |
-| Daten-Update | Polling (1-Sekunden-Intervall via `setInterval`) |
+| Language | TypeScript                                               |
+| HTTP Client | Fetch API                                                |
 
 ---
 
