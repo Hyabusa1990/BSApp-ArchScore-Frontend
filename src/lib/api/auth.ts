@@ -5,7 +5,7 @@ export interface TokenPair {
 	refresh: string;
 }
 
-export type Role = 'archer' | 'judge' | 'admin';
+export type Role = 'user' | 'admin';
 
 export interface User {
 	id: string;

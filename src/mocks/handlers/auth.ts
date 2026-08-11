@@ -72,7 +72,7 @@ export const authHandlers = [
 			id,
 			username: body.email!,
 			email: body.email!,
-			role: 'archer'
+			role: 'user'
 		};
 		db.usersByUsername.set(newUser.username, newUser);
 		db.usersById.set(id, newUser);
