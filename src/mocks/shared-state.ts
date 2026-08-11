@@ -1,16 +1,21 @@
 import type { VorlaeufigePasse } from '$lib/api/binocular';
+import { loadState, saveState } from './persist';
 
 /**
  * Geteilter Pfeil-/Satz-Zustand pro Scheibe — von Binocular (#4/#5) UND Display (#1–#3)
  * gelesen/geschrieben, siehe Issue #10. Das Admin-Verwaltungs-Modell (#6–#9) kennt nur
  * "welches Match ist aktiv" (Match/Begegnung), nicht den laufenden Pfeilstand — der lebt
  * ausschließlich hier.
+ *
+ * Über `localStorage` persistiert (siehe persist.ts): Spotter-Tablet und Display laufen in
+ * der Realität auf verschiedenen Geräten, im Dev-Setup simuliert durch verschiedene
+ * Browser-Tabs — ohne Persistenz sähe jeder Tab nur seinen eigenen, leeren Zustand.
  */
 
 export interface ScheibenScoringState {
 	/** Admin-Match-ID (aus veranstaltungen.ts) — zur Rundenwechsel-Erkennung. */
 	matchKey: string;
-	/** Synthetische, pro Scheibe eindeutige Zahl — ersetzt das extern_match_id aus dem
+	/** Eindeutige Kennung pro Scheibe/Match — ersetzt das extern_match_id aus dem
 	 * Referenzprojekt (das Admin-Modell hier hat keine externe Match-ID), dient nur der
 	 * frontendseitigen Rundenwechsel-Erkennung (siehe binocular/+page.svelte). */
 	externMatchId: number;
@@ -19,29 +24,49 @@ export interface ScheibenScoringState {
 	schuetze_bestaetigte_saetze: number[];
 }
 
-const scoringByScheibe = new Map<number, ScheibenScoringState>();
-let nextExternMatchId = 1;
+const STORAGE_KEY = 'scoring';
+
+function load(): [number, ScheibenScoringState][] {
+	return loadState(STORAGE_KEY, () => []);
+}
+
+function persist(entries: [number, ScheibenScoringState][]): void {
+	saveState(STORAGE_KEY, entries);
+}
 
 /** Holt den Scoring-Zustand einer Scheibe, erzeugt ihn bei Rundenwechsel (neues Match auf
  * dieser Scheibe, erkannt am geänderten matchKey) automatisch frisch. */
 export function getScoringState(scheibennummer: number, matchKey: string): ScheibenScoringState {
-	const existing = scoringByScheibe.get(scheibennummer);
+	const entries = load();
+	const existing = entries.find(([nummer]) => nummer === scheibennummer)?.[1];
 	if (existing && existing.matchKey === matchKey) return existing;
+
 	const fresh: ScheibenScoringState = {
 		matchKey,
-		externMatchId: nextExternMatchId++,
+		externMatchId: Date.now(),
 		aktueller_satz: 1,
 		vorlaeufige_passen: [],
 		schuetze_bestaetigte_saetze: []
 	};
-	scoringByScheibe.set(scheibennummer, fresh);
+	const next = entries.filter(([nummer]) => nummer !== scheibennummer);
+	next.push([scheibennummer, fresh]);
+	persist(next);
 	return fresh;
 }
 
 /** Wie getScoringState, aber erzeugt nichts neu — für lesende Konsumenten (Display), die
  * keinen Zustand für eine Scheibe anlegen sollen, die der Spotter noch nie geöffnet hat. */
 export function peekScoringState(scheibennummer: number): ScheibenScoringState | undefined {
-	return scoringByScheibe.get(scheibennummer);
+	return load().find(([nummer]) => nummer === scheibennummer)?.[1];
+}
+
+/** Schreibt einen (vom Aufrufer mutierten) Scoring-Zustand zurück — Mutationsfunktionen in
+ * binoculars.ts holen sich den Zustand über getScoringState, ändern ihn und rufen das hier
+ * auf, damit die Änderung tab-übergreifend sichtbar wird. */
+export function saveScoringState(scheibennummer: number, state: ScheibenScoringState): void {
+	const entries = load().filter(([nummer]) => nummer !== scheibennummer);
+	entries.push([scheibennummer, state]);
+	persist(entries);
 }
 
 function ringSumme(passen: VorlaeufigePasse[], lfdNr: number): number {

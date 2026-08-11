@@ -3,146 +3,190 @@ import type { Veranstaltung } from '$lib/api/veranstaltung';
 import type { Match, Begegnung } from '$lib/api/matchkontrolle';
 import type { Bildschirm } from '$lib/api/bildschirme';
 import { users } from './fixtures';
+import { loadState, saveState } from './persist';
 
 /**
- * In-memory Fake-Backend-Zustand für die Verwaltungsoberfläche — ein gemeinsamer Store für
+ * Fake-Backend-Zustand für die Verwaltungsoberfläche — ein gemeinsamer Store für
  * Veranstaltung/Match/Bildschirm (referenzieren sich gegenseitig über veranstaltung_id).
  * Weiterhin eigenständig ggü. db.ts (auth-spezifisch), aber jetzt die Quelle, aus der
  * displays.ts/binoculars.ts ihren Zustand lesen (welches Match ist aktiv, welcher
  * Bildschirm/Tablet-Token gehört wozu) — siehe Issue #10.
+ *
+ * Über `localStorage` persistiert (siehe persist.ts): Admin-Verwaltung, Display und
+ * Spotter-Tablet laufen in der Realität auf verschiedenen Geräten, im Dev-Setup simuliert
+ * durch verschiedene Browser-Tabs — reine Modul-Variablen wären dafür NICHT konsistent,
+ * jeder Tab hat seinen eigenen JS-Kontext. Jede Funktion liest den Zustand deshalb frisch
+ * und schreibt ihn nach jeder Änderung zurück, statt ihn einmalig beim Modul-Load zu laden.
  */
 
 const OWNER_USER = users.member.id;
 const OWNER_ADMIN = users.admin.id;
 
-export const veranstaltungen: Veranstaltung[] = [
-	{
-		id: 'v-1',
-		owner_id: OWNER_ADMIN,
-		name: '1. WKT Bundesliga',
-		datenquelle: 'tabelle',
-		tabelle: [
-			{ platz: 1, mannschaft_name: 'BSC Abendau', satzpunkte: 15, matchpunkte: 14 },
-			{ platz: 2, mannschaft_name: 'SV Scharfhaus', satzpunkte: 7, matchpunkte: 11 },
-			{ platz: 3, mannschaft_name: 'SGes Schützenschaft', satzpunkte: -5, matchpunkte: 11 },
-			{ platz: 4, mannschaft_name: 'BS Hunshausen', satzpunkte: 12, matchpunkte: 6 },
-			{ platz: 5, mannschaft_name: 'SV Vogelwiese', satzpunkte: 8, matchpunkte: 8 },
-			{ platz: 6, mannschaft_name: 'BS Weiß-Blau München', satzpunkte: -10, matchpunkte: 2 },
-			{ platz: 7, mannschaft_name: 'SGi Wuppenhausen', satzpunkte: -22, matchpunkte: 2 },
-			{ platz: 8, mannschaft_name: 'BSC Rot-Rot Beerendorf', satzpunkte: -15, matchpunkte: 0 }
-		]
-	},
-	{
-		id: 'v-2',
-		owner_id: OWNER_USER,
-		name: 'Kreisliga Ost',
-		datenquelle: 'liga',
-		liga: {
-			liga_app: 'BSApp Liga',
-			url: 'https://liga.bsapp.de',
-			login_pin: 'A689HL5',
-			digitaler_schusszettel: true
-		}
-	}
-];
+interface TabletPairingRecord {
+	token: string;
+	veranstaltungId: string;
+	scheibennummer: number;
+}
 
-export const matches: Match[] = [
-	{
-		id: 'm-1',
-		veranstaltung_id: 'v-1',
-		nummer: 1,
-		aktiv: true,
-		begegnungen: [
-			{ scheibe_a: 1, scheibe_b: 2, mannschaft_a: 'BSC Abendau', mannschaft_b: 'SV Scharfhaus' },
+interface State {
+	veranstaltungen: Veranstaltung[];
+	matches: Match[];
+	bildschirme: Bildschirm[];
+	tabletPairings: TabletPairingRecord[];
+	nextId: number;
+}
+
+function seedState(): State {
+	return {
+		veranstaltungen: [
 			{
-				scheibe_a: 3,
-				scheibe_b: 4,
-				mannschaft_a: 'SGes Schützenschaft',
-				mannschaft_b: 'BS Hunshausen'
+				id: 'v-1',
+				owner_id: OWNER_ADMIN,
+				name: '1. WKT Bundesliga',
+				datenquelle: 'tabelle',
+				tabelle: [
+					{ platz: 1, mannschaft_name: 'BSC Abendau', satzpunkte: 15, matchpunkte: 14 },
+					{ platz: 2, mannschaft_name: 'SV Scharfhaus', satzpunkte: 7, matchpunkte: 11 },
+					{ platz: 3, mannschaft_name: 'SGes Schützenschaft', satzpunkte: -5, matchpunkte: 11 },
+					{ platz: 4, mannschaft_name: 'BS Hunshausen', satzpunkte: 12, matchpunkte: 6 },
+					{ platz: 5, mannschaft_name: 'SV Vogelwiese', satzpunkte: 8, matchpunkte: 8 },
+					{ platz: 6, mannschaft_name: 'BS Weiß-Blau München', satzpunkte: -10, matchpunkte: 2 },
+					{ platz: 7, mannschaft_name: 'SGi Wuppenhausen', satzpunkte: -22, matchpunkte: 2 },
+					{ platz: 8, mannschaft_name: 'BSC Rot-Rot Beerendorf', satzpunkte: -15, matchpunkte: 0 }
+				]
+			},
+			{
+				id: 'v-2',
+				owner_id: OWNER_USER,
+				name: 'Kreisliga Ost',
+				datenquelle: 'liga',
+				liga: {
+					liga_app: 'BSApp Liga',
+					url: 'https://liga.bsapp.de',
+					login_pin: 'A689HL5',
+					digitaler_schusszettel: true
+				}
 			}
-		]
-	},
-	{
-		id: 'm-2',
-		veranstaltung_id: 'v-1',
-		nummer: 2,
-		aktiv: false,
-		begegnungen: [
-			{ scheibe_a: 1, scheibe_b: 2, mannschaft_a: 'SV Vogelwiese', mannschaft_b: 'BSC Abendau' }
-		]
-	},
-	{
-		id: 'm-3',
-		veranstaltung_id: 'v-1',
-		nummer: 3,
-		aktiv: false,
-		begegnungen: [
+		],
+		matches: [
 			{
+				id: 'm-1',
+				veranstaltung_id: 'v-1',
+				nummer: 1,
+				aktiv: true,
+				begegnungen: [
+					{
+						scheibe_a: 1,
+						scheibe_b: 2,
+						mannschaft_a: 'BSC Abendau',
+						mannschaft_b: 'SV Scharfhaus'
+					},
+					{
+						scheibe_a: 3,
+						scheibe_b: 4,
+						mannschaft_a: 'SGes Schützenschaft',
+						mannschaft_b: 'BS Hunshausen'
+					}
+				]
+			},
+			{
+				id: 'm-2',
+				veranstaltung_id: 'v-1',
+				nummer: 2,
+				aktiv: false,
+				begegnungen: [
+					{ scheibe_a: 1, scheibe_b: 2, mannschaft_a: 'SV Vogelwiese', mannschaft_b: 'BSC Abendau' }
+				]
+			},
+			{
+				id: 'm-3',
+				veranstaltung_id: 'v-1',
+				nummer: 3,
+				aktiv: false,
+				begegnungen: [
+					{
+						scheibe_a: 1,
+						scheibe_b: 2,
+						mannschaft_a: 'BS Weiß-Blau München',
+						mannschaft_b: 'SGi Wuppenhausen'
+					}
+				]
+			}
+		],
+		bildschirme: [
+			{
+				id: 'b-1',
+				veranstaltung_id: 'v-1',
 				scheibe_a: 1,
 				scheibe_b: 2,
-				mannschaft_a: 'BS Weiß-Blau München',
-				mannschaft_b: 'SGi Wuppenhausen'
+				name: null,
+				pin: 'A1L35P',
+				aktiv: true,
+				mode: 'ergebnisse'
+			},
+			{
+				id: 'b-2',
+				veranstaltung_id: 'v-1',
+				scheibe_a: 3,
+				scheibe_b: 4,
+				name: null,
+				pin: 'P94T67',
+				aktiv: true,
+				mode: 'ergebnisse'
+			},
+			{
+				id: 'b-3',
+				veranstaltung_id: 'v-1',
+				scheibe_a: 5,
+				scheibe_b: 6,
+				name: null,
+				pin: 'KLM579',
+				aktiv: true,
+				mode: 'ergebnisse'
+			},
+			{
+				id: 'b-4',
+				veranstaltung_id: 'v-1',
+				scheibe_a: 7,
+				scheibe_b: 8,
+				name: null,
+				pin: 'T52LAB',
+				aktiv: false,
+				mode: 'ergebnisse'
+			},
+			{
+				id: 'b-5',
+				veranstaltung_id: 'v-1',
+				scheibe_a: null,
+				scheibe_b: null,
+				name: 'BEAMER',
+				pin: 'RTZ794',
+				aktiv: true,
+				mode: 'tabelle'
 			}
-		]
-	}
-];
+		],
+		tabletPairings: [],
+		nextId: 100
+	};
+}
 
-export const bildschirme: Bildschirm[] = [
-	{
-		id: 'b-1',
-		veranstaltung_id: 'v-1',
-		scheibe_a: 1,
-		scheibe_b: 2,
-		name: null,
-		pin: 'A1L35P',
-		aktiv: true,
-		mode: 'ergebnisse'
-	},
-	{
-		id: 'b-2',
-		veranstaltung_id: 'v-1',
-		scheibe_a: 3,
-		scheibe_b: 4,
-		name: null,
-		pin: 'P94T67',
-		aktiv: true,
-		mode: 'ergebnisse'
-	},
-	{
-		id: 'b-3',
-		veranstaltung_id: 'v-1',
-		scheibe_a: 5,
-		scheibe_b: 6,
-		name: null,
-		pin: 'KLM579',
-		aktiv: true,
-		mode: 'ergebnisse'
-	},
-	{
-		id: 'b-4',
-		veranstaltung_id: 'v-1',
-		scheibe_a: 7,
-		scheibe_b: 8,
-		name: null,
-		pin: 'T52LAB',
-		aktiv: false,
-		mode: 'ergebnisse'
-	},
-	{
-		id: 'b-5',
-		veranstaltung_id: 'v-1',
-		scheibe_a: null,
-		scheibe_b: null,
-		name: 'BEAMER',
-		pin: 'RTZ794',
-		aktiv: true,
-		mode: 'tabelle'
-	}
-];
+const STORAGE_KEY = 'veranstaltungen';
 
-let nextId = 100;
-function generateId(prefix: string): string {
-	return `${prefix}-${nextId++}`;
+function load(): State {
+	return loadState(STORAGE_KEY, seedState);
+}
+
+function persist(state: State): void {
+	saveState(STORAGE_KEY, state);
+}
+
+function generateId(state: State, prefix: string): string {
+	return `${prefix}-${state.nextId++}`;
+}
+
+function generatePin(): string {
+	const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+	return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
 export function canSee(user: User, v: Veranstaltung): boolean {
@@ -150,25 +194,33 @@ export function canSee(user: User, v: Veranstaltung): boolean {
 }
 
 export function visibleVeranstaltungen(user: User): Veranstaltung[] {
-	return veranstaltungen.filter((v) => canSee(user, v));
+	return load().veranstaltungen.filter((v) => canSee(user, v));
 }
 
 export function findVeranstaltung(user: User, id: string): Veranstaltung | undefined {
-	const v = veranstaltungen.find((v) => v.id === id);
+	const v = load().veranstaltungen.find((v) => v.id === id);
 	return v && canSee(user, v) ? v : undefined;
 }
 
 export function createVeranstaltung(user: User, name: string): Veranstaltung {
-	const v: Veranstaltung = { id: generateId('v'), owner_id: user.id, name, datenquelle: null };
-	veranstaltungen.push(v);
+	const state = load();
+	const v: Veranstaltung = {
+		id: generateId(state, 'v'),
+		owner_id: user.id,
+		name,
+		datenquelle: null
+	};
+	state.veranstaltungen.push(v);
+	persist(state);
 	return v;
 }
 
 export function removeVeranstaltung(user: User, id: string): boolean {
-	const v = findVeranstaltung(user, id);
-	if (!v) return false;
-	const idx = veranstaltungen.indexOf(v);
-	veranstaltungen.splice(idx, 1);
+	const state = load();
+	const v = state.veranstaltungen.find((v) => v.id === id);
+	if (!v || !canSee(user, v)) return false;
+	state.veranstaltungen.splice(state.veranstaltungen.indexOf(v), 1);
+	persist(state);
 	return true;
 }
 
@@ -176,11 +228,11 @@ export function removeVeranstaltung(user: User, id: string): boolean {
 // die tatsächliche Berechnung (Round-Robin etc.) ist Backend-Sache, siehe FACHLICHKEIT.md
 // "Diese App berechnet keine eigenen Ergebnisse". Ziel hier ist nur, dass #7/#8 danach
 // etwas zum Anzeigen haben.
-function ensureDemoMatch(v: Veranstaltung) {
-	if (matches.some((m) => m.veranstaltung_id === v.id)) return;
+function ensureDemoMatch(state: State, v: Veranstaltung) {
+	if (state.matches.some((m) => m.veranstaltung_id === v.id)) return;
 	const namen = (v.tabelle ?? []).map((e) => e.mannschaft_name);
-	matches.push({
-		id: generateId('m'),
+	state.matches.push({
+		id: generateId(state, 'm'),
 		veranstaltung_id: v.id,
 		nummer: 1,
 		aktiv: true,
@@ -195,58 +247,77 @@ function ensureDemoMatch(v: Veranstaltung) {
 	});
 }
 
+function findInState(state: State, id: string): Veranstaltung | undefined {
+	return state.veranstaltungen.find((v) => v.id === id);
+}
+
 export function setTabelle(v: Veranstaltung, eintraege: Veranstaltung['tabelle']): Veranstaltung {
-	v.datenquelle = 'tabelle';
-	v.tabelle = eintraege;
-	v.liga = undefined;
-	ensureDemoMatch(v);
-	return v;
+	const state = load();
+	const target = findInState(state, v.id) ?? v;
+	target.datenquelle = 'tabelle';
+	target.tabelle = eintraege;
+	target.liga = undefined;
+	ensureDemoMatch(state, target);
+	persist(state);
+	return target;
 }
 
 export function clearTabelle(v: Veranstaltung): Veranstaltung {
-	v.datenquelle = null;
-	v.tabelle = undefined;
-	for (const m of [...matches]) {
-		if (m.veranstaltung_id === v.id) matches.splice(matches.indexOf(m), 1);
-	}
-	return v;
+	const state = load();
+	const target = findInState(state, v.id) ?? v;
+	target.datenquelle = null;
+	target.tabelle = undefined;
+	state.matches = state.matches.filter((m) => m.veranstaltung_id !== target.id);
+	persist(state);
+	return target;
 }
 
 export function connectLiga(
 	v: Veranstaltung,
 	liga: NonNullable<Veranstaltung['liga']>
 ): Veranstaltung {
-	v.datenquelle = 'liga';
-	v.liga = liga;
-	v.tabelle = undefined;
-	ensureDemoMatch(v);
-	return v;
+	const state = load();
+	const target = findInState(state, v.id) ?? v;
+	target.datenquelle = 'liga';
+	target.liga = liga;
+	target.tabelle = undefined;
+	ensureDemoMatch(state, target);
+	persist(state);
+	return target;
 }
 
 export function matchesFor(veranstaltungId: string): Match[] {
-	return matches.filter((m) => m.veranstaltung_id === veranstaltungId);
+	return load().matches.filter((m) => m.veranstaltung_id === veranstaltungId);
 }
 
 /** Aktiviert das gewählte Match, deaktiviert automatisch jedes andere derselben Veranstaltung. */
 export function activateMatch(veranstaltungId: string, matchId: string): Match[] | undefined {
-	const target = matches.find((m) => m.id === matchId && m.veranstaltung_id === veranstaltungId);
+	const state = load();
+	const target = state.matches.find(
+		(m) => m.id === matchId && m.veranstaltung_id === veranstaltungId
+	);
 	if (!target) return undefined;
-	for (const m of matches) {
+	for (const m of state.matches) {
 		if (m.veranstaltung_id === veranstaltungId) m.aktiv = m.id === matchId;
 	}
-	return matchesFor(veranstaltungId);
+	persist(state);
+	return state.matches.filter((m) => m.veranstaltung_id === veranstaltungId);
 }
 
 /** Deaktiviert das gewählte Match, ohne ein anderes zu aktivieren. */
 export function deactivateMatch(veranstaltungId: string, matchId: string): Match[] | undefined {
-	const target = matches.find((m) => m.id === matchId && m.veranstaltung_id === veranstaltungId);
+	const state = load();
+	const target = state.matches.find(
+		(m) => m.id === matchId && m.veranstaltung_id === veranstaltungId
+	);
 	if (!target) return undefined;
 	target.aktiv = false;
-	return matchesFor(veranstaltungId);
+	persist(state);
+	return state.matches.filter((m) => m.veranstaltung_id === veranstaltungId);
 }
 
 export function bildschirmeFor(veranstaltungId: string): Bildschirm[] {
-	return bildschirme.filter((b) => b.veranstaltung_id === veranstaltungId);
+	return load().bildschirme.filter((b) => b.veranstaltung_id === veranstaltungId);
 }
 
 export function updateBildschirm(
@@ -254,17 +325,20 @@ export function updateBildschirm(
 	bildschirmId: string,
 	data: Partial<Pick<Bildschirm, 'pin' | 'aktiv' | 'mode'>>
 ): Bildschirm | undefined {
-	const b = bildschirme.find(
+	const state = load();
+	const b = state.bildschirme.find(
 		(b) => b.id === bildschirmId && b.veranstaltung_id === veranstaltungId
 	);
 	if (!b) return undefined;
 	Object.assign(b, data);
+	persist(state);
 	return b;
 }
 
 export function createBildschirm(veranstaltungId: string, name: string): Bildschirm {
+	const state = load();
 	const b: Bildschirm = {
-		id: generateId('b'),
+		id: generateId(state, 'b'),
 		veranstaltung_id: veranstaltungId,
 		scheibe_a: null,
 		scheibe_b: null,
@@ -273,21 +347,10 @@ export function createBildschirm(veranstaltungId: string, name: string): Bildsch
 		aktiv: true,
 		mode: 'tabelle'
 	};
-	bildschirme.push(b);
+	state.bildschirme.push(b);
+	persist(state);
 	return b;
 }
-
-function generatePin(): string {
-	const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-	return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
-}
-
-interface TabletPairingRecord {
-	token: string;
-	veranstaltungId: string;
-	scheibennummer: number;
-}
-const tabletPairings: TabletPairingRecord[] = [];
 
 // Anders als vorher (#9, zustandslos erzeugt) merkt sich das jetzt ausgestellte Tokens —
 // erst dadurch kann der Binocular-Mock (#4) sie überhaupt validieren, siehe Issue #10.
@@ -295,13 +358,15 @@ export function generateTabletToken(
 	veranstaltungId: string,
 	scheibennummer: number
 ): { scheibennummer: number; token: string } {
+	const state = load();
 	const token = `tablet-${crypto.randomUUID()}`;
-	tabletPairings.push({ token, veranstaltungId, scheibennummer });
+	state.tabletPairings.push({ token, veranstaltungId, scheibennummer });
+	persist(state);
 	return { scheibennummer, token };
 }
 
 export function findTabletPairing(token: string): TabletPairingRecord | undefined {
-	return tabletPairings.find((p) => p.token === token);
+	return load().tabletPairings.find((p) => p.token === token);
 }
 
 // ── Lookups für Display (#1–#3) und Binocular (#4–#5) — siehe Issue #10 ─────────────────
@@ -316,7 +381,7 @@ export interface AktivesMatchFuerScheibe {
 export function findAktivesMatchFuerScheibe(
 	scheibennummer: number
 ): AktivesMatchFuerScheibe | undefined {
-	for (const m of matches) {
+	for (const m of load().matches) {
 		if (!m.aktiv) continue;
 		for (const begegnung of m.begegnungen) {
 			if (begegnung.scheibe_a === scheibennummer) return { match: m, begegnung, seite: 'a' };
@@ -335,13 +400,19 @@ export function mannschaftUndGegner(
 		: { mannschaft: begegnung.mannschaft_b, gegner: begegnung.mannschaft_a };
 }
 
-/** Ungefiltert (kein Ownership-Check) — Display-Pairing per PIN ist kein Account-Auth-Vorgang. */
+/**
+ * Ungefiltert (kein Ownership-Check) — Display-Pairing per PIN ist kein Account-Auth-Vorgang.
+ * PIN-Vergleich bewusst tolerant (getrimmt, groß/klein ignoriert): der Admin tippt den am
+ * Display angezeigten Code von Hand ab, Tippfehler bei Groß-/Kleinschreibung sollen das
+ * Pairing nicht unnötig verhindern.
+ */
 export function findBildschirmByPin(pin: string): Bildschirm | undefined {
-	return bildschirme.find((b) => b.pin === pin);
+	const normalized = pin.trim().toUpperCase();
+	return load().bildschirme.find((b) => b.pin.trim().toUpperCase() === normalized);
 }
 
 /** Ungefiltert — wird nur für öffentlich lesbare Anzeige-Inhalte (Display-Tabellenmodus)
  * gebraucht, nicht für Admin-Zugriff (der läuft über findVeranstaltung mit Ownership-Check). */
 export function getVeranstaltungById(id: string): Veranstaltung | undefined {
-	return veranstaltungen.find((v) => v.id === id);
+	return load().veranstaltungen.find((v) => v.id === id);
 }

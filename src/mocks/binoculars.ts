@@ -5,7 +5,12 @@ import {
 	mannschaftUndGegner,
 	type AktivesMatchFuerScheibe
 } from './veranstaltungen';
-import { berechneMatchStand, getScoringState, type ScheibenScoringState } from './shared-state';
+import {
+	berechneMatchStand,
+	getScoringState,
+	saveScoringState,
+	type ScheibenScoringState
+} from './shared-state';
 
 /**
  * Auflösung jetzt über den echten Admin-Verwaltungs-Mock (#6–#9) statt eigener Demo-Tokens —
@@ -99,6 +104,7 @@ export function applyPfeil(token: string, scheibennummer: number, ringzahl: numb
 		else passe.ringzahl_pfeil2 = ringzahl;
 	}
 
+	saveScoringState(scheibennummer, scoring);
 	return { kind: 'ok', match: buildMatch(scheibennummer, outcome.resolved) };
 }
 
@@ -124,6 +130,7 @@ export function undoLast(token: string, scheibennummer: number): ResolveResult {
 		}
 	}
 
+	saveScoringState(scheibennummer, scoring);
 	return { kind: 'ok', match: buildMatch(scheibennummer, outcome.resolved) };
 }
 
@@ -137,5 +144,6 @@ export function bestaetigeSatz(token: string, scheibennummer: number): ResolveRe
 	}
 	scoring.aktueller_satz += 1;
 
+	saveScoringState(scheibennummer, scoring);
 	return { kind: 'ok', match: buildMatch(scheibennummer, outcome.resolved) };
 }
