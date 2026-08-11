@@ -7,11 +7,11 @@
 
 ## Tech Stack
 
-| Component | Technology                                               |
-|---|----------------------------------------------------------|
-| Framework | [SvelteKit](https://svelte.dev/)                         |
-| UI Library | [Sveltestrap](https://sveltestrap.js.org/) (Bootstrap 5) |
-| Language | TypeScript                                               |
+| Component   | Technology                                               |
+| ----------- | -------------------------------------------------------- |
+| Framework   | [SvelteKit](https://svelte.dev/)                         |
+| UI Library  | [Sveltestrap](https://sveltestrap.js.org/) (Bootstrap 5) |
+| Language    | TypeScript                                               |
 | HTTP Client | Fetch API                                                |
 
 ---
@@ -98,13 +98,13 @@ App erreichbar unter: [http://localhost:5173](http://localhost:5173)
 
 ## Skripte
 
-| Befehl | Beschreibung |
-|---|---|
-| `npm run dev` | Dev-Server mit HMR starten |
-| `npm run build` | Produktions-Build |
+| Befehl            | Beschreibung                       |
+| ----------------- | ---------------------------------- |
+| `npm run dev`     | Dev-Server mit HMR starten         |
+| `npm run build`   | Produktions-Build                  |
 | `npm run preview` | Produktions-Build lokal vorschauen |
-| `npm run check` | Svelte Type-Check |
-| `npm run lint` | ESLint + Prettier pruefen |
+| `npm run check`   | Svelte Type-Check                  |
+| `npm run lint`    | ESLint + Prettier pruefen          |
 
 ---
 
@@ -117,4 +117,5 @@ App erreichbar unter: [http://localhost:5173](http://localhost:5173)
 ---
 
 ## Lizenz
+
 MIT
