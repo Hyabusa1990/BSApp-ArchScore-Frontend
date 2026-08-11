@@ -169,7 +169,8 @@
 		"liga_nein": "No",
 		"liga_connect_btn": "Connect / Save",
 		"switch_to_tabelle": "Enter initial table instead",
-		"matchkontrolle_btn": "Match control"
+		"matchkontrolle_btn": "Match control",
+		"bildschirme_btn": "Screens & tablets"
 	},
 	"matchkontrolle": {
 		"title": "Match control",
@@ -182,5 +183,30 @@
 		"inaktiv": "INACTIVE",
 		"activate_btn": "Activate",
 		"deactivate_btn": "Deactivate"
+	},
+	"bildschirme": {
+		"title": "Screen and Tablet Management",
+		"back_btn": "Back to event",
+		"error_load": "Could not load screens.",
+		"error_save": "Saving failed.",
+		"error_create": "Failed to create.",
+		"screens_heading": "Screens",
+		"scheiben_paar_label": "Lane {a}+{b}",
+		"aktiv": "ACTIVE",
+		"inaktiv": "INACTIVE",
+		"pin_label": "PIN",
+		"mode_label": "Display mode",
+		"mode_ergebnisse": "Results",
+		"mode_tabelle": "Table",
+		"aktiv_toggle_label": "Active",
+		"save_btn": "Save",
+		"add_screen_heading": "Add screen",
+		"add_screen_placeholder": "e.g. Projector",
+		"add_screen_btn": "Add",
+		"tablets_heading": "Tablet pairing",
+		"tablet_scheibe_btn": "Tablet lane {n}",
+		"qr_title": "Lane {n} — QR code",
+		"qr_hint": "Scan with the tablet to pair it to this lane.",
+		"qr_error": "Could not generate QR code."
 	}
 }

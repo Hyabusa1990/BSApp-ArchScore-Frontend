@@ -145,14 +145,22 @@
 	{:else}
 		<div class="d-flex justify-content-between align-items-center mb-4">
 			<h4 class="mb-0">{veranstaltung.name}</h4>
-			{#if veranstaltung.datenquelle !== null}
+			<div class="d-flex gap-2">
 				<a
-					href={resolve('/veranstaltungen/[id]/matchkontrolle', { id })}
-					class="btn btn-outline-primary btn-sm"
+					href={resolve('/veranstaltungen/[id]/bildschirme', { id })}
+					class="btn btn-outline-secondary btn-sm"
 				>
-					{$_('veranstaltungen.matchkontrolle_btn')}
+					{$_('veranstaltungen.bildschirme_btn')}
 				</a>
-			{/if}
+				{#if veranstaltung.datenquelle !== null}
+					<a
+						href={resolve('/veranstaltungen/[id]/matchkontrolle', { id })}
+						class="btn btn-outline-primary btn-sm"
+					>
+						{$_('veranstaltungen.matchkontrolle_btn')}
+					</a>
+				{/if}
+			</div>
 		</div>
 
 		{#if saveError}

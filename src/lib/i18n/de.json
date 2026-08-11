@@ -170,7 +170,8 @@
 		"liga_nein": "Nein",
 		"liga_connect_btn": "Verbinden / Speichern",
 		"switch_to_tabelle": "Stattdessen initiale Tabelle eintragen",
-		"matchkontrolle_btn": "Matchkontrolle"
+		"matchkontrolle_btn": "Matchkontrolle",
+		"bildschirme_btn": "Bildschirme & Tablets"
 	},
 	"matchkontrolle": {
 		"title": "Matchkontrolle",
@@ -183,5 +184,30 @@
 		"inaktiv": "INAKTIV",
 		"activate_btn": "Aktivieren",
 		"deactivate_btn": "Deaktivieren"
+	},
+	"bildschirme": {
+		"title": "Bildschirm- und Tablet-Verwaltung",
+		"back_btn": "Zurück zur Veranstaltung",
+		"error_load": "Bildschirme konnten nicht geladen werden.",
+		"error_save": "Speichern fehlgeschlagen.",
+		"error_create": "Anlegen fehlgeschlagen.",
+		"screens_heading": "Bildschirme",
+		"scheiben_paar_label": "Scheibe {a}+{b}",
+		"aktiv": "AKTIV",
+		"inaktiv": "INAKTIV",
+		"pin_label": "PIN",
+		"mode_label": "Anzeigemodus",
+		"mode_ergebnisse": "Ergebnisse",
+		"mode_tabelle": "Tabelle",
+		"aktiv_toggle_label": "Aktiv",
+		"save_btn": "Speichern",
+		"add_screen_heading": "Bildschirm hinzufügen",
+		"add_screen_placeholder": "z. B. Beamer",
+		"add_screen_btn": "Hinzufügen",
+		"tablets_heading": "Tablet-Pairing",
+		"tablet_scheibe_btn": "Tablet Scheibe {n}",
+		"qr_title": "Scheibe {n} — QR-Code",
+		"qr_hint": "Mit dem Tablet scannen, um es dieser Scheibe zuzuordnen.",
+		"qr_error": "QR-Code konnte nicht erzeugt werden."
 	}
 }
