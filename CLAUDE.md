@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ArchScore Frontend — SvelteKit client for a live archery league scoring system. This repository currently only contains the **auth/profile shell** (login, register, profile, permission-gated nav) — the scoreboard feature described in `README.md`'s "Projektstruktur" does not exist yet in `src/`; treat that section of the README as aspirational, not current state.
 
+Domain knowledge (competition structure, roles, scoring rules) lives in `FACHLICHKEIT.md` — read it before working on scoring/spotter/display features.
+
+**Planned scope**: this app is meant to absorb the spotter-input ("binocular") and spectator-screen ("display") features currently live in a separate, older project (`/home/gero/PycharmProjects/scoring`, **read-only reference** — do not edit it), extended so it can run standalone without relying on the paper/digital Schusszettel that project depends on. That migration happens once this repo is stable; see `FACHLICHKEIT.md` for the reference project's relevant files and the open question of whether ArchScore becomes its own source of truth for results (the reference project deliberately isn't one — it's a proxy to an external league-management app).
+
 The API contract lives in the `ArchScore-SpecsAndDocu` git submodule (`openapi.yaml` is the single source of truth, shared with the C# backend repo). If a submodule folder appears empty, run:
 
 ```bash
