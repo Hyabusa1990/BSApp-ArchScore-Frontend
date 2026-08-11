@@ -1,0 +1,14 @@
+node_modules
+.svelte-kit
+build
+.git
+.gitignore
+.idea
+*.log
+.DS_Store
+
+# Lokale Secrets/Config nie in den Build-Kontext — PUBLIC_USE_MOCKS kommt im Dockerfile
+# bewusst über ein ARG, nicht über eine mitkopierte .env.
+.env
+.env.*
+!.env.example

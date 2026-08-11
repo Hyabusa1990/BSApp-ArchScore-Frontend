@@ -1,0 +1,22 @@
+# Konfiguration für static-web-server, siehe Dockerfile. CLI-Flags allein reichen für die
+# eingebaute dateityp-basierte Cache-Control nicht aus, um index.html gezielt auszunehmen —
+# ohne diese Override-Regel bekäme index.html einen Tag Cache-Control (empirisch geprüft
+# gegen die im Dockerfile gepinnte Version, weicht von der GitHub-Doku ab), sodass Nutzer
+# nach einem Deploy bis zu 24h eine alte App-Shell mit nicht mehr passenden, gehashten
+# Asset-Pfaden bekommen könnten. Gehashte Assets unter /_app/immutable/ bekommen bereits
+# über die eingebaute Logik ein Jahr Cache-Control (dateityp-basiert: .js/.css/... — dank
+# Content-Hash im Dateinamen unbedenklich), das lassen wir unverändert.
+
+[general]
+root = "/public"
+port = 8080
+page-fallback = "/public/index.html"
+compression = true
+cache-control-headers = true
+log-level = "warn"
+
+[[advanced.headers]]
+source = "/index.html"
+
+[advanced.headers.headers]
+Cache-Control = "no-cache"
