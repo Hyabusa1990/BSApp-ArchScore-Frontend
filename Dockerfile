@@ -12,7 +12,7 @@
 # im Code fest auf "/api" gesetzt — dieser Container muss /api selbst nicht kennen/proxien.
 
 # ── Build-Stage ─────────────────────────────────────────────────────────────
-FROM node:22-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
