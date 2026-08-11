@@ -59,7 +59,14 @@ function buildMatch(scheibennummer: number, { found, scoring }: Resolved): Binoc
 		// Admin-Modell kennt keine Schützen-Aufstellung pro Begegnung — bewusst leer.
 		selected_members: [],
 		aktueller_satz: scoring.aktueller_satz,
-		vorlaeufige_passen: scoring.vorlaeufige_passen,
+		// Nur der aktuelle Satz — 1:1 wie im scoring-Referenzprojekt (_binocular_dict filtert
+		// dort genauso). scoring.vorlaeufige_passen selbst sammelt alle Sätze (für
+		// liveSatzErgebnisse/berechneMatchStand gebraucht), aber die Binocular-UI indiziert
+		// Pfeile rein über "position" (1-3) ohne lfd_nr — ungefiltert würden sich mehrere
+		// Sätze in der Anzeige überlagern, sobald mehr als ein Satz gelaufen ist.
+		vorlaeufige_passen: scoring.vorlaeufige_passen.filter(
+			(p) => p.lfd_nr === scoring.aktueller_satz
+		),
 		schuetze_bestaetigte_saetze: scoring.schuetze_bestaetigte_saetze
 	};
 }
