@@ -1,20 +1,21 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { auth } from '$lib/stores/auth.svelte';
+	import type { Role } from '$lib/api/auth';
 
 	interface Props {
-		permission?: string;
-		group?: string;
+		/** Erlaubte Rolle(n). Ohne Angabe: nur eingeloggt sein reicht. */
+		role?: Role | Role[];
 		children: Snippet;
 		fallback?: Snippet;
 	}
 
-	let { permission, group, children, fallback }: Props = $props();
+	let { role, children, fallback }: Props = $props();
+
+	const allowedRoles = $derived(role === undefined ? undefined : ([] as Role[]).concat(role));
 
 	const allowed = $derived(
-		auth.initialized &&
-			(!permission || auth.hasPermission(permission)) &&
-			(!group || auth.hasGroup(group))
+		auth.initialized && !!auth.user && (!allowedRoles || allowedRoles.includes(auth.user.role))
 	);
 </script>
 

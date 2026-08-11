@@ -3,7 +3,7 @@ import { register as registerLocale, init, getLocaleFromNavigator, locale } from
 
 export const languages = [
 	{ code: 'en', label: 'EN — English' },
-	{ code: 'de', label: 'DE — Deutsch' },
+	{ code: 'de', label: 'DE — Deutsch' }
 ] as const;
 
 export type LanguageCode = (typeof languages)[number]['code'];

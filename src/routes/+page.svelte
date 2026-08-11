@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { _ } from 'svelte-i18n';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { resolve } from '$app/paths';
 	import { Container } from '@sveltestrap/sveltestrap';
 </script>
 
@@ -15,7 +16,7 @@
 			<h1 class="display-5 mb-2">{$_('home.welcome')}</h1>
 			<p class="lead text-muted">
 				{$_('home.login_hint_1')}
-				<a href="/login" class="text-decoration-none fw-semibold">{$_('nav.login')}</a>
+				<a href={resolve('/login')} class="text-decoration-none fw-semibold">{$_('nav.login')}</a>
 				{$_('home.login_hint_2')}
 			</p>
 		{/if}

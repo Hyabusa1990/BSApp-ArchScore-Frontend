@@ -3,6 +3,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { appConfig } from '$lib/stores/config.svelte';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { APIError } from '$lib/api/client';
 	import { Alert, Button, Form, Spinner } from '@sveltestrap/sveltestrap';
 	import AuthCard from '$lib/components/AuthCard.svelte';
@@ -17,7 +18,7 @@
 
 	$effect(() => {
 		if (appConfig.loaded && !appConfig.allowRegistration) {
-			goto('/login');
+			goto(resolve('/login'));
 		}
 	});
 
@@ -34,7 +35,7 @@
 		try {
 			await auth.register(email, password, passwordConfirm);
 			success = true;
-			setTimeout(() => goto('/login'), 2000);
+			setTimeout(() => goto(resolve('/login')), 2000);
 		} catch (err) {
 			if (err instanceof APIError) {
 				const msg = (err.data as { detail?: string })?.detail;
@@ -100,7 +101,7 @@
 		</Form>
 		<p class="text-center text-muted small mt-3 mb-0">
 			{$_('register.have_account')}
-			<a href="/login" class="text-decoration-none">{$_('nav.login')}</a>
+			<a href={resolve('/login')} class="text-decoration-none">{$_('nav.login')}</a>
 		</p>
 	{/if}
 </AuthCard>
