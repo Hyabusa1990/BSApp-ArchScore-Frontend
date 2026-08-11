@@ -1,4 +1,5 @@
 import type { VorlaeufigePasse } from '$lib/api/binocular';
+import type { SatzErgebnis } from '$lib/api/display';
 import { loadState, saveState } from './persist';
 
 /**
@@ -125,4 +126,38 @@ export function berechneMatchStand(scheibeA: number, scheibeB: number): MatchSta
 		(fertigeSaetze >= 5 && satzpunkteA === 5 && satzpunkteB === 5);
 
 	return { satzpunkteA, satzpunkteB, fertigeSaetze, ergebnisse, beendet };
+}
+
+/**
+ * Satz-für-Satz-Ergebnisse für die Trefferanzeige — anders als berechneMatchStand oben
+ * (streng: nur BEIDE Seiten fertig zählt für Satzpunkte) zeigt das hier die eigene
+ * Ringsumme schon LIVE während der Satz noch läuft, sobald mindestens ein Pfeil erfasst
+ * ist — Gegner-Ringe bleiben null, bis die Gegenseite ebenfalls etwas erfasst hat. 1:1
+ * nach `_display_satz_ergebnisse` im scoring-Referenzprojekt. Ohne das bleibt die
+ * Ringsummen-Anzeige während eines laufenden Satzes leer/veraltet, siehe Bugreport.
+ */
+export function liveSatzErgebnisse(ownScheibe: number, gegnerScheibe: number): SatzErgebnis[] {
+	const own = peekScoringState(ownScheibe);
+	const gegner = peekScoringState(gegnerScheibe);
+	const ergebnisse: SatzErgebnis[] = [];
+
+	for (let lfdNr = 1; lfdNr <= 5; lfdNr++) {
+		const eigenePfeile = (own?.vorlaeufige_passen ?? []).filter((p) => p.lfd_nr === lfdNr);
+		if (eigenePfeile.length === 0) break; // dieser Satz (und alle danach) noch nicht begonnen
+
+		const gegnerPfeile = (gegner?.vorlaeufige_passen ?? []).filter((p) => p.lfd_nr === lfdNr);
+		const gegnerRinge =
+			gegnerPfeile.length > 0 ? ringSumme(gegner!.vorlaeufige_passen, lfdNr) : null;
+
+		ergebnisse.push({
+			lfd_nr: lfdNr,
+			eigene_ringe: ringSumme(own!.vorlaeufige_passen, lfdNr),
+			gegner_ringe: gegnerRinge,
+			eigene_strafpunkte: 0,
+			gegner_strafpunkte: gegnerRinge !== null ? 0 : null,
+			beide_eingegeben: gegnerRinge !== null
+		});
+	}
+
+	return ergebnisse;
 }

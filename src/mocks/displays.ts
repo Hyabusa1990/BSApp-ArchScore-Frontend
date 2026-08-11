@@ -5,7 +5,7 @@ import {
 	getVeranstaltungById,
 	mannschaftUndGegner
 } from './veranstaltungen';
-import { berechneMatchStand, peekScoringState } from './shared-state';
+import { berechneMatchStand, liveSatzErgebnisse, peekScoringState } from './shared-state';
 
 /**
  * In-memory Fake-Backend-Zustand für Displays — Pairing/Inhalt kommen jetzt aus dem echten
@@ -80,14 +80,10 @@ function buildSeiteForScheibe(scheibennummer: number | null): DisplaySeite {
 	);
 	const eigeneSatzpunkte = found.seite === 'a' ? stand.satzpunkteA : stand.satzpunkteB;
 
-	const satzErgebnisse: DisplaySeite['satz_ergebnisse'] = stand.ergebnisse.map((e) => ({
-		lfd_nr: e.lfd_nr,
-		eigene_ringe: found.seite === 'a' ? e.ringeA : e.ringeB,
-		gegner_ringe: found.seite === 'a' ? e.ringeB : e.ringeA,
-		eigene_strafpunkte: 0,
-		gegner_strafpunkte: 0,
-		beide_eingegeben: true
-	}));
+	// Live-Ringsumme für die Anzeige (zeigt den laufenden Satz schon während der Erfassung,
+	// nicht erst wenn beide Seiten fertig sind) — bewusst getrennt von berechneMatchStand
+	// oben, das für Satzpunkte/Matchende weiterhin streng "beide fertig" verlangt.
+	const satzErgebnisse = liveSatzErgebnisse(scheibennummer, gegnerScheibe);
 
 	if (stand.beendet) {
 		return {
