@@ -93,5 +93,15 @@
 		"error_save": "Änderungen konnten nicht gespeichert werden.",
 		"error_create": "Anlegen fehlgeschlagen.",
 		"error_delete": "Löschen fehlgeschlagen."
+	},
+	"display": {
+		"page_title": "Zuschauer-Monitor",
+		"load_error": "Verbindung zum Server fehlgeschlagen.",
+		"pairing_hint": "PIN in der Bildschirmverwaltung eintragen",
+		"pairing_waiting": "Warte auf Zuordnung…",
+		"no_team": "–",
+		"status_wartet": "Wartet auf Freigabe",
+		"status_match_fertig": "Match beendet",
+		"mode_tabelle_placeholder": "Tabellenansicht kommt in Kürze."
 	}
 }
