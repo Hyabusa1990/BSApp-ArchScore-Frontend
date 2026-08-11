@@ -1,14 +1,15 @@
 import type { User } from '$lib/api/auth';
 import type { Veranstaltung } from '$lib/api/veranstaltung';
-import type { Match } from '$lib/api/matchkontrolle';
+import type { Match, Begegnung } from '$lib/api/matchkontrolle';
 import type { Bildschirm } from '$lib/api/bildschirme';
 import { users } from './fixtures';
 
 /**
  * In-memory Fake-Backend-Zustand für die Verwaltungsoberfläche — ein gemeinsamer Store für
  * Veranstaltung/Match/Bildschirm (referenzieren sich gegenseitig über veranstaltung_id).
- * Eigenständig, nicht geteilt mit db.ts/displays.ts/binoculars.ts (siehe Issue #10 für die
- * geplante spätere Zusammenführung — hier bewusst noch nicht).
+ * Weiterhin eigenständig ggü. db.ts (auth-spezifisch), aber jetzt die Quelle, aus der
+ * displays.ts/binoculars.ts ihren Zustand lesen (welches Match ist aktiv, welcher
+ * Bildschirm/Tablet-Token gehört wozu) — siehe Issue #10.
  */
 
 const OWNER_USER = users.member.id;
@@ -281,9 +282,66 @@ function generatePin(): string {
 	return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
-export function generateTabletToken(scheibennummer: number): {
-	scheibennummer: number;
+interface TabletPairingRecord {
 	token: string;
-} {
-	return { scheibennummer, token: `tablet-${crypto.randomUUID()}` };
+	veranstaltungId: string;
+	scheibennummer: number;
+}
+const tabletPairings: TabletPairingRecord[] = [];
+
+// Anders als vorher (#9, zustandslos erzeugt) merkt sich das jetzt ausgestellte Tokens —
+// erst dadurch kann der Binocular-Mock (#4) sie überhaupt validieren, siehe Issue #10.
+export function generateTabletToken(
+	veranstaltungId: string,
+	scheibennummer: number
+): { scheibennummer: number; token: string } {
+	const token = `tablet-${crypto.randomUUID()}`;
+	tabletPairings.push({ token, veranstaltungId, scheibennummer });
+	return { scheibennummer, token };
+}
+
+export function findTabletPairing(token: string): TabletPairingRecord | undefined {
+	return tabletPairings.find((p) => p.token === token);
+}
+
+// ── Lookups für Display (#1–#3) und Binocular (#4–#5) — siehe Issue #10 ─────────────────
+
+export interface AktivesMatchFuerScheibe {
+	match: Match;
+	begegnung: Begegnung;
+	/** 'a' wenn scheibennummer === begegnung.scheibe_a, sonst 'b'. */
+	seite: 'a' | 'b';
+}
+
+export function findAktivesMatchFuerScheibe(
+	scheibennummer: number
+): AktivesMatchFuerScheibe | undefined {
+	for (const m of matches) {
+		if (!m.aktiv) continue;
+		for (const begegnung of m.begegnungen) {
+			if (begegnung.scheibe_a === scheibennummer) return { match: m, begegnung, seite: 'a' };
+			if (begegnung.scheibe_b === scheibennummer) return { match: m, begegnung, seite: 'b' };
+		}
+	}
+	return undefined;
+}
+
+export function mannschaftUndGegner(
+	begegnung: Begegnung,
+	seite: 'a' | 'b'
+): { mannschaft: string; gegner: string } {
+	return seite === 'a'
+		? { mannschaft: begegnung.mannschaft_a, gegner: begegnung.mannschaft_b }
+		: { mannschaft: begegnung.mannschaft_b, gegner: begegnung.mannschaft_a };
+}
+
+/** Ungefiltert (kein Ownership-Check) — Display-Pairing per PIN ist kein Account-Auth-Vorgang. */
+export function findBildschirmByPin(pin: string): Bildschirm | undefined {
+	return bildschirme.find((b) => b.pin === pin);
+}
+
+/** Ungefiltert — wird nur für öffentlich lesbare Anzeige-Inhalte (Display-Tabellenmodus)
+ * gebraucht, nicht für Admin-Zugriff (der läuft über findVeranstaltung mit Ownership-Check). */
+export function getVeranstaltungById(id: string): Veranstaltung | undefined {
+	return veranstaltungen.find((v) => v.id === id);
 }

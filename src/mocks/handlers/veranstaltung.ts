@@ -176,6 +176,6 @@ export const veranstaltungHandlers = [
 		if (typeof body.scheibennummer !== 'number') {
 			return HttpResponse.json({ detail: 'scheibennummer fehlt oder ungültig' }, { status: 422 });
 		}
-		return HttpResponse.json(generateTabletToken(body.scheibennummer));
+		return HttpResponse.json(generateTabletToken(v.id, body.scheibennummer));
 	})
 ];

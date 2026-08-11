@@ -12,13 +12,13 @@ Design, Größenverhältnisse und Verhalten der Binocular-/Display-Screens sind 
 
 ## Wettkampfstruktur
 
-- **Begegnung** = zwei Mannschaften gegeneinander, je eine auf einer eigenen **Scheibe**. Eine Begegnung nutzt also 2 Scheiben — und damit auch 2 Spotter (einen pro Scheibe), aber nur 1 Display (siehe Display-Workflow unten).
+- **Begegnung** = zwei Mannschaften gegeneinander, je eine auf einer eigenen **Scheibe**. Eine Begegnung nutzt also 2 Scheiben — und damit auch 2 Spotter (einen pro Scheibe), aber nur 1 Display (siehe Display-Workflow unten). Feste Scheiben-Paarung: **Scheibe 1 gegen 2, 3 gegen 4, 5 gegen 6, 7 gegen 8**.
 - **Runde** = alle gleichzeitig laufenden Begegnungen eines Zeitslots (typisch 4 Begegnungen = 8 Scheiben gleichzeitig aktiv).
 - **Match** (eine Seite einer Begegnung, eine Mannschaft an einer Scheibe) läuft über **5 Sätze**.
 - Pro Satz schießen die **3 Schützen** der Mannschaft je **2 Pfeile** → 6 Pfeile pro Satz, in fester Reihenfolge (Position 1, 2, 3, jeweils 2 Pfeile).
 - **Ringzahl-Kodierung**: 10–1 = Ringzahl, Fehlschuss ("M" = Miss) = **0** (nicht `null`!), noch nicht erfasst = `null`. Diese Unterscheidung ist wichtig — 0 und "nicht erfasst" sind fachlich verschiedene Zustände.
-- **Satzpunkte**: pro Satz vergleicht man die Ringsumme beider Mannschaften — Sieger bekommt Punkte, bei Gleichstand teilen sich beide. Kommt aus der externen Liga-Verwaltung, wird hier nicht selbst berechnet (siehe unten).
-- **Matchpunkte**: Summe/Ableitung aus den Satzpunkten über alle 5 Sätze, entscheidet den Sieger der Begegnung (einer Scheibenseite). Bei Gleichstand: **Stechen** (Shoot-off) mit einem "Vorteil Heim/Auswärts"-Konzept als Tie-Breaker.
+- **Satzpunkte** (genaue Regel): pro Satz vergleicht man die Ringsumme (Summe aller Pfeilwerte) beider Mannschaften — die Mannschaft mit mehr Ringen bekommt **2 Satzpunkte**, bei Gleichstand bekommen **beide 1 Satzpunkt**.
+- **Matchende**: eine Mannschaft hat gewonnen (Match beendet), sobald sie **6 oder mehr Satzpunkte** erreicht — das kann schon vor Satz 5 feststehen, da der Rückstand rechnerisch nicht mehr aufholbar ist. Steht es nach allen 5 Sätzen **5:5**, ist das Match ebenfalls beendet (unentschieden) → **Stechen** (Shoot-off) mit einem "Vorteil Heim/Auswärts"-Konzept als Tie-Breaker (Stechen-Ablauf selbst noch nicht vertieft/umgesetzt).
 
 ## Rollen an der Scheibe / im System
 
