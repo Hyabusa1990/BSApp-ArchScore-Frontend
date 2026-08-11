@@ -26,6 +26,9 @@ Design, Größenverhältnisse und Verhalten der Binocular-/Display-Screens sind 
 - **Spotter/Fernglas-Scorer** ("Binocular"): **einer pro Scheibe** (nicht pro Begegnung), beobachtet durchs Fernglas, erfasst Pfeilwerte vorläufig, sofort nach jedem Schuss, auf einem Tablet — bevor der Schütze offiziell bestätigt. Diese vorläufigen Werte sind reine Vorschau für die Anzeige, nicht die Wahrheit.
 - **Kampfrichter**: eigene Rolle mit eigenem Zugang, überwacht/greift bei Regelverstößen ein (Details noch nicht vertieft, siehe Referenzprojekt `ref/[token]`-Route).
 - **Zuschauer**: sehen nur den Bildschirm zwischen den Scheiben, keine Interaktion.
+- **Turnierleitung/Admin** (Account-Rolle, Verwaltungsoberfläche): siehe eigener Abschnitt unten — andere Achse als diese vier, kein Zugang an der Scheibe selbst.
+
+Wichtig: Schütze/Spotter/Kampfrichter/Zuschauer authentifizieren sich **nie** über ein Benutzerkonto — immer passwortlos über einen zweckgebundenen Token in der URL (Display-JWT, Tablet-QR-Token, Kampfrichter-Token). Das Account-`role`-Feld (`user`/`admin`, siehe „Veranstaltungs-Setup und Admin-Workflow") betrifft ausschließlich die Verwaltungsoberfläche, nicht diese vier Rollen.
 
 ## Spotter-Workflow (Referenz: `binocular`-Route)
 
@@ -49,10 +52,16 @@ Design, Größenverhältnisse und Verhalten der Binocular-/Display-Screens sind 
 
 > Quelle: Nutzerbeschreibung + Mockups/Ablauf-Skizzen in `/home/gero/Downloads/Spotter-Bildschirm/` (siehe Referenzen unten). Das dortige `Ablauf.md` ist explizit als „ENTWURF – noch nicht abgestimmt" markiert — anders als die Binocular-/Display-UI im Referenzprojekt (siehe Migrations-Prinzip oben) ist dieser Teil **kein** fertig abgestimmtes Verhalten, sondern Diskussionsstand. Als Design-Richtung/Ausgangspunkt behandeln, nicht als fixe Vorgabe.
 
-1. **Veranstaltung anlegen**: ein User (Turnierleitung/Admin) legt eine Veranstaltung an.
+**Account-Rollen** (`User.role`, siehe `src/lib/api/auth.ts`) — genau zwei, keine weiteren:
+- **`user`**: normaler registrierter Account, verwaltet **nur eigene** Veranstaltungen (Ownership-Scoping — ein `user` sieht/ändert nie Veranstaltungen eines anderen `user`, analog zum `owner`-Feld im `scoring`-Referenzprojekt).
+- **`admin`**: verwaltet zusätzlich **alle** Benutzer und **alle** Veranstaltungen, nicht nur eigene.
+
+Diese Achse ist unabhängig von den Wettkampf-Rollen (Schütze/Spotter/Kampfrichter/Zuschauer, siehe oben) — die Verwaltungsoberfläche ist die einzige Stelle in ArchScore, die echten Benutzerkonto-Login (statt passwortloser Token-URLs) braucht.
+
+1. **Veranstaltung anlegen**: ein `user` (oder `admin`) legt eine Veranstaltung an — gehört danach diesem Account (Ownership).
 2. **Datenquelle für Begegnungen** — zwei Wege, im Verwaltungs-UI nur als Auswahl sichtbar:
-   - **Initiale Tabelle**: Admin trägt die Ausgangstabelle (Platz, Mannschaft, Satzpunkte, Matchpunkte) direkt ein → Backend berechnet daraus den Spielplan/die Begegnungen.
-   - **Ligaverwaltung verbinden**: Admin verbindet die Veranstaltung stattdessen mit einer externen Liga-App (z. B. „BSApp Liga") über URL + Login-PIN; zusätzlich wird angegeben, ob dort ein **digitaler Schusszettel** eingesetzt wird (Ja/Nein) — das entspricht den drei Ablauf-Varianten in `Ablauf.md` (ohne externes System / mit Liga-App / mit Liga-App + separater Schusszettel-App).
+   - **Initiale Tabelle**: der Veranstalter trägt die Ausgangstabelle (Platz, Mannschaft, Satzpunkte, Matchpunkte) direkt ein → Backend berechnet daraus den Spielplan/die Begegnungen.
+   - **Ligaverwaltung verbinden**: der Veranstalter verbindet die Veranstaltung stattdessen mit einer externen Liga-App (z. B. „BSApp Liga") über URL + Login-PIN; zusätzlich wird angegeben, ob dort ein **digitaler Schusszettel** eingesetzt wird (Ja/Nein) — das entspricht den drei Ablauf-Varianten in `Ablauf.md` (ohne externes System / mit Liga-App / mit Liga-App + separater Schusszettel-App).
    - **Für das Frontend später identisch**: Das Backend bereitet in beiden Fällen dieselben aufbereiteten Begegnungs-Daten auf — das Frontend selbst unterscheidet nach der Einrichtung nicht mehr, woher die Daten kommen. Im Verwaltungs-UI ist nur die Einrichtung selbst (Tabelle vs. Verbindung) unterschiedlich.
 3. **Matchkontrolle**: sobald Begegnungen existieren, gibt es pro **„Match"** (= Terminologie hier für das, was im Referenzprojekt „Runde" heißt: 4 gleichzeitige Begegnungen, 8 Scheiben parallel im Einsatz) eine Karte mit Aktiv/Inaktiv-Status und einem Freigabe-Button. Genau **ein Match/eine Runde ist immer aktiv** — erst dieses „Freigeben" sagt allen Tablets und Displays der 4 enthaltenen Begegnungen, dass ihre jeweiligen Sätze (bis zu 5 pro Begegnungsseite) jetzt laufen. Deckungsgleich mit der `LOCKED → ACTIVE → COMPLETED`-Zustandsmaschine des Referenzprojekts, nur andere Bezeichnung („Match" statt „Runde") — kein Widerspruch.
 4. **Bildschirm- und Tablet-Verwaltung**: eigener Bereich, um Scheiben-Hardware der Veranstaltung zuzuordnen (siehe eigener Abschnitt unten).
