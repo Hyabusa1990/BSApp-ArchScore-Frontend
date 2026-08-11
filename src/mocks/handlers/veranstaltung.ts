@@ -8,6 +8,7 @@ import {
 	clearTabelle,
 	connectLiga,
 	createBildschirm,
+	deactivateMatch,
 	findVeranstaltung,
 	generateTabletToken,
 	matchesFor,
@@ -116,6 +117,16 @@ export const veranstaltungHandlers = [
 		const v = findVeranstaltung(user, String(params.id));
 		if (!v) return notFound();
 		const updated = activateMatch(v.id, String(params.matchId));
+		if (!updated) return HttpResponse.json({ detail: 'Match nicht gefunden' }, { status: 404 });
+		return HttpResponse.json(updated);
+	}),
+
+	http.post(`${API_URL}/veranstaltungen/:id/matches/:matchId/deactivate`, ({ request, params }) => {
+		const user = requireUser(request);
+		if (!user) return unauthorized();
+		const v = findVeranstaltung(user, String(params.id));
+		if (!v) return notFound();
+		const updated = deactivateMatch(v.id, String(params.matchId));
 		if (!updated) return HttpResponse.json({ detail: 'Match nicht gefunden' }, { status: 404 });
 		return HttpResponse.json(updated);
 	}),

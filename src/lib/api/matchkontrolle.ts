@@ -33,5 +33,14 @@ export const matchkontrolleApi = {
 			`/veranstaltungen/${veranstaltungId}/matches/${matchId}/activate`,
 			{},
 			token
+		),
+
+	// Deaktiviert das gewählte Match, ohne ein anderes zu aktivieren — kann danach also
+	// kurzzeitig kein Match aktiv sein. Entspricht dem "Deaktivieren"-Link im Mockup.
+	deactivate: (token: string, veranstaltungId: string, matchId: string) =>
+		apiClient.post<Match[]>(
+			`/veranstaltungen/${veranstaltungId}/matches/${matchId}/deactivate`,
+			{},
+			token
 		)
 };

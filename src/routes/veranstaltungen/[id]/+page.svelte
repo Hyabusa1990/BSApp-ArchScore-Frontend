@@ -143,7 +143,17 @@
 	{:else if loadError || !veranstaltung}
 		<Alert color="danger">{loadError}</Alert>
 	{:else}
-		<h4 class="mb-4">{veranstaltung.name}</h4>
+		<div class="d-flex justify-content-between align-items-center mb-4">
+			<h4 class="mb-0">{veranstaltung.name}</h4>
+			{#if veranstaltung.datenquelle !== null}
+				<a
+					href={resolve('/veranstaltungen/[id]/matchkontrolle', { id })}
+					class="btn btn-outline-primary btn-sm"
+				>
+					{$_('veranstaltungen.matchkontrolle_btn')}
+				</a>
+			{/if}
+		</div>
 
 		{#if saveError}
 			<Alert color="danger">{saveError}</Alert>

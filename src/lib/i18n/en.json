@@ -168,6 +168,19 @@
 		"liga_ja": "Yes",
 		"liga_nein": "No",
 		"liga_connect_btn": "Connect / Save",
-		"switch_to_tabelle": "Enter initial table instead"
+		"switch_to_tabelle": "Enter initial table instead",
+		"matchkontrolle_btn": "Match control"
+	},
+	"matchkontrolle": {
+		"title": "Match control",
+		"back_btn": "Back to event",
+		"empty": "No matches yet — create a schedule or connect a league management first.",
+		"error_load": "Could not load matches.",
+		"error_toggle": "Action failed. State reloaded.",
+		"match_label": "Match {n}",
+		"aktiv": "ACTIVE",
+		"inaktiv": "INACTIVE",
+		"activate_btn": "Activate",
+		"deactivate_btn": "Deactivate"
 	}
 }

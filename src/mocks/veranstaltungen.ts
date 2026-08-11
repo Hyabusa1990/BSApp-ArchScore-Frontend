@@ -236,6 +236,14 @@ export function activateMatch(veranstaltungId: string, matchId: string): Match[]
 	return matchesFor(veranstaltungId);
 }
 
+/** Deaktiviert das gewählte Match, ohne ein anderes zu aktivieren. */
+export function deactivateMatch(veranstaltungId: string, matchId: string): Match[] | undefined {
+	const target = matches.find((m) => m.id === matchId && m.veranstaltung_id === veranstaltungId);
+	if (!target) return undefined;
+	target.aktiv = false;
+	return matchesFor(veranstaltungId);
+}
+
 export function bildschirmeFor(veranstaltungId: string): Bildschirm[] {
 	return bildschirme.filter((b) => b.veranstaltung_id === veranstaltungId);
 }

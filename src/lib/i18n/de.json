@@ -169,6 +169,19 @@
 		"liga_ja": "Ja",
 		"liga_nein": "Nein",
 		"liga_connect_btn": "Verbinden / Speichern",
-		"switch_to_tabelle": "Stattdessen initiale Tabelle eintragen"
+		"switch_to_tabelle": "Stattdessen initiale Tabelle eintragen",
+		"matchkontrolle_btn": "Matchkontrolle"
+	},
+	"matchkontrolle": {
+		"title": "Matchkontrolle",
+		"back_btn": "Zurück zur Veranstaltung",
+		"empty": "Noch keine Matches — zuerst Spielplan anlegen oder Ligaverwaltung verbinden.",
+		"error_load": "Matches konnten nicht geladen werden.",
+		"error_toggle": "Aktion fehlgeschlagen. Stand wurde neu geladen.",
+		"match_label": "Match {n}",
+		"aktiv": "AKTIV",
+		"inaktiv": "INAKTIV",
+		"activate_btn": "Aktivieren",
+		"deactivate_btn": "Deaktivieren"
 	}
 }
