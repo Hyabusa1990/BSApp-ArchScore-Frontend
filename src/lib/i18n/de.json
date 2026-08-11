@@ -102,6 +102,10 @@
 		"no_team": "–",
 		"status_wartet": "Wartet auf Freigabe",
 		"status_match_fertig": "Match beendet",
-		"mode_tabelle_placeholder": "Tabellenansicht kommt in Kürze."
+		"tabelle_pos": "Platz",
+		"tabelle_mannschaft": "Mannschaft",
+		"tabelle_mp": "Match-Pkt.",
+		"tabelle_sp": "Satz-Pkt.",
+		"tabelle_empty": "Noch keine Tabellendaten."
 	}
 }

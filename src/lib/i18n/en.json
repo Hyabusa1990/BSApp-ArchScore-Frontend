@@ -101,6 +101,10 @@
 		"no_team": "–",
 		"status_wartet": "Waiting for release",
 		"status_match_fertig": "Match finished",
-		"mode_tabelle_placeholder": "Table view coming soon."
+		"tabelle_pos": "Rank",
+		"tabelle_mannschaft": "Team",
+		"tabelle_mp": "Match Pts.",
+		"tabelle_sp": "Set Pts.",
+		"tabelle_empty": "No table data yet."
 	}
 }

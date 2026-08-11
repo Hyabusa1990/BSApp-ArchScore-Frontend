@@ -5,6 +5,7 @@
 	import { _ } from 'svelte-i18n';
 	import { Spinner } from '@sveltestrap/sveltestrap';
 	import MonitorTeamBlock from '$lib/components/MonitorTeamBlock.svelte';
+	import DisplayTabelle from '$lib/components/DisplayTabelle.svelte';
 
 	const JWT_KEY = 'display_jwt';
 	const PIN_KEY = 'display_pin';
@@ -118,10 +119,7 @@
 				/>
 			</div>
 		{:else}
-			<!-- Tabellen-Modus: Umsetzung ist Issue #3 — bewusst nur Platzhalter hier. -->
-			<div class="monitor-center">
-				<p class="monitor-pairing-hint">{$_('display.mode_tabelle_placeholder')}</p>
-			</div>
+			<DisplayTabelle eintraege={content.tabelle ?? []} />
 		{/if}
 	{/if}
 </div>
