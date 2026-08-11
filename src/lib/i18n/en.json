@@ -92,5 +92,19 @@
 		"error_save": "Failed to save changes.",
 		"error_create": "Failed to create.",
 		"error_delete": "Failed to delete."
+	},
+	"display": {
+		"page_title": "Spectator Monitor",
+		"load_error": "Connection to the server failed.",
+		"pairing_hint": "Enter this PIN in the screen management",
+		"pairing_waiting": "Waiting for assignment…",
+		"no_team": "–",
+		"status_wartet": "Waiting for release",
+		"status_match_fertig": "Match finished",
+		"tabelle_pos": "Rank",
+		"tabelle_mannschaft": "Team",
+		"tabelle_mp": "Match Pts.",
+		"tabelle_sp": "Set Pts.",
+		"tabelle_empty": "No table data yet."
 	}
 }
