@@ -27,10 +27,12 @@
 	let { children } = $props();
 	let isNavOpen = $state(false);
 
-	// Chrome-lose Vollbild-Routen (Zuschauer-Bildschirm, später Spotter-Tablet/Kampfrichter) —
+	// Chrome-lose Vollbild-Routen (Zuschauer-Bildschirm, Spotter-Tablet, später Kampfrichter) —
 	// teilen das Bedürfnis nach unverstellter Fullscreen-Ansicht ohne Site-Navigation, siehe
 	// dasselbe Pattern im scoring-Referenzprojekt (dort "isMobileRoute").
-	const isChromelessRoute = $derived(page.url.pathname.startsWith('/display'));
+	const isChromelessRoute = $derived(
+		page.url.pathname.startsWith('/display') || page.url.pathname.startsWith('/tablet')
+	);
 
 	const showAdminLink = $derived(auth.user?.role === 'admin');
 

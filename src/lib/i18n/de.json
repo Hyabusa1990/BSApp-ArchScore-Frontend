@@ -107,5 +107,28 @@
 		"tabelle_mp": "Match-Pkt.",
 		"tabelle_sp": "Satz-Pkt.",
 		"tabelle_empty": "Noch keine Tabellendaten."
+	},
+	"binocular": {
+		"page_title": "Fernglas-Scorer",
+		"load_error": "Scheibe nicht gefunden oder Serverfehler.",
+		"lane_label": "Scheibe {lane}",
+		"waiting_title": "Warte auf Freigabe",
+		"waiting_release_hint": "Diese Scheibe hat aktuell keine freigegebene Begegnung. Sobald die Runde freigegeben wird, startet die Erfassung automatisch.",
+		"completed_title": "Match beendet",
+		"set_badge": "Satz {set}/5",
+		"all_sets_done": "Alle 5 Sätze erfasst ✓",
+		"satz_ende_title": "Satz {set} abgeschlossen",
+		"satz_ende_confirm_btn": "Weiter zu Satz {next}",
+		"satz_ende_confirm_final_btn": "Fertig — alle Sätze erfasst",
+		"toggle_show_low": "Weitere Werte (1–5) einblenden",
+		"toggle_hide_low": "Weitere Werte ausblenden",
+		"korrektur_hint": "Pfeil {n} korrigieren — neuen Wert tippen",
+		"korrektur_cancel": "Abbrechen",
+		"korrektur_error": "Korrektur fehlgeschlagen. Bitte Seite neu laden.",
+		"undo_btn": "↩ Zurücknehmen",
+		"undo_error": "Nichts zum Zurücknehmen.",
+		"pfeil_error": "Erfassung fehlgeschlagen. Bitte erneut versuchen.",
+		"satz_speichern_error": "Speichern fehlgeschlagen. Bitte erneut versuchen.",
+		"satz_gesperrt_info": "Dieser Satz wurde bereits vom Schützen abgeschlossen."
 	}
 }
