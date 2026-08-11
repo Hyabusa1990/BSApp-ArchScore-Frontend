@@ -2,6 +2,7 @@ import { authHandlers } from './auth';
 import { configHandlers } from './config';
 import { displayHandlers } from './display';
 import { binocularHandlers } from './binocular';
+import { veranstaltungHandlers } from './veranstaltung';
 
 /**
  * Eine Handler-Datei pro Feature-Modul, gespiegelt zu src/lib/api/*.ts.
@@ -12,5 +13,6 @@ export const handlers = [
 	...authHandlers,
 	...configHandlers,
 	...displayHandlers,
-	...binocularHandlers
+	...binocularHandlers,
+	...veranstaltungHandlers
 ];

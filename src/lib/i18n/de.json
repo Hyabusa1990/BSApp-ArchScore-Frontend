@@ -4,7 +4,7 @@
 		"login": "Anmelden",
 		"register": "Registrieren",
 		"profile": "Profil",
-		"admin": "Administration"
+		"veranstaltungen": "Veranstaltungen"
 	},
 	"home": {
 		"welcome_user": "Willkommen, {username}!",

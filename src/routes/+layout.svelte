@@ -34,7 +34,10 @@
 		page.url.pathname.startsWith('/display') || page.url.pathname.startsWith('/tablet')
 	);
 
-	const showAdminLink = $derived(auth.user?.role === 'admin');
+	// Veranstaltungs-Verwaltung ist für jeden eingeloggten Account sichtbar (user verwaltet
+	// eigene Veranstaltungen, admin alle) — kein role==="admin"-Gate hier, das Filtern nach
+	// Ownership passiert in der API/im Mock, siehe FACHLICHKEIT.md/Issue #6.
+	const showVerwaltungLink = $derived(auth.isAuthenticated);
 
 	onMount(() => {
 		auth.init();
@@ -72,9 +75,9 @@
 								<DropdownItem href="/profile" onclick={closeNav}>
 									<Icon name="person-gear" class="me-2" />{$_('nav.profile')}
 								</DropdownItem>
-								{#if showAdminLink}
-									<DropdownItem href="/admin" onclick={closeNav}>
-										<Icon name="shield-lock" class="me-2" />{$_('nav.admin')}
+								{#if showVerwaltungLink}
+									<DropdownItem href="/veranstaltungen" onclick={closeNav}>
+										<Icon name="calendar-event" class="me-2" />{$_('nav.veranstaltungen')}
 									</DropdownItem>
 								{/if}
 								<li><hr class="dropdown-divider" /></li>

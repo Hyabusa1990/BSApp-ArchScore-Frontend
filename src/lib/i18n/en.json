@@ -4,7 +4,7 @@
 		"login": "Login",
 		"register": "Register",
 		"profile": "Profile",
-		"admin": "Administration"
+		"veranstaltungen": "Events"
 	},
 	"home": {
 		"welcome_user": "Welcome, {username}!",
