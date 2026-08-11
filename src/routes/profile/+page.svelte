@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { _ } from 'svelte-i18n';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { profileApi } from '$lib/api/profile';
 	import { APIError } from '$lib/api/client';
@@ -30,7 +31,7 @@
 	let pwErrorKey = $state<string | null>(null);
 
 	$effect(() => {
-		if (auth.initialized && !auth.isAuthenticated) goto('/login');
+		if (auth.initialized && !auth.isAuthenticated) goto(resolve('/login'));
 	});
 
 	$effect(() => {

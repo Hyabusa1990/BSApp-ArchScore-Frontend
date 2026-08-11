@@ -3,6 +3,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { appConfig } from '$lib/stores/config.svelte';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { APIError } from '$lib/api/client';
 	import { Alert, Button, Form, Spinner } from '@sveltestrap/sveltestrap';
 	import AuthCard from '$lib/components/AuthCard.svelte';
@@ -17,7 +18,7 @@
 		errorKey = null;
 		try {
 			await auth.login(username, password);
-			goto('/');
+			goto(resolve('/'));
 		} catch (err) {
 			errorKey =
 				err instanceof APIError && err.status === 401
@@ -64,7 +65,7 @@
 	{#if appConfig.allowRegistration}
 		<p class="text-center text-muted small mt-3 mb-0">
 			{$_('login.no_account')}
-			<a href="/register" class="text-decoration-none">{$_('nav.register')}</a>
+			<a href={resolve('/register')} class="text-decoration-none">{$_('nav.register')}</a>
 		</p>
 	{/if}
 </AuthCard>
