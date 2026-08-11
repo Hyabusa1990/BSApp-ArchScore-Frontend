@@ -7,6 +7,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { appConfig } from '$lib/stores/config.svelte';
 	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
 	import { onMount } from 'svelte';
 	import {
 		Navbar,
@@ -25,13 +26,7 @@
 	let { children } = $props();
 	let isNavOpen = $state(false);
 
-	const showAdminLink = $derived(
-		!!(
-			auth.user?.is_staff ||
-			auth.hasPermission('auth.view_user') ||
-			auth.hasPermission('auth.view_group')
-		)
-	);
+	const showAdminLink = $derived(auth.user?.role === 'admin');
 
 	onMount(() => {
 		auth.init();
@@ -41,7 +36,7 @@
 	function logout() {
 		isNavOpen = false;
 		auth.logout();
-		goto('/login');
+		goto(resolve('/login'));
 	}
 
 	function closeNav() {

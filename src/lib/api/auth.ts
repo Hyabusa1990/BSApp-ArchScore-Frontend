@@ -5,9 +5,13 @@ export interface TokenPair {
 	refresh: string;
 }
 
+export type Role = 'archer' | 'judge' | 'admin';
+
 export interface User {
-	id: number;
+	id: string;
+	username: string;
 	email: string;
+	role: Role;
 }
 
 export const authApi = {
