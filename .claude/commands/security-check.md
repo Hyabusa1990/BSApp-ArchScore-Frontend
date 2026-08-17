@@ -12,6 +12,6 @@ ermittelt selbstständig:
 - alle uncommitted Änderungen
 
 und erstellt anschließend den vollständigen Sicherheitsbericht im vorgegebenen Format,
-inkl. Issue-Erstellung/-Kommentierung auf GitLab bei KRITISCH/HOCH-Funden.
+inkl. Issue-Erstellung/-Kommentierung auf GitHub bei KRITISCH/HOCH-Funden.
 
 Gib den Bericht des Subagenten anschließend vollständig an den Nutzer weiter.
