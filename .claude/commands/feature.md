@@ -10,8 +10,8 @@ Du bist ein erfahrener Software-Architekt im Kontext dieses Projekts. Deine Aufg
 
 Lese zwingend folgende Dateien, bevor du mit dem Interview beginnst:
 
-- `fachlichkeit.md` / `docs/*.md` – Business-Logik, Rollenkonzepte, fachliche Workflows
-- `AGENTEN.md` – Agenten-Zusammenarbeit und Projektregeln
+- `FACHLICHKEIT.md` – Business-Logik, Rollenkonzepte, fachliche Workflows
+- `CLAUDE.md` – Architektur, Konventionen und Projektregeln dieses Repos
 
 Falls eine der Dateien nicht existiert, informiere den Benutzer und fahre trotzdem fort.
 
@@ -35,7 +35,7 @@ Pflichtfragen (in dieser Reihenfolge, sofern noch unklar):
    Bitte um eine kurze, funktionale Beschreibung aus Nutzersicht.
 
 2. **Welche Rolle(n) sind betroffen?**
-   Wer nutzt dieses Feature? (Bezug zu den Rollen in `fachlichkeit.md` herstellen)
+   Wer nutzt dieses Feature? (Bezug zu den Rollen in `FACHLICHKEIT.md` herstellen)
 
 3. **Gibt es visuelle Vorlagen?**
    Frage, ob der Benutzer ein Mockup, Wireframe oder Screenshot bereitstellen kann.
@@ -58,11 +58,14 @@ Nach Abschluss des Interviews:
 
 1. Fasse dein Verständnis des Features auf Deutsch zusammen.
 2. Plane die Architektur strikt innerhalb des Tech-Stacks:
-   - **Backend:** Django 6 + Django Ninja (REST/API, Pydantic Schemas, ORM)
-   - **Frontend:** SvelteKit
+   - **Frontend:** SvelteKit 2 + Svelte 5 (Runes), TypeScript, Sveltestrap
+   - **Backend:** kein lokales Backend in diesem Repo — die echte API (Fawkes, C#) wird in einem separaten
+     Repo von einem anderen Entwickler gebaut; dieses Repo spricht sie nur über `src/lib/api/*.ts` an.
+     Solange ein Endpunkt in `ArchScore-SpecsAndDocu/*.json` (openapi/Fawkes-Spec) noch nicht feststeht,
+     wird stattdessen der Fake-API-Mock (MSW, `src/mocks/`) gebaut — siehe CLAUDE.md „New endpoint workflow".
 3. Zerlege das Feature in logisch entkoppelte Issues:
-   - Trenne Frontend- und Backend-Aufgaben sauber
-   - Definiere Abhängigkeiten explizit (Backend-Endpoint blockiert oft Frontend-Komponente)
+   - Trenne Frontend-Umsetzung und Fake-API/Mock-Anpassung sauber
+   - Definiere Abhängigkeiten explizit (z.B. wenn ein Issue ein Feld/Endpunkt aus einem anderen Issue braucht)
 4. Stelle dem Benutzer deinen Plan vor und kläre offene Fragen.
 
 **Warte auf das explizite "Go" des Benutzers, bevor du Issues erstellst.**
@@ -71,9 +74,12 @@ Nach Abschluss des Interviews:
 
 ## Schritt 3a – Bestehende Tests auf fachliche Kollision prüfen
 
-Bevor du den Plan zur Freigabe vorlegst: Durchsuche die bestehenden Testdateien im betroffenen Bereich
-(Backend: `*/tests/*.py`, Frontend: `frontend/src/tests/**/*.test.ts`) nach Tests, die aktuelles
-Verhalten in genau dem Bereich absichern, den das neue Feature verändert.
+Bevor du den Plan zur Freigabe vorlegst: Durchsuche bestehende Testdateien im betroffenen Bereich nach
+Tests, die aktuelles Verhalten in genau dem Bereich absichern, den das neue Feature verändert.
+
+Stand CLAUDE.md: aktuell ist **kein Testrunner konfiguriert** (kein `npm test`-Setup, keine Testdateien
+im Repo) — dieser Schritt greift also faktisch erst, sobald das nicht mehr der Fall ist. Bis dahin
+reicht der Vermerk „Keine bestehenden Tests betroffen — kein Testrunner im Repo konfiguriert."
 
 Unterscheide klar:
 
@@ -118,7 +124,7 @@ Nach Freigabe durch den Benutzer:
 ### 🇩🇪 Fachlicher Kontext & Zielsetzung
 
 **Kontext:**
-[Zusammenfassung auf Deutsch. Fachlicher Bezug aus fachlichkeit.md.
+[Zusammenfassung auf Deutsch. Fachlicher Bezug aus FACHLICHKEIT.md.
 Falls visuelle Vorlagen vorhanden: gewünschtes UI/UX-Verhalten beschreiben.]
 
 **Zielsetzung:**
@@ -129,26 +135,30 @@ Falls visuelle Vorlagen vorhanden: gewünschtes UI/UX-Verhalten beschreiben.]
 ### 🇬🇧 Technical Specification & Execution Plan
 
 **Attention Implementation Agent:** The following instructions are your
-technical execution plan. Implement strictly within the Django 6 / SvelteKit stack.
+technical execution plan. Implement strictly within the SvelteKit 2 / Svelte 5 stack.
+There is no local backend in this repo — the real API is Fawkes (C#, separate repo);
+if its contract isn't settled yet for this feature, build/extend the Fake-API (MSW)
+instead, see CLAUDE.md „New endpoint workflow".
 
 #### 1. Frontend Execution (SvelteKit)
 - [Specific instructions for UI implementation, Svelte components,
   state management, routing. Translate visual requirements into
   technical structure here.]
 
-#### 2. Backend Execution (Django 6 / Ninja)
-- [Instructions for API endpoints, Pydantic schemas, ORM models,
-  data validation, authentication/permissions.]
+#### 2. Fake-API Execution (MSW)
+- [Instructions for the mock handler(s) in `src/mocks/handlers/`, the in-memory
+  store/fixtures it needs, and — once the real Fawkes endpoint is confirmed —
+  what changes in `src/lib/api/*.ts` to match it.]
 
 #### 3. Dependencies (Prerequisites)
 - [ ] Blocked by Issue #<Insert Number> — do not start until resolved.
       (Remove this section if no dependencies exist.)
 
 #### 4. Testanpassungen (freigegeben)
-- [ ] `pfad/zur/test_datei.py::test_name` — Freigabe erteilt durch den Auftraggeber am [Datum]:
+- [ ] `pfad/zur/datei.test.ts::test_name` — Freigabe erteilt durch den Auftraggeber am [Datum]:
       [altes → neues Verhalten, kurz begründet]
-      (Falls keine Kollision besteht: "Keine bestehenden Tests betroffen — alle bestehenden
-      Testdateien bleiben schreibgeschützt.")
+      (Solange kein Testrunner im Repo konfiguriert ist — siehe CLAUDE.md — reicht:
+      "Keine bestehenden Tests betroffen — kein Testrunner im Repo konfiguriert.")
 
 #### 5. Acceptance Criteria
 - [ ] [Technical criterion 1]
@@ -159,7 +169,7 @@ technical execution plan. Implement strictly within the Django 6 / SvelteKit sta
 
 ## Hinweise
 
-- Beziehe alle Architekturentscheidungen auf die Inhalte von `fachlichkeit.md`
+- Beziehe alle Architekturentscheidungen auf die Inhalte von `FACHLICHKEIT.md`
 - Nummeriere die Issues in deinem Plan, bevor du sie anlegst, damit der Benutzer die Reihenfolge bestätigen kann
 - `gh issue create` gibt die Issue-URL aus (endet auf `/issues/<Nummer>`) — diese Nummer für die
   `Dependencies`-Sektion nachfolgender Issues im selben Lauf verwenden
