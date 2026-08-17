@@ -18,17 +18,18 @@ Design, Größenverhältnisse und Verhalten der Binocular-/Display-Screens sind 
 - Pro Satz schießen die **3 Schützen** der Mannschaft je **2 Pfeile** → 6 Pfeile pro Satz, in fester Reihenfolge (Position 1, 2, 3, jeweils 2 Pfeile).
 - **Ringzahl-Kodierung**: 10–1 = Ringzahl, Fehlschuss ("M" = Miss) = **0** (nicht `null`!), noch nicht erfasst = `null`. Diese Unterscheidung ist wichtig — 0 und "nicht erfasst" sind fachlich verschiedene Zustände.
 - **Satzpunkte** (genaue Regel): pro Satz vergleicht man die Ringsumme (Summe aller Pfeilwerte) beider Mannschaften — die Mannschaft mit mehr Ringen bekommt **2 Satzpunkte**, bei Gleichstand bekommen **beide 1 Satzpunkt**.
-- **Matchende**: eine Mannschaft hat gewonnen (Match beendet), sobald sie **6 oder mehr Satzpunkte** erreicht — das kann schon vor Satz 5 feststehen, da der Rückstand rechnerisch nicht mehr aufholbar ist. Steht es nach allen 5 Sätzen **5:5**, ist das Match ebenfalls beendet (unentschieden) → **Stechen** (Shoot-off) mit einem "Vorteil Heim/Auswärts"-Konzept als Tie-Breaker (Stechen-Ablauf selbst noch nicht vertieft/umgesetzt).
+- **Matchende**: eine Mannschaft hat gewonnen (Match beendet), sobald sie **6 oder mehr Satzpunkte** erreicht — das kann schon vor Satz 5 feststehen, da der Rückstand rechnerisch nicht mehr aufholbar ist. Steht es nach allen 5 Sätzen **5:5**, ist das Match unentschieden beendet — **kein Stechen/Shoot-off**, bewusst nicht vorgesehen.
 
 ## Rollen an der Scheibe / im System
 
 - **Schütze**: schießt, Werte landen offiziell im Schusszettel (Wahrheit).
 - **Spotter/Fernglas-Scorer** ("Binocular"): **einer pro Scheibe** (nicht pro Begegnung), beobachtet durchs Fernglas, erfasst Pfeilwerte vorläufig, sofort nach jedem Schuss, auf einem Tablet — bevor der Schütze offiziell bestätigt. Diese vorläufigen Werte sind reine Vorschau für die Anzeige, nicht die Wahrheit.
-- **Kampfrichter**: eigene Rolle mit eigenem Zugang, überwacht/greift bei Regelverstößen ein (Details noch nicht vertieft, siehe Referenzprojekt `ref/[token]`-Route).
 - **Zuschauer**: sehen nur den Bildschirm zwischen den Scheiben, keine Interaktion.
-- **Turnierleitung/Admin** (Account-Rolle, Verwaltungsoberfläche): siehe eigener Abschnitt unten — andere Achse als diese vier, kein Zugang an der Scheibe selbst.
+- **Turnierleitung/Admin** (Account-Rolle, Verwaltungsoberfläche): siehe eigener Abschnitt unten — andere Achse als diese drei, kein Zugang an der Scheibe selbst.
 
-Wichtig: Schütze/Spotter/Kampfrichter/Zuschauer authentifizieren sich **nie** über ein Benutzerkonto — immer passwortlos über einen zweckgebundenen Token in der URL (Display-JWT, Tablet-QR-Token, Kampfrichter-Token). Das Account-`role`-Feld (`user`/`admin`, siehe „Veranstaltungs-Setup und Admin-Workflow") betrifft ausschließlich die Verwaltungsoberfläche, nicht diese vier Rollen.
+Wichtig: Schütze/Spotter/Zuschauer authentifizieren sich **nie** über ein Benutzerkonto — immer passwortlos über einen zweckgebundenen Token in der URL (Display-JWT, Tablet-QR-Token). Das Account-`role`-Feld (`user`/`admin`, siehe „Veranstaltungs-Setup und Admin-Workflow") betrifft ausschließlich die Verwaltungsoberfläche, nicht diese drei Rollen.
+
+(Eine Kampfrichter-Rolle war ursprünglich angedacht, wird aber nicht gebraucht — kein System-Zugang, kein Feature dafür.)
 
 ## Spotter-Workflow (Referenz: `binocular`-Route)
 
@@ -56,7 +57,7 @@ Wichtig: Schütze/Spotter/Kampfrichter/Zuschauer authentifizieren sich **nie** �
 - **`user`**: normaler registrierter Account, verwaltet **nur eigene** Veranstaltungen (Ownership-Scoping — ein `user` sieht/ändert nie Veranstaltungen eines anderen `user`, analog zum `owner`-Feld im `scoring`-Referenzprojekt).
 - **`admin`**: verwaltet zusätzlich **alle** Benutzer und **alle** Veranstaltungen, nicht nur eigene.
 
-Diese Achse ist unabhängig von den Wettkampf-Rollen (Schütze/Spotter/Kampfrichter/Zuschauer, siehe oben) — die Verwaltungsoberfläche ist die einzige Stelle in ArchScore, die echten Benutzerkonto-Login (statt passwortloser Token-URLs) braucht.
+Diese Achse ist unabhängig von den Wettkampf-Rollen (Schütze/Spotter/Zuschauer, siehe oben) — die Verwaltungsoberfläche ist die einzige Stelle in ArchScore, die echten Benutzerkonto-Login (statt passwortloser Token-URLs) braucht.
 
 1. **Veranstaltung anlegen**: ein `user` (oder `admin`) legt eine Veranstaltung an — gehört danach diesem Account (Ownership).
 2. **Datenquelle für Begegnungen** — zwei Wege, im Verwaltungs-UI nur als Auswahl sichtbar:
