@@ -1,4 +1,4 @@
-import type { DisplayContent, DisplayPfeil, DisplaySeite, TabellenEintrag } from '$lib/api/display';
+import type { DisplayContent, DisplaySeite, TabellenEintrag } from '$lib/api/display';
 import {
 	findAktivesMatchFuerScheibe,
 	findBildschirmByPin,
@@ -6,7 +6,8 @@ import {
 	getVeranstaltungById,
 	mannschaftUndGegner
 } from './veranstaltungen';
-import { berechneMatchStand, liveSatzErgebnisse, peekScoringState } from './shared-state';
+import { berechneMatchStand, peekScoringState, ringSumme } from './shared-state';
+import { encodeShots } from './binoculars';
 
 /**
  * In-memory Fake-Backend-Zustand für Displays — Pairing/Inhalt kommen jetzt aus dem echten
@@ -34,17 +35,14 @@ export function registerDisplay(): { jwt: string; pin: string } {
 	return { jwt, pin };
 }
 
-function leereSeite(scheibennummer: number | null): DisplaySeite {
+function leereSeite(targetNo: number | null): DisplaySeite {
 	return {
-		scheibennummer,
-		mannschaft_name: null,
-		monitor_status: 'WARTET',
-		schuetzen: [],
-		aktueller_satz: null,
-		pfeile: [],
-		satz_ergebnisse: [],
-		matchpunkte: null,
-		satzpunkte: null
+		targetNo,
+		teamName: null,
+		shots: null,
+		setScores: null,
+		currentSetScore: null,
+		setPoints: null
 	};
 }
 
@@ -57,20 +55,20 @@ function buildSeiteForScheibe(scheibennummer: number | null): DisplaySeite {
 	const { mannschaft } = mannschaftUndGegner(found.begegnung, found.seite);
 	const scoringOwn = peekScoringState(scheibennummer);
 
-	// Match aktiv, aber der Spotter hat diese Scheibe noch nie geöffnet / noch keinen Pfeil
-	// erfasst — Scoring-Zustand existiert dann noch gar nicht (peekScoringState legt ihn
-	// bewusst nicht an, siehe shared-state.ts).
+	// Match aktiv, aber der Spotter hat diese Scheibe noch nie geöffnet — Scoring-Zustand
+	// existiert dann noch gar nicht (peekScoringState legt ihn bewusst nicht an, siehe
+	// shared-state.ts). shots/setScores bleiben leer -> deriveMonitorStatus liefert
+	// VOR_DEM_MATCH. shooters ist reiner Mock-Platzhalter (das Admin-Modell kennt keine echte
+	// Schützen-Aufstellung, siehe binoculars.ts) — nur damit der Chip-Zweig testbar ist.
 	if (!scoringOwn) {
 		return {
-			scheibennummer,
-			mannschaft_name: mannschaft,
-			monitor_status: 'SCHUETZEN_GEMELDET',
-			schuetzen: [],
-			aktueller_satz: 1,
-			pfeile: [],
-			satz_ergebnisse: [],
-			matchpunkte: null,
-			satzpunkte: null
+			targetNo: scheibennummer,
+			teamName: mannschaft,
+			shots: null,
+			setScores: null,
+			currentSetScore: null,
+			setPoints: null,
+			shooters: ['Schütze 1', 'Schütze 2', 'Schütze 3']
 		};
 	}
 
@@ -81,66 +79,25 @@ function buildSeiteForScheibe(scheibennummer: number | null): DisplaySeite {
 	);
 	const eigeneSatzpunkte = found.seite === 'a' ? stand.satzpunkteA : stand.satzpunkteB;
 
-	// Live-Ringsumme für die Anzeige (zeigt den laufenden Satz schon während der Erfassung,
-	// nicht erst wenn beide Seiten fertig sind) — bewusst getrennt von berechneMatchStand
-	// oben, das für Satzpunkte/Matchende weiterhin streng "beide fertig" verlangt.
-	const satzErgebnisse = liveSatzErgebnisse(scheibennummer, gegnerScheibe);
-
-	if (stand.beendet) {
-		return {
-			scheibennummer,
-			mannschaft_name: mannschaft,
-			monitor_status: 'MATCH_FERTIG',
-			schuetzen: [],
-			aktueller_satz: 5,
-			pfeile: [],
-			satz_ergebnisse: satzErgebnisse,
-			matchpunkte: eigeneSatzpunkte,
-			satzpunkte: null
-		};
-	}
-
 	const lfdNr = scoringOwn.aktueller_satz;
-	const pfeileImSatz = scoringOwn.vorlaeufige_passen.filter((p) => p.lfd_nr === lfdNr);
-	const anzahlPfeileImSatz = pfeileImSatz.reduce(
-		(n, p) => n + (p.ringzahl_pfeil1 !== null ? 1 : 0) + (p.ringzahl_pfeil2 !== null ? 1 : 0),
-		0
+	const passenAktuellerSatz = scoringOwn.vorlaeufige_passen.filter((p) => p.lfd_nr === lfdNr);
+	const shotsAktuellerSatz = encodeShots(passenAktuellerSatz);
+
+	// Eigene Ringsummen aller vom eigenen Spotter schon bestätigten Sätze — unabhängig davon,
+	// ob die Gegenseite auch schon fertig ist (Fortschritt bleibt pro Spotter unabhängig,
+	// siehe FACHLICHKEIT.md). Kein eigener "Match fertig"-Zustand mehr (#16): die letzten
+	// setScores bleiben nach Matchende einfach stehen.
+	const setScores = Array.from({ length: lfdNr - 1 }, (_, i) =>
+		ringSumme(scoringOwn.vorlaeufige_passen, i + 1)
 	);
 
-	if (anzahlPfeileImSatz === 0) {
-		// lfdNr === 1: frisch gemeldet, noch kein Pfeil. lfdNr > 1: voriger Satz gerade
-		// komplett, wartet auf den nächsten — spiegelt _derive_monitor_status im
-		// scoring-Referenzprojekt.
-		return {
-			scheibennummer,
-			mannschaft_name: mannschaft,
-			monitor_status: lfdNr === 1 ? 'SCHUETZEN_GEMELDET' : 'SATZ_FERTIG',
-			schuetzen: [],
-			aktueller_satz: lfdNr,
-			pfeile: [],
-			satz_ergebnisse: satzErgebnisse,
-			matchpunkte: null,
-			satzpunkte: lfdNr > 1 ? eigeneSatzpunkte : null
-		};
-	}
-
-	const pfeile: DisplayPfeil[] = pfeileImSatz.map((p) => ({
-		position: p.position,
-		name: `Position ${p.position}`,
-		ringzahl_pfeil1: p.ringzahl_pfeil1,
-		ringzahl_pfeil2: p.ringzahl_pfeil2
-	}));
-
 	return {
-		scheibennummer,
-		mannschaft_name: mannschaft,
-		monitor_status: 'SATZ_LAEUFT',
-		schuetzen: [],
-		aktueller_satz: lfdNr,
-		pfeile,
-		satz_ergebnisse: satzErgebnisse,
-		matchpunkte: null,
-		satzpunkte: null
+		targetNo: scheibennummer,
+		teamName: mannschaft,
+		shots: shotsAktuellerSatz || null,
+		setScores: setScores.length > 0 ? setScores : null,
+		currentSetScore: shotsAktuellerSatz ? ringSumme(scoringOwn.vorlaeufige_passen, lfdNr) : null,
+		setPoints: eigeneSatzpunkte
 	};
 }
 

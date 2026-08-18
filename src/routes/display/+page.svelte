@@ -20,13 +20,13 @@
 	// Satzpunkte kommen unverändert aus der aufbereiteten Backend-Antwort — Vergleich nur zur
 	// Einfärbung (grün/rot), keine eigene Ergebnisberechnung (siehe FACHLICHKEIT.md).
 	const satzpunkteVergleichbar = $derived(
-		content?.scheibe_a?.satzpunkte != null && content?.scheibe_b?.satzpunkte != null
+		content?.scheibe_a?.setPoints != null && content?.scheibe_b?.setPoints != null
 	);
 	const aSatzpunkteFuehrt = $derived(
-		satzpunkteVergleichbar && content!.scheibe_a!.satzpunkte! > content!.scheibe_b!.satzpunkte!
+		satzpunkteVergleichbar && content!.scheibe_a!.setPoints! > content!.scheibe_b!.setPoints!
 	);
 	const bSatzpunkteFuehrt = $derived(
-		satzpunkteVergleichbar && content!.scheibe_b!.satzpunkte! > content!.scheibe_a!.satzpunkte!
+		satzpunkteVergleichbar && content!.scheibe_b!.setPoints! > content!.scheibe_a!.setPoints!
 	);
 
 	// ── Pairing + Polling in einer Schleife ─────────────────────────────────────
@@ -109,6 +109,7 @@
 					seite={content.scheibe_a!}
 					satzpunkteFuehrt={aSatzpunkteFuehrt}
 					satzpunkteZurueck={bSatzpunkteFuehrt}
+					gegnerSetScores={content.scheibe_b?.setScores ?? null}
 				/>
 				<div class="monitor-divider"><span>VS</span></div>
 				<MonitorTeamBlock
@@ -116,6 +117,7 @@
 					rechtsOrientiert
 					satzpunkteFuehrt={bSatzpunkteFuehrt}
 					satzpunkteZurueck={aSatzpunkteFuehrt}
+					gegnerSetScores={content.scheibe_a?.setScores ?? null}
 				/>
 			</div>
 		{:else}

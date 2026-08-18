@@ -50,8 +50,10 @@ function resolvePairing(token: string, scheibennummer: number): ResolveOutcome {
 	};
 }
 
-/** Passen des aktuellen Satzes, Position-sortiert, -> Fawkes-shots-String (siehe binocular.ts). */
-function encodeShots(passenImSatz: BinocularMatch['vorlaeufige_passen']): string {
+/** Passen des aktuellen Satzes, Position-sortiert, -> Fawkes-shots-String (siehe binocular.ts).
+ * Auch von displays.ts wiederverwendet, um das `shots`-Feld der Match-Anzeige aus denselben
+ * Roh-Passen abzuleiten (Issue #16) — dieselbe Kodierung, keine zweite Implementierung. */
+export function encodeShots(passenImSatz: BinocularMatch['vorlaeufige_passen']): string {
 	const sortiert = [...passenImSatz].sort((a, b) => a.position - b.position);
 	const chars: string[] = [];
 	for (const p of sortiert) {
@@ -70,7 +72,7 @@ function buildMatch(scheibennummer: number, { found, scoring }: Resolved): Binoc
 	const { mannschaft, gegner } = mannschaftUndGegner(found.begegnung, found.seite);
 	// Nur der aktuelle Satz — 1:1 wie im scoring-Referenzprojekt (_binocular_dict filtert
 	// dort genauso). scoring.vorlaeufige_passen selbst sammelt alle Sätze (für
-	// liveSatzErgebnisse/berechneMatchStand gebraucht), aber die Binocular-UI indiziert
+	// displays.ts/berechneMatchStand gebraucht, siehe #16), aber die Binocular-UI indiziert
 	// Pfeile rein über "position" (1-3) ohne lfd_nr — ungefiltert würden sich mehrere
 	// Sätze in der Anzeige überlagern, sobald mehr als ein Satz gelaufen ist.
 	const passenImSatz = scoring.vorlaeufige_passen.filter(

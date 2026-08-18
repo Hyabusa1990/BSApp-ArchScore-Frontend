@@ -1,18 +1,25 @@
 <script lang="ts">
-	import type { DisplayPfeil, DisplaySeite } from '$lib/api/display';
+	import { deriveMonitorStatus, type DisplaySeite } from '$lib/api/display';
+	import { decodeShot } from '$lib/api/binocular';
 	import { _ } from 'svelte-i18n';
 
 	let {
 		seite,
 		rechtsOrientiert = false,
 		satzpunkteFuehrt = false,
-		satzpunkteZurueck = false
+		satzpunkteZurueck = false,
+		gegnerSetScores = null
 	} = $props<{
 		seite: DisplaySeite;
 		rechtsOrientiert?: boolean;
 		satzpunkteFuehrt?: boolean;
 		satzpunkteZurueck?: boolean;
+		/** setScores der gegnerischen Seite, für den Positionsvergleich in ZWISCHEN_SAETZEN
+		 * (siehe Issue #16) — von +page.svelte durchgereicht. */
+		gegnerSetScores?: number[] | null;
 	}>();
+
+	const status = $derived(deriveMonitorStatus(seite));
 
 	// Zielscheiben-Farbschema: 10-9 gelb, 8-7 rot, 6-5 blau, 4-3 schwarz, 2-1 weiß, M grün.
 	function ringColorClass(val: number | null): string {
@@ -30,21 +37,43 @@
 		return val === 0 ? 'M' : String(val);
 	}
 
-	// Flache Liste aller bereits erfassten Pfeile des offenen Satzes in Schussreihenfolge —
-	// wächst von links nach rechts mit jedem Treffer, keine Platzhalter für noch nicht
-	// geschossene Pfeile (bewusst reduziert für die Zuschauer-Anzeige aus der Distanz).
-	const pfeilWerte = $derived(
-		seite.pfeile
-			.flatMap((p: DisplayPfeil) => [p.ringzahl_pfeil1, p.ringzahl_pfeil2])
-			.filter((v: number | null) => v !== null)
-	) as number[];
+	// Vergleich mit demselben Satz der gegnerischen Mannschaft (gleiche Index-Position) —
+	// eigener Wert höher = grün (führt), niedriger = rot (liegt zurück), gleich = hellgrau.
+	function vergleichsKlasse(eigen: number, gegner: number | null | undefined): string {
+		if (gegner == null) return 'punkte-gleich';
+		if (eigen > gegner) return 'punkte-fuehrend';
+		if (eigen < gegner) return 'punkte-rueckstand';
+		return 'punkte-gleich';
+	}
 
-	// Ringsumme des aktuell laufenden ODER gerade beendeten Satzes — der letzte Eintrag in
-	// satz_ergebnisse ist für beide Fälle maßgeblich.
-	const ringSummeSatz = $derived(
-		seite.satz_ergebnisse.length > 0
-			? seite.satz_ergebnisse[seite.satz_ergebnisse.length - 1].eigene_ringe
-			: 0
+	type AnzeigeWert = { label: string; colorClass: string };
+
+	// Pfeilwerte des laufenden Satzes, aus dem shots-String geparst (gleiche Dekodierung wie
+	// beim Spotter, siehe #9) — wächst von links nach rechts mit jedem Treffer, keine
+	// Platzhalter für noch nicht geschossene Pfeile (bewusst reduziert für die
+	// Zuschauer-Anzeige aus der Distanz).
+	const shotsWerte = $derived<AnzeigeWert[]>(
+		status === 'SATZ_LAEUFT' && seite.shots
+			? seite.shots.split('').map((zeichen: string) => {
+					const ringzahl = decodeShot(zeichen);
+					return { label: ringLabel(ringzahl), colorClass: ringColorClass(ringzahl) };
+				})
+			: []
+	);
+
+	// Ein Kästchen pro abgeschlossenem Satz, farblich gegen die gegnerische Mannschaft an
+	// derselben Index-Position verglichen.
+	const setScoreWerte = $derived<AnzeigeWert[]>(
+		status === 'ZWISCHEN_SAETZEN' && seite.setScores
+			? seite.setScores.map((wert: number, i: number) => ({
+					label: String(wert),
+					colorClass: vergleichsKlasse(wert, gegnerSetScores?.[i])
+				}))
+			: []
+	);
+
+	const boxWerte = $derived<AnzeigeWert[]>(
+		status === 'SATZ_LAEUFT' ? shotsWerte : status === 'ZWISCHEN_SAETZEN' ? setScoreWerte : []
 	);
 
 	const satzpunkteBoxClass = $derived(
@@ -57,12 +86,13 @@
 	// die Zeile bläht sich auf ein Vielfaches der verfügbaren Höhe auf; reproduziert bei
 	// 720p/FullHD mit 5-6 Pfeilen). Die pixelgenaue JS-Berechnung ist zwar weniger elegant,
 	// aber deterministisch: Pfeile passen garantiert in eine Zeile (nie Umbruch) und ihre
-	// Schrift bleibt immer proportional zum tatsächlichen Kästchen.
+	// Schrift bleibt immer proportional zum tatsächlichen Kästchen. Gilt gleichermaßen für
+	// die setScores-Boxen in ZWISCHEN_SAETZEN — dieselbe Größenberechnung, andere Werte.
 	let arrowsWidth = $state(0);
 	let arrowsHeight = $state(0);
 	const ARROW_GAP_PX = 8;
 	const arrowSizePx = $derived.by(() => {
-		const n = pfeilWerte.length;
+		const n = boxWerte.length;
 		if (n === 0 || arrowsWidth <= 0 || arrowsHeight <= 0) return 0;
 		const breitePerPfeil = (arrowsWidth - ARROW_GAP_PX * (n - 1)) / n;
 		return Math.max(0, Math.min(arrowsHeight, breitePerPfeil));
@@ -71,52 +101,45 @@
 
 <div class="monitor-block">
 	<div class="monitor-header {rechtsOrientiert ? 'monitor-header-rechts' : ''}">
-		<span class="monitor-badge">{seite.scheibennummer ?? '–'}</span>
-		<span class="monitor-team-name">{seite.mannschaft_name ?? $_('display.no_team')}</span>
+		<span class="monitor-badge">{seite.targetNo ?? '–'}</span>
+		<span class="monitor-team-name">{seite.teamName ?? $_('display.no_team')}</span>
 	</div>
 
-	{#if seite.monitor_status === 'WARTET'}
-		<div class="monitor-center-content">
-			<div class="monitor-placeholder">⏳</div>
-			<div class="monitor-status-label">{$_('display.status_wartet')}</div>
-		</div>
-	{:else if seite.monitor_status === 'SCHUETZEN_GEMELDET'}
-		<div class="monitor-schuetzen-grid">
-			{#each seite.schuetzen as name (name)}
-				<div class="monitor-schuetze-chip">{name}</div>
-			{/each}
-		</div>
-	{:else if seite.monitor_status === 'SATZ_LAEUFT' || seite.monitor_status === 'SATZ_FERTIG'}
+	{#if status === 'VOR_DEM_MATCH'}
+		{#if seite.shooters && seite.shooters.length > 0}
+			<div class="monitor-schuetzen-grid">
+				{#each seite.shooters as name (name)}
+					<div class="monitor-schuetze-chip">{name}</div>
+				{/each}
+			</div>
+		{:else}
+			<div class="monitor-center-content">
+				<div class="monitor-placeholder">⏳</div>
+				<div class="monitor-status-label">{$_('display.status_wartet')}</div>
+			</div>
+		{/if}
+	{:else}
 		<div class="monitor-satz-row">
 			<div class="monitor-arrows" bind:clientWidth={arrowsWidth} bind:clientHeight={arrowsHeight}>
-				{#each pfeilWerte as val, i (i)}
+				{#each boxWerte as wert, i (i)}
 					<div
-						class="monitor-arrow {ringColorClass(val)}"
+						class="monitor-arrow {wert.colorClass}"
 						style="width: {arrowSizePx}px; height: {arrowSizePx}px; font-size: {arrowSizePx *
 							0.5}px;"
 					>
-						{ringLabel(val)}
+						{wert.label}
 					</div>
 				{/each}
 			</div>
 			<div class="monitor-boxes">
-				<div class="monitor-box monitor-box-neutral">{ringSummeSatz}</div>
-				{#if seite.monitor_status === 'SATZ_FERTIG' && seite.satzpunkte !== null}
+				{#if status === 'SATZ_LAEUFT'}
+					<div class="monitor-box monitor-box-neutral">{seite.currentSetScore ?? 0}</div>
+				{/if}
+				{#if seite.setPoints !== null}
 					<div class="monitor-box monitor-box-punkte {satzpunkteBoxClass}">
-						{seite.satzpunkte}
+						{seite.setPoints}
 					</div>
 				{/if}
-			</div>
-		</div>
-	{:else if seite.monitor_status === 'MATCH_FERTIG'}
-		<div class="monitor-satz-row">
-			<div class="monitor-boxes monitor-boxes-final">
-				<div class="monitor-box monitor-box-neutral monitor-box-label">
-					{$_('display.status_match_fertig')}
-				</div>
-				<div class="monitor-box monitor-box-punkte monitor-box-final {satzpunkteBoxClass}">
-					{seite.satzpunkte ?? '–'}
-				</div>
 			</div>
 		</div>
 	{/if}
@@ -261,11 +284,6 @@
 		align-self: stretch;
 	}
 
-	.monitor-boxes-final {
-		flex: 1;
-		justify-content: flex-end;
-	}
-
 	.monitor-box {
 		display: flex;
 		align-items: center;
@@ -283,21 +301,9 @@
 		color: #f5f7fa;
 	}
 
-	.monitor-box-label {
-		flex: 1;
-		font-size: clamp(1.6rem, 6vh, 3.5rem);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
 	.monitor-box-punkte {
 		background: #495057;
 		color: #fff;
-	}
-
-	.monitor-box-final {
-		min-width: clamp(7rem, 20vw, 18rem);
-		font-size: clamp(4rem, 30vh, 17rem);
 	}
 
 	.punkte-fuehrend {
@@ -306,6 +312,14 @@
 
 	.punkte-rueckstand {
 		background: #c8304a;
+	}
+
+	/* Gleichstand im setScores-Vergleich (ZWISCHEN_SAETZEN) — hellgrau statt der neutralen
+	   dunklen monitor-box-neutral-Farbe, damit "gleich" optisch klar von "noch kein Vergleich
+	   möglich" unterscheidbar bleibt. */
+	.punkte-gleich {
+		background: #ced4da;
+		color: #212529;
 	}
 
 	.ring-leer {
