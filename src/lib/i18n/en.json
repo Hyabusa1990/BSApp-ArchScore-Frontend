@@ -47,7 +47,6 @@
 		"section_password": "Change Password",
 		"username": "Username",
 		"email": "Email",
-		"email_placeholder": "you@example.com",
 		"groups": "Roles",
 		"no_groups": "No roles assigned",
 		"current_password": "Current Password",
@@ -55,7 +54,6 @@
 		"confirm_password": "Confirm New Password",
 		"save": "Save",
 		"saving": "Saving…",
-		"email_updated": "Email updated.",
 		"password_changed": "Password changed successfully.",
 		"error_wrong_password": "Current password is incorrect.",
 		"error_failed": "An error occurred. Please try again."

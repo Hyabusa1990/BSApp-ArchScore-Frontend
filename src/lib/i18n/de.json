@@ -48,7 +48,6 @@
 		"section_password": "Passwort ändern",
 		"username": "Benutzername",
 		"email": "E-Mail",
-		"email_placeholder": "du@beispiel.de",
 		"groups": "Rollen",
 		"no_groups": "Keine Rollen zugewiesen",
 		"current_password": "Aktuelles Passwort",
@@ -56,7 +55,6 @@
 		"confirm_password": "Neues Passwort bestätigen",
 		"save": "Speichern",
 		"saving": "Speichern…",
-		"email_updated": "E-Mail aktualisiert.",
 		"password_changed": "Passwort erfolgreich geändert.",
 		"error_wrong_password": "Das aktuelle Passwort ist falsch.",
 		"error_failed": "Ein Fehler ist aufgetreten. Bitte erneut versuchen."

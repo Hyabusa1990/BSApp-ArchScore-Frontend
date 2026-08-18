@@ -74,19 +74,6 @@ export const authHandlers = [
 		return HttpResponse.json({ code: 'REGISTERED', message: 'Konto erstellt.' }, { status: 200 });
 	}),
 
-	http.patch(`${API_URL}/auth/profile`, async ({ request }) => {
-		const user = userFromAccessToken(request.headers.get('Authorization'));
-		if (!user) {
-			return HttpResponse.json(
-				{ code: 'UNAUTHORIZED', message: 'Token ungültig oder abgelaufen' },
-				{ status: 401 }
-			);
-		}
-		const body = (await request.json()) as { email?: string };
-		if (body.email) user.email = body.email;
-		return HttpResponse.json(user);
-	}),
-
 	http.post(`${API_URL}/auth/change-password`, async ({ request }) => {
 		const user = userFromAccessToken(request.headers.get('Authorization'));
 		if (!user) {
