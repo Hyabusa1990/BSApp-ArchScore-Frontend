@@ -5,20 +5,11 @@ import { apiClient } from './client';
  * FACHLICHKEIT.md). Auth läuft über den bestehenden Account-`access_token` aus
  * `auth.svelte.ts`, kein eigenes Token-System wie bei Display/Binocular.
  *
- * Mockups dazu sind Entwurf, nicht abgestimmt — Shapes hier sind eine angemessene
- * Annahme, kein exaktes Nachbauen einer Spezifikation.
+ * "Veranstaltung" ↔ Fawkes-"Fixture" ist 1:1 (mit Backend-Entwickler geklärt, siehe Issue #14) —
+ * `id`/`uniqueId`/`date`/`location`/`leagueName`/`fixtureName` entsprechen 1:1
+ * `GetFixtureResponse`. Name der Veranstaltung ist Liganame + Wettkampftag, kein einzelnes
+ * `name`-Feld wie in einer früheren, unbestätigten Annahme dieses Moduls.
  */
-
-/** Eingabedaten der initialen Tabelle (Admin trägt Ausgangsstand ein) — bewusst ein
- * eigener, schlankerer Typ als `TabellenEintrag` aus display.ts: das dort ist die vom
- * Backend aufbereitete, laufend aktualisierte Anzeige-Tabelle (mit matchpunkte_neg/
- * satzpunkte_netto), hier ist es reine, einmalige Admin-Eingabe. */
-export interface InitialeTabelleEintrag {
-	platz: number;
-	mannschaft_name: string;
-	satzpunkte: number;
-	matchpunkte: number;
-}
 
 export interface LigaVerbindung {
 	liga_app: string;
@@ -28,22 +19,32 @@ export interface LigaVerbindung {
 }
 
 export interface Veranstaltung {
-	id: string;
-	owner_id: string;
-	name: string;
-	/** null = noch keine Datenquelle eingerichtet. */
-	datenquelle: 'tabelle' | 'liga' | null;
-	tabelle?: InitialeTabelleEintrag[];
-	liga?: LigaVerbindung;
+	/** Fawkes-Fixture-ID (numerisch) — steuert u. a. `PUT/GET /fixtures/{fixtureId}/phase`
+	 * (Matchkontrolle, #10) und `/Fixture/{id}/users...` (Mitgliederverwaltung, #13). */
+	id: number;
+	/** Schwer zu erraten, Bearer-frei nutzbar — steuert die Spotter-Info-Abfragen. */
+	uniqueId: string;
+	/** ISO-8601 UTC. */
+	date: string;
+	location: string;
+	leagueName: string;
+	fixtureName: string;
 	/**
-	 * Fawkes-Fixture, die diese Veranstaltung repräsentiert — Annahme 1 Veranstaltung = 1
-	 * Fixture (passt zur Fixture-Granularität "3. Wettkampftag"/"Finale"), vom Backend nicht
-	 * bestätigt (siehe Issue #10). `fixtureId` (numerisch, Bearer-authentifiziert) steuert
-	 * `PUT/GET /fixtures/{fixtureId}/phase`, `fixtureUniqueId` (schwer zu erraten, Bearer-frei)
-	 * die Spotter-Info-Abfragen für die Confirm-Status-Anzeige.
+	 * Mock-only-Zusatzfelder, NICHT Teil von `GetFixtureResponse` — degradieren gegen ein
+	 * echtes Backend zu `undefined`. `datenquelle`/`liga` bleiben bewusst reine
+	 * Verwaltungs-UI-Konzepte: Liga-Verbindung hat laut Issue #14 keinen Fawkes-Endpunkt (bleibt
+	 * vollständig Mock-only), "tabelle" ist hier nur eine Vorschau für die Übersichtsliste — die
+	 * eigentliche Quelle ist `GET /MatchPlayChart/{fixtureId}` (separat abgefragt, siehe unten).
 	 */
-	fixtureId: number;
-	fixtureUniqueId: string;
+	datenquelle?: 'tabelle' | 'liga' | null;
+	liga?: LigaVerbindung;
+}
+
+export interface CreateFixtureData {
+	date: string;
+	location: string;
+	leagueName: string;
+	fixtureName: string;
 }
 
 /**
@@ -59,25 +60,50 @@ export interface FixtureUser {
 	isOwner: boolean;
 }
 
+/** `Fawkes.Api.Controllers.MatchPlayChartController.Team` — Werte VOR dieser Fixture. */
+export interface MatchPlayChartTeam {
+	name: string;
+	setPoints: number;
+	matchPoints: number;
+}
+
+export interface MatchPlayChart {
+	fixtureId: number;
+	teams: MatchPlayChartTeam[];
+	/** 1-indiziert pro Runde, 0 = leere Scheibe — hier bewusst nie gesetzt, siehe
+	 * `createMatchPlayChart`. */
+	targetAssignments?: number[][];
+}
+
 export const veranstaltungApi = {
-	list: (token: string) => apiClient.get<Veranstaltung[]>('/veranstaltungen', token),
+	list: (token: string) => apiClient.get<Veranstaltung[]>('/Fixture', token),
 
-	get: (token: string, id: string) => apiClient.get<Veranstaltung>(`/veranstaltungen/${id}`, token),
+	get: (token: string, id: number) => apiClient.get<Veranstaltung>(`/Fixture/${id}`, token),
 
-	create: (token: string, name: string) =>
-		apiClient.post<Veranstaltung>('/veranstaltungen', { name }, token),
+	create: (token: string, data: CreateFixtureData) =>
+		apiClient.post<Veranstaltung>('/Fixture', data, token),
 
-	remove: (token: string, id: string) => apiClient.delete<void>(`/veranstaltungen/${id}`, token),
+	// Von keiner UI aktuell aufgerufen (kein Bearbeiten-Formular existiert) — trotzdem verdrahtet,
+	// damit der Kontrakt vollständig zu CreateFixtureRequest/UpdateFixtureRequest passt (#14).
+	update: (token: string, id: number, data: CreateFixtureData) =>
+		apiClient.put<Veranstaltung>(`/Fixture/${id}`, data, token),
 
-	// "Spielplan anlegen": Tabelle eintragen -> Backend berechnet Begegnungen/Matches.
-	setTabelle: (token: string, id: string, eintraege: InitialeTabelleEintrag[]) =>
-		apiClient.post<Veranstaltung>(`/veranstaltungen/${id}/tabelle`, { eintraege }, token),
+	remove: (token: string, id: number) => apiClient.delete<void>(`/Fixture/${id}`, token),
 
-	// "Spielplan löschen".
-	clearTabelle: (token: string, id: string) =>
-		apiClient.delete<Veranstaltung>(`/veranstaltungen/${id}/tabelle`, token),
+	getMatchPlayChart: (token: string, fixtureId: number) =>
+		apiClient.get<MatchPlayChart>(`/MatchPlayChart/${fixtureId}`, token),
 
-	connectLiga: (token: string, id: string, data: LigaVerbindung) =>
+	// "Spielplan anlegen": Tabelle eintragen -> Backend berechnet Begegnungen/Matches
+	// (targetAssignments bewusst weggelassen, siehe FACHLICHKEIT.md "keine eigenen Ergebnisse
+	// berechnen"). hardOverride bewusst nicht gesetzt (#14) — Standardverhalten: Fehler, wenn
+	// für diese Fixture schon Daten existieren. Kein Lösch-/Reset-Endpunkt verifiziert, daher
+	// gibt es hier absichtlich kein clearTabelle-Äquivalent mehr.
+	createMatchPlayChart: (token: string, fixtureId: number, teams: MatchPlayChartTeam[]) =>
+		apiClient.post<MatchPlayChart>(`/MatchPlayChart/${fixtureId}`, { teams }, token),
+
+	// Kein Fawkes-Endpunkt für Ligaverwaltungs-Verbindung (siehe Issue #14) — bleibt vollständig
+	// Mock-only, eigener Custom-Pfad.
+	connectLiga: (token: string, id: number, data: LigaVerbindung) =>
 		apiClient.post<Veranstaltung>(`/veranstaltungen/${id}/liga`, data, token),
 
 	listUsers: (token: string, fixtureId: number) =>

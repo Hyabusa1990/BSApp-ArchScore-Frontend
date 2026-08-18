@@ -42,10 +42,7 @@
 		if (!veranstaltung) return;
 		const aktivesMatch = matches.find((m) => m.aktiv);
 		confirmStatus = aktivesMatch
-			? await matchkontrolleApi.getConfirmStatus(
-					veranstaltung.fixtureUniqueId,
-					scheibenFuer(aktivesMatch)
-				)
+			? await matchkontrolleApi.getConfirmStatus(veranstaltung.uniqueId, scheibenFuer(aktivesMatch))
 			: {};
 	}
 
@@ -54,11 +51,11 @@
 		loadError = null;
 		try {
 			const [v, ms] = await Promise.all([
-				veranstaltungApi.get(auth.accessToken!, veranstaltungId),
+				veranstaltungApi.get(auth.accessToken!, Number(veranstaltungId)),
 				matchkontrolleApi.list(auth.accessToken!, veranstaltungId)
 			]);
 			veranstaltung = v;
-			const phase = await matchkontrolleApi.getPhase(auth.accessToken!, v.fixtureId);
+			const phase = await matchkontrolleApi.getPhase(auth.accessToken!, v.id);
 			matches = ms.map((m) => ({ ...m, aktiv: m.nummer === phase.roundNo }));
 			await ladeConfirmStatus();
 		} catch {
@@ -89,7 +86,7 @@
 		matches = matches.map((m) => ({ ...m, aktiv: m.id === match.id }));
 
 		try {
-			await matchkontrolleApi.setPhase(auth.accessToken!, veranstaltung.fixtureId, match.nummer);
+			await matchkontrolleApi.setPhase(auth.accessToken!, veranstaltung.id, match.nummer);
 			await ladeConfirmStatus();
 		} catch {
 			loadError = $_('matchkontrolle.error_freigeben');

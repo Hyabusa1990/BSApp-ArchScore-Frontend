@@ -6,7 +6,6 @@
 	import {
 		veranstaltungApi,
 		type Veranstaltung,
-		type InitialeTabelleEintrag,
 		type LigaVerbindung,
 		type FixtureUser
 	} from '$lib/api/veranstaltung';
@@ -25,6 +24,9 @@
 
 	let { data } = $props<{ data: { id: string } }>();
 	const id = $derived(data.id);
+	// `Veranstaltung.id` ist seit #14 die numerische Fawkes-Fixture-ID — der Routen-Parameter
+	// selbst bleibt (wie bei SvelteKit üblich) ein String.
+	const fixtureId = $derived(Number(id));
 
 	let veranstaltung = $state<Veranstaltung | null>(null);
 	let loading = $state(true);
@@ -36,6 +38,11 @@
 	// datenquelle übernommen, kann aber per Sekundär-Link umgeschaltet werden, ohne dass das
 	// schon gespeichert wird — erst der jeweilige Submit-Button persistiert.
 	let chosenSource = $state<'tabelle' | 'liga' | null>(null);
+
+	// Sobald eine Tabelle einmal angelegt ist, gibt es keinen echten Bearbeiten-/Reset-Endpunkt
+	// (POST /MatchPlayChart schlägt ohne hardOverride fehl, wenn schon Daten existieren, siehe
+	// Issue #14 — hardOverride bewusst nicht verifiziert). Ab dann nur noch Leseansicht.
+	let chartCreated = $state(false);
 
 	type TabelleRow = { mannschaft_name: string; satzpunkte: number; matchpunkte: number };
 	let rows = $state<TabelleRow[]>([]);
@@ -57,6 +64,10 @@
 		fixtureUsers.some((u) => u.userName === auth.user?.email && u.isOwner)
 	);
 
+	const anzeigename = $derived(
+		veranstaltung ? `${veranstaltung.leagueName} – ${veranstaltung.fixtureName}` : ''
+	);
+
 	$effect(() => {
 		if (auth.initialized && !auth.isAuthenticated) goto(resolve('/login'));
 	});
@@ -65,14 +76,20 @@
 		loading = true;
 		loadError = null;
 		try {
-			veranstaltung = await veranstaltungApi.get(auth.accessToken!, id);
-			chosenSource = veranstaltung.datenquelle;
-			rows = (veranstaltung.tabelle ?? []).map((e) => ({
-				mannschaft_name: e.mannschaft_name,
-				satzpunkte: e.satzpunkte,
-				matchpunkte: e.matchpunkte
-			}));
-			if (rows.length === 0) rows = [{ mannschaft_name: '', satzpunkte: 0, matchpunkte: 0 }];
+			veranstaltung = await veranstaltungApi.get(auth.accessToken!, fixtureId);
+			chosenSource = veranstaltung.datenquelle ?? null;
+			if (chosenSource === 'tabelle') {
+				const chart = await veranstaltungApi.getMatchPlayChart(auth.accessToken!, fixtureId);
+				rows = chart.teams.map((t) => ({
+					mannschaft_name: t.name,
+					satzpunkte: t.setPoints,
+					matchpunkte: t.matchPoints
+				}));
+				chartCreated = true;
+			} else {
+				rows = [{ mannschaft_name: '', satzpunkte: 0, matchpunkte: 0 }];
+				chartCreated = false;
+			}
 			if (veranstaltung.liga) {
 				ligaApp = veranstaltung.liga.liga_app;
 				ligaUrl = veranstaltung.liga.url;
@@ -92,7 +109,7 @@
 		usersLoading = true;
 		usersError = null;
 		try {
-			fixtureUsers = await veranstaltungApi.listUsers(auth.accessToken!, veranstaltung.fixtureId);
+			fixtureUsers = await veranstaltungApi.listUsers(auth.accessToken!, veranstaltung.id);
 		} catch {
 			usersError = $_('veranstaltungen.mitglieder_error_load');
 		} finally {
@@ -106,11 +123,7 @@
 		addingUser = true;
 		usersError = null;
 		try {
-			await veranstaltungApi.addUser(
-				auth.accessToken!,
-				veranstaltung.fixtureId,
-				newUserName.trim()
-			);
+			await veranstaltungApi.addUser(auth.accessToken!, veranstaltung.id, newUserName.trim());
 			newUserName = '';
 			await loadUsers();
 		} catch (err) {
@@ -128,7 +141,7 @@
 		removingUserName = userName;
 		usersError = null;
 		try {
-			await veranstaltungApi.removeUser(auth.accessToken!, veranstaltung.fixtureId, userName);
+			await veranstaltungApi.removeUser(auth.accessToken!, veranstaltung.id, userName);
 			await loadUsers();
 		} catch (err) {
 			usersError =
@@ -157,31 +170,21 @@
 		saving = true;
 		saveError = null;
 		try {
-			const eintraege: InitialeTabelleEintrag[] = rows
+			const teams = rows
 				.filter((r) => r.mannschaft_name.trim())
-				.map((r, i) => ({
-					platz: i + 1,
-					mannschaft_name: r.mannschaft_name.trim(),
-					satzpunkte: r.satzpunkte,
-					matchpunkte: r.matchpunkte
+				.map((r) => ({
+					name: r.mannschaft_name.trim(),
+					setPoints: r.satzpunkte,
+					matchPoints: r.matchpunkte
 				}));
-			veranstaltung = await veranstaltungApi.setTabelle(auth.accessToken!, id, eintraege);
-		} catch {
-			saveError = $_('veranstaltungen.error_save');
-		} finally {
-			saving = false;
-		}
-	}
-
-	async function deleteTabelle() {
-		saving = true;
-		saveError = null;
-		try {
-			veranstaltung = await veranstaltungApi.clearTabelle(auth.accessToken!, id);
-			chosenSource = null;
-			rows = [{ mannschaft_name: '', satzpunkte: 0, matchpunkte: 0 }];
-		} catch {
-			saveError = $_('veranstaltungen.error_save');
+			await veranstaltungApi.createMatchPlayChart(auth.accessToken!, fixtureId, teams);
+			if (veranstaltung) veranstaltung = { ...veranstaltung, datenquelle: 'tabelle' };
+			chartCreated = true;
+		} catch (err) {
+			saveError =
+				err instanceof APIError && err.status === 409
+					? $_('veranstaltungen.error_tabelle_exists')
+					: $_('veranstaltungen.error_save');
 		} finally {
 			saving = false;
 		}
@@ -197,7 +200,7 @@
 				login_pin: ligaPin,
 				digitaler_schusszettel: digitalerSchusszettel
 			};
-			veranstaltung = await veranstaltungApi.connectLiga(auth.accessToken!, id, data);
+			veranstaltung = await veranstaltungApi.connectLiga(auth.accessToken!, fixtureId, data);
 		} catch {
 			saveError = $_('veranstaltungen.error_save');
 		} finally {
@@ -207,7 +210,7 @@
 </script>
 
 <svelte:head>
-	<title>{veranstaltung?.name ?? $_('veranstaltungen.title')}</title>
+	<title>{anzeigename || $_('veranstaltungen.title')}</title>
 </svelte:head>
 
 <Container class="py-4">
@@ -221,7 +224,7 @@
 		<Alert color="danger">{loadError}</Alert>
 	{:else}
 		<div class="d-flex justify-content-between align-items-center mb-4">
-			<h4 class="mb-0">{veranstaltung.name}</h4>
+			<h4 class="mb-0">{anzeigename}</h4>
 			<div class="d-flex gap-2">
 				<a
 					href={resolve('/veranstaltungen/[id]/bildschirme', { id })}
@@ -330,14 +333,16 @@
 						<h6 class="text-muted text-uppercase small fw-semibold mb-0">
 							{$_('veranstaltungen.tabelle_heading')}
 						</h6>
-						<button
-							type="button"
-							class="btn btn-link btn-sm text-decoration-none p-0 text-muted"
-							disabled
-							title={$_('veranstaltungen.liga_coming_soon')}
-						>
-							{$_('veranstaltungen.switch_to_liga')}
-						</button>
+						{#if !chartCreated}
+							<button
+								type="button"
+								class="btn btn-link btn-sm text-decoration-none p-0 text-muted"
+								disabled
+								title={$_('veranstaltungen.liga_coming_soon')}
+							>
+								{$_('veranstaltungen.switch_to_liga')}
+							</button>
+						{/if}
 					</div>
 
 					<div class="table-responsive">
@@ -348,64 +353,69 @@
 									<th>{$_('veranstaltungen.tabelle_mannschaft')}</th>
 									<th style="width: 8rem;">{$_('veranstaltungen.tabelle_satzpunkte')}</th>
 									<th style="width: 8rem;">{$_('veranstaltungen.tabelle_matchpunkte')}</th>
-									<th style="width: 3rem;"></th>
+									{#if !chartCreated}<th style="width: 3rem;"></th>{/if}
 								</tr>
 							</thead>
 							<tbody>
 								{#each rows as row, i (i)}
 									<tr>
 										<td class="fw-bold text-muted">{i + 1}</td>
-										<td>
-											<input
-												class="form-control form-control-sm"
-												bind:value={row.mannschaft_name}
-											/>
-										</td>
-										<td>
-											<input
-												type="number"
-												class="form-control form-control-sm"
-												bind:value={row.satzpunkte}
-											/>
-										</td>
-										<td>
-											<input
-												type="number"
-												class="form-control form-control-sm"
-												bind:value={row.matchpunkte}
-											/>
-										</td>
-										<td>
-											<button
-												type="button"
-												class="btn btn-sm btn-outline-danger"
-												disabled={rows.length <= 1}
-												onclick={() => removeRow(i)}
-											>
-												&times;
-											</button>
-										</td>
+										{#if chartCreated}
+											<td>{row.mannschaft_name}</td>
+											<td>{row.satzpunkte}</td>
+											<td>{row.matchpunkte}</td>
+										{:else}
+											<td>
+												<input
+													class="form-control form-control-sm"
+													bind:value={row.mannschaft_name}
+												/>
+											</td>
+											<td>
+												<input
+													type="number"
+													class="form-control form-control-sm"
+													bind:value={row.satzpunkte}
+												/>
+											</td>
+											<td>
+												<input
+													type="number"
+													class="form-control form-control-sm"
+													bind:value={row.matchpunkte}
+												/>
+											</td>
+											<td>
+												<button
+													type="button"
+													class="btn btn-sm btn-outline-danger"
+													disabled={rows.length <= 1}
+													onclick={() => removeRow(i)}
+												>
+													&times;
+												</button>
+											</td>
+										{/if}
 									</tr>
 								{/each}
 							</tbody>
 						</table>
 					</div>
 
-					<button type="button" class="btn btn-outline-secondary btn-sm mb-3" onclick={addRow}>
-						+ {$_('veranstaltungen.tabelle_add_row')}
-					</button>
+					{#if !chartCreated}
+						<button type="button" class="btn btn-outline-secondary btn-sm mb-3" onclick={addRow}>
+							+ {$_('veranstaltungen.tabelle_add_row')}
+						</button>
 
-					<div class="d-flex gap-2">
-						<Button color="success" disabled={saving} onclick={saveTabelle}>
-							{#if saving}<Spinner size="sm" class="me-2" />{/if}
-							{$_('veranstaltungen.tabelle_anlegen_btn')}
-						</Button>
-						{#if veranstaltung.datenquelle === 'tabelle'}
-							<Button color="danger" outline disabled={saving} onclick={deleteTabelle}>
-								{$_('veranstaltungen.tabelle_loeschen_btn')}
+						<div class="d-flex gap-2">
+							<Button color="success" disabled={saving} onclick={saveTabelle}>
+								{#if saving}<Spinner size="sm" class="me-2" />{/if}
+								{$_('veranstaltungen.tabelle_anlegen_btn')}
 							</Button>
-						{/if}
-					</div>
+						</div>
+					{:else}
+						<p class="text-muted small mb-0">{$_('veranstaltungen.tabelle_readonly_hint')}</p>
+					{/if}
 				</CardBody>
 			</Card>
 		{:else if chosenSource === 'liga'}

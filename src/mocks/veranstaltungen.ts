@@ -1,5 +1,11 @@
 import type { User } from '$lib/api/auth';
-import type { Veranstaltung, FixtureUser } from '$lib/api/veranstaltung';
+import type {
+	Veranstaltung,
+	CreateFixtureData,
+	FixtureUser,
+	MatchPlayChart,
+	MatchPlayChartTeam
+} from '$lib/api/veranstaltung';
 import type { Match, Begegnung } from '$lib/api/matchkontrolle';
 import type { Bildschirm } from '$lib/api/bildschirme';
 import { users } from './fixtures';
@@ -17,10 +23,13 @@ import { loadState, saveState } from './persist';
  * durch verschiedene Browser-Tabs — reine Modul-Variablen wären dafür NICHT konsistent,
  * jeder Tab hat seinen eigenen JS-Kontext. Jede Funktion liest den Zustand deshalb frisch
  * und schreibt ihn nach jeder Änderung zurück, statt ihn einmalig beim Modul-Load zu laden.
+ *
+ * `Veranstaltung.id` ist seit Issue #14 die echte numerische Fawkes-Fixture-ID — alle anderen
+ * hier gespeicherten Records (Match/Bildschirm/TabletPairing/currentRoundNo/fixtureUsers/
+ * matchPlayCharts) referenzieren sie weiterhin über einen STRING-Schlüssel (`String(v.id)`),
+ * das sind rein interne Mock-Konzepte ohne echtes Fawkes-Pendant, ihr Schlüsseltyp ist bewusst
+ * unverändert geblieben (kleinerer Diff, kein Fawkes-Kontrakt zu verletzen).
  */
-
-const OWNER_USER = users.member.id;
-const OWNER_ADMIN = users.admin.id;
 
 interface TabletPairingRecord {
 	token: string;
@@ -37,10 +46,12 @@ interface State {
 	matches: StoredMatch[];
 	bildschirme: Bildschirm[];
 	tabletPairings: TabletPairingRecord[];
-	/** Veranstaltungs-ID -> aktuell freigegebene Runde (Fawkes-`roundNo`, siehe Issue #10). */
+	/** Veranstaltungs-ID (String) -> aktuell freigegebene Runde (Fawkes-`roundNo`, Issue #10). */
 	currentRoundNo: Record<string, number>;
-	/** Veranstaltungs-ID -> Fixture-Mitglieder (Fawkes `GetUserResponse[]`, siehe Issue #13). */
+	/** Veranstaltungs-ID (String) -> Fixture-Mitglieder (Fawkes `GetUserResponse[]`, Issue #13). */
 	fixtureUsers: Record<string, FixtureUser[]>;
+	/** Veranstaltungs-ID (String) -> initiale Tabelle (`GetMatchPlayChartResponse`, Issue #14). */
+	matchPlayCharts: Record<string, MatchPlayChart>;
 	nextId: number;
 }
 
@@ -52,29 +63,21 @@ function seedState(): State {
 	return {
 		veranstaltungen: [
 			{
-				id: 'v-1',
-				owner_id: OWNER_ADMIN,
-				name: '1. WKT Bundesliga',
-				fixtureId: 1001,
-				fixtureUniqueId: 'f1e57000-0000-4000-8000-000000000001',
-				datenquelle: 'tabelle',
-				tabelle: [
-					{ platz: 1, mannschaft_name: 'BSC Abendau', satzpunkte: 15, matchpunkte: 14 },
-					{ platz: 2, mannschaft_name: 'SV Scharfhaus', satzpunkte: 7, matchpunkte: 11 },
-					{ platz: 3, mannschaft_name: 'SGes Schützenschaft', satzpunkte: -5, matchpunkte: 11 },
-					{ platz: 4, mannschaft_name: 'BS Hunshausen', satzpunkte: 12, matchpunkte: 6 },
-					{ platz: 5, mannschaft_name: 'SV Vogelwiese', satzpunkte: 8, matchpunkte: 8 },
-					{ platz: 6, mannschaft_name: 'BS Weiß-Blau München', satzpunkte: -10, matchpunkte: 2 },
-					{ platz: 7, mannschaft_name: 'SGi Wuppenhausen', satzpunkte: -22, matchpunkte: 2 },
-					{ platz: 8, mannschaft_name: 'BSC Rot-Rot Beerendorf', satzpunkte: -15, matchpunkte: 0 }
-				]
+				id: 1001,
+				uniqueId: 'f1e57000-0000-4000-8000-000000000001',
+				date: '2026-09-05T09:00:00Z',
+				location: 'Sporthalle Abendau',
+				leagueName: '1. Bundesliga Nord',
+				fixtureName: '1. Wettkampftag',
+				datenquelle: 'tabelle'
 			},
 			{
-				id: 'v-2',
-				owner_id: OWNER_USER,
-				name: 'Kreisliga Ost',
-				fixtureId: 1002,
-				fixtureUniqueId: 'f1e57000-0000-4000-8000-000000000002',
+				id: 1002,
+				uniqueId: 'f1e57000-0000-4000-8000-000000000002',
+				date: '2026-09-12T09:00:00Z',
+				location: 'Schützenhalle Ost',
+				leagueName: 'Kreisliga Ost',
+				fixtureName: '1. Wettkampftag',
 				datenquelle: 'liga',
 				liga: {
 					liga_app: 'BSApp Liga',
@@ -87,7 +90,7 @@ function seedState(): State {
 		matches: [
 			{
 				id: 'm-1',
-				veranstaltung_id: 'v-1',
+				veranstaltung_id: '1001',
 				nummer: 1,
 				begegnungen: [
 					{
@@ -106,7 +109,7 @@ function seedState(): State {
 			},
 			{
 				id: 'm-2',
-				veranstaltung_id: 'v-1',
+				veranstaltung_id: '1001',
 				nummer: 2,
 				begegnungen: [
 					{ scheibe_a: 1, scheibe_b: 2, mannschaft_a: 'SV Vogelwiese', mannschaft_b: 'BSC Abendau' }
@@ -114,7 +117,7 @@ function seedState(): State {
 			},
 			{
 				id: 'm-3',
-				veranstaltung_id: 'v-1',
+				veranstaltung_id: '1001',
 				nummer: 3,
 				begegnungen: [
 					{
@@ -129,7 +132,7 @@ function seedState(): State {
 		bildschirme: [
 			{
 				id: 'b-1',
-				veranstaltung_id: 'v-1',
+				veranstaltung_id: '1001',
 				scheibe_a: 1,
 				scheibe_b: 2,
 				name: null,
@@ -139,7 +142,7 @@ function seedState(): State {
 			},
 			{
 				id: 'b-2',
-				veranstaltung_id: 'v-1',
+				veranstaltung_id: '1001',
 				scheibe_a: 3,
 				scheibe_b: 4,
 				name: null,
@@ -149,7 +152,7 @@ function seedState(): State {
 			},
 			{
 				id: 'b-3',
-				veranstaltung_id: 'v-1',
+				veranstaltung_id: '1001',
 				scheibe_a: 5,
 				scheibe_b: 6,
 				name: null,
@@ -159,7 +162,7 @@ function seedState(): State {
 			},
 			{
 				id: 'b-4',
-				veranstaltung_id: 'v-1',
+				veranstaltung_id: '1001',
 				scheibe_a: 7,
 				scheibe_b: 8,
 				name: null,
@@ -169,7 +172,7 @@ function seedState(): State {
 			},
 			{
 				id: 'b-5',
-				veranstaltung_id: 'v-1',
+				veranstaltung_id: '1001',
 				scheibe_a: null,
 				scheibe_b: null,
 				name: 'BEAMER',
@@ -179,12 +182,27 @@ function seedState(): State {
 			}
 		],
 		tabletPairings: [],
-		currentRoundNo: { 'v-1': 1 },
+		currentRoundNo: { '1001': 1 },
 		fixtureUsers: {
-			'v-1': [{ userName: users.admin.email, isOwner: true }],
-			'v-2': [{ userName: users.member.email, isOwner: true }]
+			'1001': [{ userName: users.admin.email, isOwner: true }],
+			'1002': [{ userName: users.member.email, isOwner: true }]
 		},
-		nextId: 100
+		matchPlayCharts: {
+			'1001': {
+				fixtureId: 1001,
+				teams: [
+					{ name: 'BSC Abendau', setPoints: 15, matchPoints: 14 },
+					{ name: 'SV Scharfhaus', setPoints: 7, matchPoints: 11 },
+					{ name: 'SGes Schützenschaft', setPoints: -5, matchPoints: 11 },
+					{ name: 'BS Hunshausen', setPoints: 12, matchPoints: 6 },
+					{ name: 'SV Vogelwiese', setPoints: 8, matchPoints: 8 },
+					{ name: 'BS Weiß-Blau München', setPoints: -10, matchPoints: 2 },
+					{ name: 'SGi Wuppenhausen', setPoints: -22, matchPoints: 2 },
+					{ name: 'BSC Rot-Rot Beerendorf', setPoints: -15, matchPoints: 0 }
+				]
+			}
+		},
+		nextId: 2000
 	};
 }
 
@@ -207,37 +225,28 @@ function generatePin(): string {
 	return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
+// Sichtbarkeit läuft seit #14 über echte Fixture-Mitgliedschaft (usersFor/fixtureUsers, #13)
+// statt eines Mock-only owner_id-Feldes — schließt die in #13 offen gelassene Lücke: ein
+// hinzugefügter Nicht-Owner sieht/öffnet die Veranstaltung jetzt genauso wie der Owner.
 export function canSee(user: User, v: Veranstaltung): boolean {
-	return user.role === 'admin' || v.owner_id === user.id;
+	return user.role === 'admin' || usersFor(String(v.id)).some((u) => u.userName === user.email);
 }
 
 export function visibleVeranstaltungen(user: User): Veranstaltung[] {
 	return load().veranstaltungen.filter((v) => canSee(user, v));
 }
 
-export function findVeranstaltung(user: User, id: string): Veranstaltung | undefined {
+export function findVeranstaltung(user: User, id: number): Veranstaltung | undefined {
 	const v = load().veranstaltungen.find((v) => v.id === id);
 	return v && canSee(user, v) ? v : undefined;
 }
 
-/** Bearer-authentifizierter Lookup für den Fawkes-Phase-Endpunkt (`fixtureId` numerisch statt
- * Veranstaltungs-UUID) — Ownership-Check identisch zu `findVeranstaltung` (siehe Issue #10). */
-export function findVeranstaltungByFixtureId(
-	user: User,
-	fixtureId: number
-): Veranstaltung | undefined {
-	const v = load().veranstaltungen.find((v) => v.fixtureId === fixtureId);
-	return v && canSee(user, v) ? v : undefined;
-}
-
 /** Ungefiltert wie `findBildschirmByPin`/`findTabletPairing` weiter unten — der echte
- * Spotter-Info-Endpunkt ist laut Fawkes-Spec Bearer-frei, die schwer zu erratende
- * `fixtureUniqueId` selbst ist die Absicherung (siehe binocular.ts). Jetzt auch von der
- * Matchkontrolle direkt genutzt, um den Confirm-Status pro Scheibe zu lesen (Issue #10). */
-export function findVeranstaltungByFixtureUniqueId(
-	fixtureUniqueId: string
-): Veranstaltung | undefined {
-	return load().veranstaltungen.find((v) => v.fixtureUniqueId === fixtureUniqueId);
+ * Spotter-Info-Endpunkt ist laut Fawkes-Spec Bearer-frei, die schwer zu erratende `uniqueId`
+ * selbst ist die Absicherung (siehe binocular.ts). Von der Matchkontrolle genutzt, um den
+ * Confirm-Status pro Scheibe zu lesen (Issue #10). */
+export function findVeranstaltungByUniqueId(uniqueId: string): Veranstaltung | undefined {
+	return load().veranstaltungen.find((v) => v.uniqueId === uniqueId);
 }
 
 export function usersFor(veranstaltungId: string): FixtureUser[] {
@@ -269,26 +278,22 @@ export function removeFixtureUser(veranstaltungId: string, userName: string): Fi
 	return state.fixtureUsers[veranstaltungId];
 }
 
-export function createVeranstaltung(user: User, name: string): Veranstaltung {
+export function createVeranstaltung(user: User, data: CreateFixtureData): Veranstaltung {
 	const state = load();
 	const v: Veranstaltung = {
-		id: generateId(state, 'v'),
-		owner_id: user.id,
-		name,
-		// Mock-Annahme 1 Veranstaltung = 1 Fixture (siehe Issue #10) — fixtureId hier einfach
-		// hochgezählt, echte Fawkes-Fixture-Anlage ist Backend-Sache.
-		fixtureId: state.nextId,
-		fixtureUniqueId: crypto.randomUUID(),
+		id: state.nextId++,
+		uniqueId: crypto.randomUUID(),
+		...data,
 		datenquelle: null
 	};
 	state.veranstaltungen.push(v);
 	// Ersteller wird automatisch Owner (Rücksprache Backend-Entwickler 2026-08-17, Issue #13).
-	state.fixtureUsers[v.id] = [{ userName: user.email, isOwner: true }];
+	state.fixtureUsers[String(v.id)] = [{ userName: user.email, isOwner: true }];
 	persist(state);
 	return v;
 }
 
-export function removeVeranstaltung(user: User, id: string): boolean {
+export function removeVeranstaltung(user: User, id: number): boolean {
 	const state = load();
 	const v = state.veranstaltungen.find((v) => v.id === id);
 	if (!v || !canSee(user, v)) return false;
@@ -301,48 +306,52 @@ export function removeVeranstaltung(user: User, id: string): boolean {
 // die tatsächliche Berechnung (Round-Robin etc.) ist Backend-Sache, siehe FACHLICHKEIT.md
 // "Diese App berechnet keine eigenen Ergebnisse". Ziel hier ist nur, dass #7/#8 danach
 // etwas zum Anzeigen haben.
-function ensureDemoMatch(state: State, v: Veranstaltung) {
-	if (state.matches.some((m) => m.veranstaltung_id === v.id)) return;
-	const namen = (v.tabelle ?? []).map((e) => e.mannschaft_name);
+function ensureDemoMatch(state: State, v: Veranstaltung, teams: MatchPlayChartTeam[]) {
+	const id = String(v.id);
+	if (state.matches.some((m) => m.veranstaltung_id === id)) return;
 	state.matches.push({
 		id: generateId(state, 'm'),
-		veranstaltung_id: v.id,
+		veranstaltung_id: id,
 		nummer: 1,
 		begegnungen: [
 			{
 				scheibe_a: 1,
 				scheibe_b: 2,
-				mannschaft_a: namen[0] ?? 'Mannschaft A',
-				mannschaft_b: namen[1] ?? 'Mannschaft B'
+				mannschaft_a: teams[0]?.name ?? 'Mannschaft A',
+				mannschaft_b: teams[1]?.name ?? 'Mannschaft B'
 			}
 		]
 	});
-	state.currentRoundNo[v.id] = 1;
+	state.currentRoundNo[id] = 1;
 }
 
-function findInState(state: State, id: string): Veranstaltung | undefined {
-	return state.veranstaltungen.find((v) => v.id === id);
+export function getMatchPlayChart(fixtureId: number): MatchPlayChart | undefined {
+	return load().matchPlayCharts[String(fixtureId)];
 }
 
-export function setTabelle(v: Veranstaltung, eintraege: Veranstaltung['tabelle']): Veranstaltung {
+/**
+ * Entspricht `POST /MatchPlayChart/{fixtureId}` ohne `hardOverride` (Issue #14): schlägt fehl,
+ * wenn für diese Fixture schon eine Tabelle existiert — kein Reset-/Lösch-Pfad hier, weil dafür
+ * kein echter Endpunkt verifiziert ist (siehe `veranstaltung.ts`). `undefined` = Konflikt.
+ */
+export function createMatchPlayChart(
+	v: Veranstaltung,
+	teams: MatchPlayChartTeam[]
+): MatchPlayChart | undefined {
 	const state = load();
-	const target = findInState(state, v.id) ?? v;
+	const id = String(v.id);
+	if (state.matchPlayCharts[id]) return undefined;
+
+	const chart: MatchPlayChart = { fixtureId: v.id, teams };
+	state.matchPlayCharts[id] = chart;
+
+	const target = state.veranstaltungen.find((x) => x.id === v.id) ?? v;
 	target.datenquelle = 'tabelle';
-	target.tabelle = eintraege;
 	target.liga = undefined;
-	ensureDemoMatch(state, target);
-	persist(state);
-	return target;
-}
+	ensureDemoMatch(state, target, teams);
 
-export function clearTabelle(v: Veranstaltung): Veranstaltung {
-	const state = load();
-	const target = findInState(state, v.id) ?? v;
-	target.datenquelle = null;
-	target.tabelle = undefined;
-	state.matches = state.matches.filter((m) => m.veranstaltung_id !== target.id);
 	persist(state);
-	return target;
+	return chart;
 }
 
 export function connectLiga(
@@ -350,11 +359,10 @@ export function connectLiga(
 	liga: NonNullable<Veranstaltung['liga']>
 ): Veranstaltung {
 	const state = load();
-	const target = findInState(state, v.id) ?? v;
+	const target = state.veranstaltungen.find((x) => x.id === v.id) ?? v;
 	target.datenquelle = 'liga';
 	target.liga = liga;
-	target.tabelle = undefined;
-	ensureDemoMatch(state, target);
+	ensureDemoMatch(state, target, []);
 	persist(state);
 	return target;
 }
@@ -483,7 +491,9 @@ export function findBildschirmByPin(pin: string): Bildschirm | undefined {
 }
 
 /** Ungefiltert — wird nur für öffentlich lesbare Anzeige-Inhalte (Display-Tabellenmodus)
- * gebraucht, nicht für Admin-Zugriff (der läuft über findVeranstaltung mit Ownership-Check). */
+ * gebraucht, nicht für Admin-Zugriff (der läuft über findVeranstaltung mit Ownership-Check).
+ * `id` ist der String-Schlüssel, wie ihn Bildschirm/Match auch verwenden — vergleicht daher
+ * gegen `String(v.id)`, nicht gegen die numerische Fixture-ID direkt. */
 export function getVeranstaltungById(id: string): Veranstaltung | undefined {
-	return load().veranstaltungen.find((v) => v.id === id);
+	return load().veranstaltungen.find((v) => String(v.id) === id);
 }

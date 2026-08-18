@@ -2,7 +2,7 @@ import { decodeShot, encodeShot, type BinocularMatch } from '$lib/api/binocular'
 import {
 	findAktivesMatchFuerScheibe,
 	findTabletPairing,
-	findVeranstaltungByFixtureUniqueId,
+	findVeranstaltungByUniqueId,
 	mannschaftUndGegner,
 	type AktivesMatchFuerScheibe
 } from './veranstaltungen';
@@ -38,7 +38,7 @@ type ResolveOutcome =
 function resolvePairing(token: string, scheibennummer: number): ResolveOutcome {
 	const gueltigerToken =
 		findTabletPairing(token)?.scheibennummer === scheibennummer ||
-		findVeranstaltungByFixtureUniqueId(token) !== undefined;
+		findVeranstaltungByUniqueId(token) !== undefined;
 	if (!gueltigerToken) return { kind: 'invalid-token' };
 
 	const found = findAktivesMatchFuerScheibe(scheibennummer);

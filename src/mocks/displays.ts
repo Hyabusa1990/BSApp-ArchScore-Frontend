@@ -2,6 +2,7 @@ import type { DisplayContent, DisplayPfeil, DisplaySeite, TabellenEintrag } from
 import {
 	findAktivesMatchFuerScheibe,
 	findBildschirmByPin,
+	getMatchPlayChart,
 	getVeranstaltungById,
 	mannschaftUndGegner
 } from './veranstaltungen';
@@ -143,17 +144,21 @@ function buildSeiteForScheibe(scheibennummer: number | null): DisplaySeite {
 	};
 }
 
+// Seit Issue #14 kommt die Tabelle aus der separaten MatchPlayChart-Ressource (echter
+// Fawkes-Kontrakt), nicht mehr embedded auf der Veranstaltung selbst.
 function tabelleFuerVeranstaltung(veranstaltungId: string): TabellenEintrag[] {
 	const v = getVeranstaltungById(veranstaltungId);
-	if (!v?.tabelle) return [];
-	return v.tabelle.map((eintrag, i) => ({
+	if (!v) return [];
+	const chart = getMatchPlayChart(v.id);
+	if (!chart) return [];
+	return chart.teams.map((team, i) => ({
 		mannschaft_id: i + 1,
-		mannschaft_name: eintrag.mannschaft_name,
-		matchpunkte: eintrag.matchpunkte,
+		mannschaft_name: team.name,
+		matchpunkte: team.matchPoints,
 		// Admin-Eingabe (#7) kennt nur eine einzelne Satzpunkte-Zahl (bereits netto) — kein
 		// separates Verlust-Matchpunkte-Feld wie im liga-Referenzprojekt.
 		matchpunkte_neg: 0,
-		satzpunkte_netto: eintrag.satzpunkte
+		satzpunkte_netto: team.setPoints
 	}));
 }
 

@@ -22,7 +22,11 @@
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
 
-	let newName = $state('');
+	// Fixture-Felder (#14) statt eines einzelnen name-Feldes.
+	let newLeagueName = $state('');
+	let newFixtureName = $state('');
+	let newDate = $state('');
+	let newLocation = $state('');
 	let creating = $state(false);
 	let createError = $state<string | null>(null);
 
@@ -46,15 +50,27 @@
 		if (auth.isAuthenticated) load();
 	});
 
+	function anzeigename(v: Veranstaltung): string {
+		return `${v.leagueName} – ${v.fixtureName}`;
+	}
+
 	async function handleCreate(e: Event) {
 		e.preventDefault();
-		if (!newName.trim()) return;
+		if (!newLeagueName.trim() || !newFixtureName.trim() || !newDate || !newLocation.trim()) return;
 		creating = true;
 		createError = null;
 		try {
-			const v = await veranstaltungApi.create(auth.accessToken!, newName.trim());
+			const v = await veranstaltungApi.create(auth.accessToken!, {
+				leagueName: newLeagueName.trim(),
+				fixtureName: newFixtureName.trim(),
+				date: new Date(newDate).toISOString(),
+				location: newLocation.trim()
+			});
 			veranstaltungen = [...veranstaltungen, v];
-			newName = '';
+			newLeagueName = '';
+			newFixtureName = '';
+			newDate = '';
+			newLocation = '';
 		} catch {
 			createError = $_('veranstaltungen.error_create');
 		} finally {
@@ -63,7 +79,8 @@
 	}
 
 	async function handleDelete(v: Veranstaltung) {
-		if (!confirm($_('veranstaltungen.delete_confirm', { values: { name: v.name } }))) return;
+		if (!confirm($_('veranstaltungen.delete_confirm', { values: { name: anzeigename(v) } })))
+			return;
 		try {
 			await veranstaltungApi.remove(auth.accessToken!, v.id);
 			veranstaltungen = veranstaltungen.filter((x) => x.id !== v.id);
@@ -97,17 +114,49 @@
 					</h6>
 					<Form onsubmit={handleCreate}>
 						<FormField
-							id="new-veranstaltung-name"
-							label={$_('veranstaltungen.name_label')}
-							bind:value={newName}
-							placeholder={$_('veranstaltungen.name_placeholder')}
+							id="new-league-name"
+							label={$_('veranstaltungen.league_name_label')}
+							bind:value={newLeagueName}
+							placeholder={$_('veranstaltungen.league_name_placeholder')}
+							required
+							icon="trophy"
+						/>
+						<FormField
+							id="new-fixture-name"
+							label={$_('veranstaltungen.fixture_name_label')}
+							bind:value={newFixtureName}
+							placeholder={$_('veranstaltungen.fixture_name_placeholder')}
 							required
 							icon="calendar-event"
+						/>
+						<FormField
+							id="new-date"
+							label={$_('veranstaltungen.date_label')}
+							type="date"
+							bind:value={newDate}
+							required
+							icon="calendar3"
+						/>
+						<FormField
+							id="new-location"
+							label={$_('veranstaltungen.location_label')}
+							bind:value={newLocation}
+							placeholder={$_('veranstaltungen.location_placeholder')}
+							required
+							icon="geo-alt"
 						/>
 						{#if createError}
 							<Alert color="danger" class="py-2">{createError}</Alert>
 						{/if}
-						<Button type="submit" color="primary" disabled={creating || !newName.trim()}>
+						<Button
+							type="submit"
+							color="primary"
+							disabled={creating ||
+								!newLeagueName.trim() ||
+								!newFixtureName.trim() ||
+								!newDate ||
+								!newLocation.trim()}
+						>
 							{#if creating}
 								<Spinner size="sm" class="me-2" />
 							{/if}
@@ -132,14 +181,14 @@
 					<Card class="shadow-sm">
 						<CardBody class="p-3 d-flex justify-content-between align-items-center">
 							<div>
-								<div class="fw-bold">{v.name}</div>
+								<div class="fw-bold">{anzeigename(v)}</div>
 								<Badge color={datenquelleBadge(v).color} class="mt-1">
 									{datenquelleBadge(v).label}
 								</Badge>
 							</div>
 							<div class="d-flex gap-3">
 								<a
-									href={resolve('/veranstaltungen/[id]', { id: v.id })}
+									href={resolve('/veranstaltungen/[id]', { id: String(v.id) })}
 									class="text-decoration-none"
 								>
 									{$_('veranstaltungen.open_btn')}
