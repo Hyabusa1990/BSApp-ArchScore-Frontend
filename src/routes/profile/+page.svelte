@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { profileApi } from '$lib/api/profile';
+	import { authApi } from '$lib/api/auth';
 	import { APIError } from '$lib/api/client';
 	import {
 		Container,
@@ -31,28 +31,28 @@
 
 	async function changePassword(e: Event) {
 		e.preventDefault();
-		pwSaving = true;
 		pwSuccess = false;
 		pwErrorKey = null;
+
+		// Confirm-Passwort ist reine Client-Eingabehilfe, geht nicht mit ans Backend (Fawkes-
+		// Kontrakt kennt nur currentPassword/newPassword) — gleiches Muster wie register/+page.svelte.
+		if (newPassword !== confirmPassword) {
+			pwErrorKey = 'profile.error_mismatch';
+			return;
+		}
+
+		pwSaving = true;
 		try {
-			await profileApi.changePassword(auth.accessToken!, {
-				current_password: currentPassword,
-				new_password: newPassword,
-				new_password_confirm: confirmPassword
-			});
+			await authApi.changePassword(auth.accessToken!, currentPassword, newPassword);
 			pwSuccess = true;
 			currentPassword = '';
 			newPassword = '';
 			confirmPassword = '';
 		} catch (err) {
-			if (err instanceof APIError && err.status === 400) {
-				const detail = (err.data as { detail?: string })?.detail ?? '';
-				pwErrorKey = detail.toLowerCase().includes('incorrect')
+			pwErrorKey =
+				err instanceof APIError && err.status === 401
 					? 'profile.error_wrong_password'
 					: 'profile.error_failed';
-			} else {
-				pwErrorKey = 'profile.error_failed';
-			}
 		} finally {
 			pwSaving = false;
 		}

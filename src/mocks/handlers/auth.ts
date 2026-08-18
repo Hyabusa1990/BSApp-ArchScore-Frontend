@@ -3,8 +3,8 @@ import { API_URL } from '$lib/config';
 import type { User } from '$lib/api/auth';
 import {
 	db,
-	DEV_PASSWORD,
 	issueTokens,
+	passwordFor,
 	revokeRefreshToken,
 	rotateTokens,
 	userFromAccessToken
@@ -23,7 +23,7 @@ export const authHandlers = [
 		const body = (await request.json()) as { email?: string; password?: string };
 		const user = body.email ? db.usersByEmail.get(body.email) : undefined;
 
-		if (!user || body.password !== DEV_PASSWORD) {
+		if (!user || body.password !== passwordFor(user.id)) {
 			return HttpResponse.json(
 				{ code: 'INVALID_CREDENTIALS', message: 'E-Mail oder Passwort falsch' },
 				{ status: 401 }
@@ -74,7 +74,9 @@ export const authHandlers = [
 		return HttpResponse.json({ code: 'REGISTERED', message: 'Konto erstellt.' }, { status: 200 });
 	}),
 
-	http.post(`${API_URL}/auth/change-password`, async ({ request }) => {
+	// Fawkes-Kontrakt (#11): camelCase Body, kein new_password_confirm mehr (Mismatch-Check
+	// läuft rein client-seitig, siehe profile/+page.svelte), Erfolg als MessageResponse.
+	http.post(`${API_URL}/Auth/change-password`, async ({ request }) => {
 		const user = userFromAccessToken(request.headers.get('Authorization'));
 		if (!user) {
 			return HttpResponse.json(
@@ -82,26 +84,24 @@ export const authHandlers = [
 				{ status: 401 }
 			);
 		}
-		const body = (await request.json()) as {
-			current_password?: string;
-			new_password?: string;
-			new_password_confirm?: string;
-		};
-		if (body.current_password !== DEV_PASSWORD) {
+		const body = (await request.json()) as { currentPassword?: string; newPassword?: string };
+		if (body.currentPassword !== passwordFor(user.id)) {
 			return HttpResponse.json(
-				{ errors: [{ field: 'current_password', message: 'Aktuelles Passwort falsch' }] },
-				{ status: 400 }
+				{ code: 'INVALID_CREDENTIALS', message: 'Aktuelles Passwort falsch' },
+				{ status: 401 }
 			);
 		}
-		if (!body.new_password || body.new_password !== body.new_password_confirm) {
+		if (!body.newPassword) {
 			return HttpResponse.json(
-				{
-					errors: [{ field: 'new_password_confirm', message: 'Passwörter stimmen nicht überein' }]
-				},
-				{ status: 400 }
+				{ code: 'VALIDATION_ERROR', message: 'Neues Passwort fehlt' },
+				{ status: 422 }
 			);
 		}
-		return HttpResponse.json({ detail: 'Passwort erfolgreich geändert.' });
+		db.passwordOverrides.set(user.id, body.newPassword);
+		return HttpResponse.json({
+			code: 'PASSWORD_CHANGED',
+			message: 'Passwort erfolgreich geändert.'
+		});
 	}),
 
 	http.post(`${API_URL}/Auth/logout`, ({ request }) => {

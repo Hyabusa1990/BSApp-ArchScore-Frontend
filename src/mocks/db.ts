@@ -16,8 +16,16 @@ export const db = {
 	usersByEmail: new Map<string, User>(Object.values(users).map((u) => [u.email, clone(u)])),
 	usersById: new Map<string, User>(Object.values(users).map((u) => [u.id, clone(u)])),
 	accessTokens: new Map<string, string>(), // token -> user id
-	refreshTokens: new Map<string, string>() // token -> user id
+	refreshTokens: new Map<string, string>(), // token -> user id
+	// user id -> per Auth/change-password (#11) gesetztes Passwort, überschreibt DEV_PASSWORD
+	// für genau diesen User für den Rest des Mock-Laufs.
+	passwordOverrides: new Map<string, string>()
 };
+
+/** Aktuell gültiges Passwort des Users — DEV_PASSWORD, außer per change-password überschrieben. */
+export function passwordFor(userId: string): string {
+	return db.passwordOverrides.get(userId) ?? DEV_PASSWORD;
+}
 
 const ACCESS_TOKEN_TTL_SECONDS = 3600;
 

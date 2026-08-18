@@ -57,6 +57,7 @@
 		"saving": "Speichern…",
 		"password_changed": "Passwort erfolgreich geändert.",
 		"error_wrong_password": "Das aktuelle Passwort ist falsch.",
+		"error_mismatch": "Passwörter stimmen nicht überein.",
 		"error_failed": "Ein Fehler ist aufgetreten. Bitte erneut versuchen."
 	},
 	"admin": {

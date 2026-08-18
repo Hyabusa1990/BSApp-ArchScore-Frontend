@@ -35,5 +35,13 @@ export const authApi = {
 
 	me: (token: string) => apiClient.get<User>('/Auth/me', token),
 
+	// Eigenständige Funktion, nicht Teil des in #3 entfernten Profil-Edit-Formulars.
+	changePassword: (token: string, currentPassword: string, newPassword: string) =>
+		apiClient.post<MessageResponse>(
+			'/Auth/change-password',
+			{ currentPassword, newPassword },
+			token
+		),
+
 	logout: (token: string) => apiClient.post<void>('/Auth/logout', undefined, token)
 };
