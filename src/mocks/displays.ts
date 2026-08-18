@@ -9,33 +9,53 @@ import {
 } from './veranstaltungen';
 import { berechneMatchStand, peekScoringState, ringSumme } from './shared-state';
 import { encodeShots } from './binoculars';
+import { loadState, saveState } from './persist';
 
 /**
- * In-memory Fake-Backend-Zustand für Displays (Issue #17) — folgt seit hier dem echten
+ * Fake-Backend-Zustand für Displays (Issue #17) — folgt seit hier dem echten
  * `GET /Display/register`/`GET /Display/data`-Kontrakt: ein Gerät registriert sich selbst und
  * bekommt einen `deviceCode` (denselben Pool, den der Admin-Zuordnen-Flow prüft, siehe
  * `veranstaltungen.ts`), danach ist es ein normaler Bearer-Client (`accessToken`). Zuordnung zu
  * einer Fixture passiert ausschließlich admin-seitig (`assignDevice`) — dieses Modul liest den
- * Zuordnungs-Zustand nur, es schreibt ihn nie. Token-Maps bewusst nur In-Memory (nicht in
- * `localStorage`), analog zu `db.ts`s Account-Tokens — das Gerät merkt sich nur seine eigenen
- * Token lokal (`+page.svelte`).
+ * Zuordnungs-Zustand nur, es schreibt ihn nie.
+ *
+ * Token-Maps über `localStorage` persistiert (siehe `persist.ts`), NICHT nur In-Memory (Issue
+ * #20, Fehlerbericht Gero 2026-08-18): MSW-Handler laufen im JS-Kontext der Seite, nicht im
+ * eigentlichen Service-Worker-Skript — ein reines Reload (F5) legt diesen Kontext komplett neu
+ * an, In-Memory-Maps wären dann leer. Ohne Persistenz hätte das Gerät seinen eigenen, im
+ * `+page.svelte` in `localStorage` gemerkten `accessToken` serverseitig verloren, der
+ * Refresh-Versuch wäre ebenfalls ins Leere gelaufen (auch das `refreshToken` unbekannt) —
+ * Ergebnis: kompletter Re-Register bei jedem F5, neuer `deviceCode`, Admin-Zuordnung futsch.
  *
  * Refresh-Rotation (Issue #19, Wunsch Gero 2026-08-18): der `deviceCode` soll erhalten bleiben,
  * solange sich das Gerät irgendwie authentifizieren kann — ein abgelaufener `accessToken` allein
  * darf keine Neu-Registrierung (= neuer `deviceCode`, der Admin müsste erneut zuordnen)
- * auslösen, nur ein abgelaufenes/ungültiges `refreshToken`. Zwei Maps analog `db.ts`s
- * `accessTokens`/`refreshTokens`, `rotateDeviceTokens` wird über den geteilten
- * `POST /Auth/refresh`-Endpunkt aufgerufen (siehe `handlers/auth.ts`).
+ * auslösen, nur ein abgelaufenes/ungültiges `refreshToken`. `rotateDeviceTokens` wird über den
+ * geteilten `POST /Auth/refresh`-Endpunkt aufgerufen (siehe `handlers/auth.ts`).
  */
 
-const accessTokens = new Map<string, string>(); // accessToken -> deviceCode
-const refreshTokens = new Map<string, string>(); // refreshToken -> deviceCode
+interface SessionState {
+	accessTokens: Record<string, string>; // accessToken -> deviceCode
+	refreshTokens: Record<string, string>; // refreshToken -> deviceCode
+}
+
+const STORAGE_KEY = 'displaySessions';
+
+function loadSessions(): SessionState {
+	return loadState(STORAGE_KEY, () => ({ accessTokens: {}, refreshTokens: {} }));
+}
+
+function persistSessions(state: SessionState): void {
+	saveState(STORAGE_KEY, state);
+}
 
 function issueDeviceTokens(deviceCode: string): DeviceTokenResponse {
+	const state = loadSessions();
 	const accessToken = `mock-display.${crypto.randomUUID()}`;
 	const refreshToken = `mock-display-refresh.${crypto.randomUUID()}`;
-	accessTokens.set(accessToken, deviceCode);
-	refreshTokens.set(refreshToken, deviceCode);
+	state.accessTokens[accessToken] = deviceCode;
+	state.refreshTokens[refreshToken] = deviceCode;
+	persistSessions(state);
 	return { deviceCode, accessToken, refreshToken, expiresIn: 3600 };
 }
 
@@ -48,9 +68,11 @@ export function registerDevice(): DeviceTokenResponse {
  * `deviceCode` statt eine User-ID. `undefined` = `refreshToken` unbekannt/schon verbraucht,
  * der Aufrufer (`handlers/auth.ts`) probiert dann noch die User-Account-Rotation. */
 export function rotateDeviceTokens(refreshToken: string): DeviceTokenResponse | undefined {
-	const deviceCode = refreshTokens.get(refreshToken);
+	const state = loadSessions();
+	const deviceCode = state.refreshTokens[refreshToken];
 	if (!deviceCode) return undefined;
-	refreshTokens.delete(refreshToken);
+	delete state.refreshTokens[refreshToken];
+	persistSessions(state);
 	return issueDeviceTokens(deviceCode);
 }
 
@@ -136,7 +158,7 @@ function buildSeiteForScheibe(scheibennummer: number | null): DisplaySeite {
  * `ligaTables` — die Ligatabelle läuft über den ganzen Wettkampftag, nicht pro Runde.
  */
 export function getDisplayData(accessToken: string): DisplayDataResponse | undefined {
-	const deviceCode = accessTokens.get(accessToken);
+	const deviceCode = loadSessions().accessTokens[accessToken];
 	if (!deviceCode) return undefined;
 
 	const assigned = findAssignedDeviceByCode(deviceCode);
