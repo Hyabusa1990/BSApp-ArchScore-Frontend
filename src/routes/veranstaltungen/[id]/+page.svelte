@@ -47,6 +47,14 @@
 	type TabelleRow = { mannschaft_name: string; satzpunkte: number; matchpunkte: number };
 	let rows = $state<TabelleRow[]>([]);
 
+	// Ligagröße laut Gero (2026-08-18) immer zwischen 4 und 8 Mannschaften — feste Grenzen statt
+	// frei dynamischer Zeilenzahl, Start-Tabelle deshalb direkt mit 8 leeren Zeilen vorbelegt.
+	const MIN_MANNSCHAFTEN = 4;
+	const MAX_MANNSCHAFTEN = 8;
+	function leereRow(): TabelleRow {
+		return { mannschaft_name: '', satzpunkte: 0, matchpunkte: 0 };
+	}
+
 	let ligaApp = $state('BSApp Liga');
 	let ligaUrl = $state('');
 	let ligaPin = $state('');
@@ -87,7 +95,7 @@
 				}));
 				chartCreated = true;
 			} else {
-				rows = [{ mannschaft_name: '', satzpunkte: 0, matchpunkte: 0 }];
+				rows = Array.from({ length: MAX_MANNSCHAFTEN }, leereRow);
 				chartCreated = false;
 			}
 			if (veranstaltung.liga) {
@@ -158,25 +166,32 @@
 	});
 
 	function addRow() {
-		rows = [...rows, { mannschaft_name: '', satzpunkte: 0, matchpunkte: 0 }];
+		if (rows.length >= MAX_MANNSCHAFTEN) return;
+		rows = [...rows, leereRow()];
 	}
 
 	function removeRow(index: number) {
-		if (rows.length <= 1) return;
+		if (rows.length <= MIN_MANNSCHAFTEN) return;
 		rows = rows.filter((_, i) => i !== index);
 	}
 
 	async function saveTabelle() {
-		saving = true;
 		saveError = null;
+		const teams = rows
+			.filter((r) => r.mannschaft_name.trim())
+			.map((r) => ({
+				name: r.mannschaft_name.trim(),
+				setPoints: r.satzpunkte,
+				matchPoints: r.matchpunkte
+			}));
+		// Leere Zeilen werden oben rausgefiltert statt gelöscht (Löschen bleibt hart auf
+		// MIN_MANNSCHAFTEN begrenzt) — deshalb hier nochmal prüfen, bevor gespeichert wird.
+		if (teams.length < MIN_MANNSCHAFTEN) {
+			saveError = $_('veranstaltungen.error_tabelle_min_mannschaften');
+			return;
+		}
+		saving = true;
 		try {
-			const teams = rows
-				.filter((r) => r.mannschaft_name.trim())
-				.map((r) => ({
-					name: r.mannschaft_name.trim(),
-					setPoints: r.satzpunkte,
-					matchPoints: r.matchpunkte
-				}));
 			await veranstaltungApi.createMatchPlayChart(auth.accessToken!, fixtureId, teams);
 			if (veranstaltung) veranstaltung = { ...veranstaltung, datenquelle: 'tabelle' };
 			chartCreated = true;
@@ -389,7 +404,7 @@
 												<button
 													type="button"
 													class="btn btn-sm btn-outline-danger"
-													disabled={rows.length <= 1}
+													disabled={rows.length <= MIN_MANNSCHAFTEN}
 													onclick={() => removeRow(i)}
 												>
 													&times;
@@ -403,7 +418,12 @@
 					</div>
 
 					{#if !chartCreated}
-						<button type="button" class="btn btn-outline-secondary btn-sm mb-3" onclick={addRow}>
+						<button
+							type="button"
+							class="btn btn-outline-secondary btn-sm mb-3"
+							disabled={rows.length >= MAX_MANNSCHAFTEN}
+							onclick={addRow}
+						>
 							+ {$_('veranstaltungen.tabelle_add_row')}
 						</button>
 

@@ -6,6 +6,7 @@ import type {
 	MatchPlayChart,
 	MatchPlayChartTeam
 } from '$lib/api/veranstaltung';
+import type { LigaTableEintrag } from '$lib/api/display';
 import type { Match, Begegnung } from '$lib/api/matchkontrolle';
 import type { Device, UpdateDeviceData } from '$lib/api/bildschirme';
 import { users } from './fixtures';
@@ -13,10 +14,10 @@ import { loadState, saveState } from './persist';
 
 /**
  * Fake-Backend-Zustand für die Verwaltungsoberfläche — ein gemeinsamer Store für
- * Veranstaltung/Match/Bildschirm (referenzieren sich gegenseitig über veranstaltung_id).
+ * Veranstaltung/Match/Gerät (referenzieren sich gegenseitig über veranstaltung_id).
  * Weiterhin eigenständig ggü. db.ts (auth-spezifisch), aber jetzt die Quelle, aus der
- * displays.ts/binoculars.ts ihren Zustand lesen (welches Match ist aktiv, welcher
- * Bildschirm/Tablet-Token gehört wozu) — siehe Issue #10.
+ * displays.ts/binoculars.ts ihren Zustand lesen (welches Match ist aktiv, welches Gerät/
+ * Tablet-Token gehört wozu) — siehe Issue #10.
  *
  * Über `localStorage` persistiert (siehe persist.ts): Admin-Verwaltung, Display und
  * Spotter-Tablet laufen in der Realität auf verschiedenen Geräten, im Dev-Setup simuliert
@@ -25,7 +26,7 @@ import { loadState, saveState } from './persist';
  * und schreibt ihn nach jeder Änderung zurück, statt ihn einmalig beim Modul-Load zu laden.
  *
  * `Veranstaltung.id` ist seit Issue #14 die echte numerische Fawkes-Fixture-ID — alle anderen
- * hier gespeicherten Records (Match/Bildschirm/TabletPairing/currentRoundNo/fixtureUsers/
+ * hier gespeicherten Records (Match/Device/TabletPairing/currentRoundNo/fixtureUsers/
  * matchPlayCharts) referenzieren sie weiterhin über einen STRING-Schlüssel (`String(v.id)`),
  * das sind rein interne Mock-Konzepte ohne echtes Fawkes-Pendant, ihr Schlüsseltyp ist bewusst
  * unverändert geblieben (kleinerer Diff, kein Fawkes-Kontrakt zu verletzen).
@@ -38,20 +39,14 @@ interface TabletPairingRecord {
 }
 
 /**
- * Bewusst NICHT mehr `$lib/api/bildschirme` (das Modul modelliert seit Issue #15 nur noch das
- * echte Device-CRUD, `pin`/`scheibe_a`/`scheibe_b`/`mode`/`aktiv` existieren dort nicht mehr).
- * Dieser Typ treibt ausschließlich die weiterhin unangetastete, JWT+PIN-basierte
- * Display-Konsum-Seite (`displays.ts`/`handlers/display.ts`) — bewusste Nahtstelle, siehe #15.
+ * Intern gehaltene Erweiterung von `Device` um den `deviceCode`, mit dem sich das Gerät
+ * ursprünglich registriert hat (Issue #17) — nicht Teil von `GetDeviceResponse` (die echte
+ * Fawkes-Antwort an die Admin-UI kennt nur `id`/`displayType`/`matchNo`), deshalb beim
+ * Rausreichen an Admin-Handler immer über `toPublicDevice` strippen. Bleibt nach dem Zuordnen
+ * erhalten, damit `/Display/data` das Gerät anhand seines `deviceCode` wiederfinden kann.
  */
-interface LegacyBildschirm {
-	id: string;
-	veranstaltung_id: string;
-	scheibe_a: number | null;
-	scheibe_b: number | null;
-	name: string | null;
-	pin: string;
-	aktiv: boolean;
-	mode: 'ergebnisse' | 'tabelle';
+interface StoredDevice extends Device {
+	deviceCode: string;
 }
 
 /** Intern gespeicherte Match-Daten ohne `aktiv` — das Freigabe-Flag ist seit #10 rein aus
@@ -61,7 +56,6 @@ type StoredMatch = Omit<Match, 'aktiv'>;
 interface State {
 	veranstaltungen: Veranstaltung[];
 	matches: StoredMatch[];
-	bildschirme: LegacyBildschirm[];
 	tabletPairings: TabletPairingRecord[];
 	/** Veranstaltungs-ID (String) -> aktuell freigegebene Runde (Fawkes-`roundNo`, Issue #10). */
 	currentRoundNo: Record<string, number>;
@@ -69,11 +63,14 @@ interface State {
 	fixtureUsers: Record<string, FixtureUser[]>;
 	/** Veranstaltungs-ID (String) -> initiale Tabelle (`GetMatchPlayChartResponse`, Issue #14). */
 	matchPlayCharts: Record<string, MatchPlayChart>;
+	/** Veranstaltungs-ID (String) -> Ligatabelle, wie sie ein `LigaTable`-Gerät anzeigt (Issue
+	 * #18) — eigene Datenquelle ggü. `matchPlayCharts` (andere Feldnamen, siehe `display.ts`),
+	 * bewusst nur für Veranstaltungen mit `datenquelle === 'liga'` gepflegt. */
+	ligaTables: Record<string, LigaTableEintrag[]>;
 	/** Veranstaltungs-ID (String) -> zugewiesene Geräte (Fawkes `GetDeviceResponse[]`, Issue #15). */
-	devices: Record<string, Device[]>;
-	/** deviceCodes, die sich schon "selbst registriert" haben, aber noch keiner Fixture
-	 * zugeordnet sind (simuliert `/Display/register`, hier NICHT nachgebaut — nur ein Pool zum
-	 * Testen von `assign`, siehe Issue #15). */
+	devices: Record<string, StoredDevice[]>;
+	/** deviceCodes, die sich schon selbst registriert haben (`GET /Display/register`, Issue #17),
+	 * aber noch keiner Fixture zugeordnet sind — derselbe Pool, den `assignDevice` prüft. */
 	pendingDeviceCodes: string[];
 	nextId: number;
 }
@@ -152,58 +149,6 @@ function seedState(): State {
 				]
 			}
 		],
-		bildschirme: [
-			{
-				id: 'b-1',
-				veranstaltung_id: '1001',
-				scheibe_a: 1,
-				scheibe_b: 2,
-				name: null,
-				pin: 'A1L35P',
-				aktiv: true,
-				mode: 'ergebnisse'
-			},
-			{
-				id: 'b-2',
-				veranstaltung_id: '1001',
-				scheibe_a: 3,
-				scheibe_b: 4,
-				name: null,
-				pin: 'P94T67',
-				aktiv: true,
-				mode: 'ergebnisse'
-			},
-			{
-				id: 'b-3',
-				veranstaltung_id: '1001',
-				scheibe_a: 5,
-				scheibe_b: 6,
-				name: null,
-				pin: 'KLM579',
-				aktiv: true,
-				mode: 'ergebnisse'
-			},
-			{
-				id: 'b-4',
-				veranstaltung_id: '1001',
-				scheibe_a: 7,
-				scheibe_b: 8,
-				name: null,
-				pin: 'T52LAB',
-				aktiv: false,
-				mode: 'ergebnisse'
-			},
-			{
-				id: 'b-5',
-				veranstaltung_id: '1001',
-				scheibe_a: null,
-				scheibe_b: null,
-				name: 'BEAMER',
-				pin: 'RTZ794',
-				aktiv: true,
-				mode: 'tabelle'
-			}
-		],
 		tabletPairings: [],
 		currentRoundNo: { '1001': 1 },
 		fixtureUsers: {
@@ -226,7 +171,44 @@ function seedState(): State {
 			}
 		},
 		devices: {
-			'1001': [{ id: 500, displayType: 'Match', matchNo: 1 }]
+			'1001': [{ id: 500, displayType: 'Match', matchNo: 1, deviceCode: 'DEV-SEED01' }],
+			'1002': [{ id: 501, displayType: 'LigaTable', matchNo: null, deviceCode: 'DEV-SEED02' }]
+		},
+		ligaTables: {
+			'1002': [
+				{
+					teamName: 'BSC Nordlicht',
+					setPlus: 22,
+					setMinus: 6,
+					matchPlus: 12,
+					matchMinus: 2,
+					position: 1
+				},
+				{
+					teamName: 'SV Kreisstadt',
+					setPlus: 18,
+					setMinus: 10,
+					matchPlus: 9,
+					matchMinus: 5,
+					position: 2
+				},
+				{
+					teamName: 'BS Ostwind',
+					setPlus: 15,
+					setMinus: 13,
+					matchPlus: 8,
+					matchMinus: 6,
+					position: 3
+				},
+				{
+					teamName: 'SGi Talblick',
+					setPlus: 12,
+					setMinus: 16,
+					matchPlus: 6,
+					matchMinus: 8,
+					position: 4
+				}
+			]
 		},
 		pendingDeviceCodes: ['DEV-A1B2C3', 'DEV-D4E5F6', 'DEV-G7H8I9'],
 		nextId: 2000
@@ -263,7 +245,7 @@ export function findVeranstaltung(user: User, id: number): Veranstaltung | undef
 	return v && canSee(user, v) ? v : undefined;
 }
 
-/** Ungefiltert wie `findBildschirmByPin`/`findTabletPairing` weiter unten — der echte
+/** Ungefiltert wie `findTabletPairing`/`findAssignedDeviceByCode` weiter unten — der echte
  * Spotter-Info-Endpunkt ist laut Fawkes-Spec Bearer-frei, die schwer zu erratende `uniqueId`
  * selbst ist die Absicherung (siehe binocular.ts). Von der Matchkontrolle genutzt, um den
  * Confirm-Status pro Scheibe zu lesen (Issue #10). */
@@ -352,6 +334,41 @@ export function getMatchPlayChart(fixtureId: number): MatchPlayChart | undefined
 }
 
 /**
+ * Sortierung wie in einer echten Ligatabelle üblich: Matchpunkte absteigend, bei Gleichstand
+ * Satzpunkte absteigend als Tiebreak. `MatchPlayChartTeam` kennt nur je eine Netto-Zahl (Admin
+ * gibt keine Plus/Minus-Aufteilung ein, siehe `saveTabelle`), deshalb Plus/Minus hier synthetisch
+ * aus dem Vorzeichen rekonstruiert (negativ -> komplett in Minus, sonst komplett in Plus) — reine
+ * Mock-Annäherung, keine echte Sieg/Niederlage-Historie.
+ */
+function toLigaTableEintraege(teams: MatchPlayChartTeam[]): LigaTableEintrag[] {
+	return [...teams]
+		.sort((a, b) => b.matchPoints - a.matchPoints || b.setPoints - a.setPoints)
+		.map((team, i) => ({
+			teamName: team.name,
+			setPlus: Math.max(team.setPoints, 0),
+			setMinus: Math.max(-team.setPoints, 0),
+			matchPlus: Math.max(team.matchPoints, 0),
+			matchMinus: Math.max(-team.matchPoints, 0),
+			position: i + 1
+		}));
+}
+
+/**
+ * Ligatabelle für ein `LigaTable`-Gerät (Issue #18) — leeres Array, wenn (noch) keine Daten
+ * vorliegen, nicht `undefined`, damit `getDisplayData` nicht extra unterscheiden muss. Explizit
+ * gepflegte `ligaTables` (externe Liga-Anbindung) haben Vorrang; ohne die fällt es auf die
+ * initiale Tabelle zurück (`matchPlayCharts`, "Tabelle eintragen" im Veranstaltungs-Formular) —
+ * dieselben Standings, die auch in der Verwaltungsoberfläche angezeigt werden.
+ */
+export function getLigaTable(veranstaltungId: string): LigaTableEintrag[] {
+	const state = load();
+	const explizit = state.ligaTables[veranstaltungId];
+	if (explizit) return explizit;
+	const chart = state.matchPlayCharts[veranstaltungId];
+	return chart ? toLigaTableEintraege(chart.teams) : [];
+}
+
+/**
  * Entspricht `POST /MatchPlayChart/{fixtureId}` ohne `hardOverride` (Issue #14): schlägt fehl,
  * wenn für diese Fixture schon eine Tabelle existiert — kein Reset-/Lösch-Pfad hier, weil dafür
  * kein echter Endpunkt verifiziert ist (siehe `veranstaltung.ts`). `undefined` = Konflikt.
@@ -414,14 +431,44 @@ export function setCurrentRoundNo(veranstaltungId: string, roundNo: number): Mat
 	return matchesFor(veranstaltungId);
 }
 
-// ── Geräteverwaltung (Fawkes `DeviceManagementController`, siehe Issue #15) ────────────────
+// ── Geräteverwaltung (Fawkes `DeviceManagementController`/`DisplayController`, Issue #15/#17) ──
+
+function randomDeviceCode(): string {
+	const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // ohne verwechselbare Zeichen (0/O, 1/I)
+	const suffix = Array.from(
+		{ length: 6 },
+		() => chars[Math.floor(Math.random() * chars.length)]
+	).join('');
+	return `DEV-${suffix}`;
+}
+
+/** Nie an Admin-Handler durchreichen — `GetDeviceResponse` kennt kein `deviceCode`-Feld. */
+function toPublicDevice({ id, displayType, matchNo }: StoredDevice): Device {
+	return { id, displayType, matchNo };
+}
 
 export function devicesFor(veranstaltungId: string): Device[] {
-	return load().devices[veranstaltungId] ?? [];
+	return (load().devices[veranstaltungId] ?? []).map(toPublicDevice);
 }
 
 export function findDevice(veranstaltungId: string, deviceId: number): Device | undefined {
-	return devicesFor(veranstaltungId).find((d) => d.id === deviceId);
+	const d = (load().devices[veranstaltungId] ?? []).find((d) => d.id === deviceId);
+	return d && toPublicDevice(d);
+}
+
+/**
+ * Simuliert die Selbst-Registrierung eines Geräts (`GET /Display/register`, Issue #17) — legt
+ * einen frischen, noch unzugewiesenen `deviceCode` im selben Pool an, den `assignDevice` prüft.
+ * Vorher (Issue #15) war dieser Pool nur mit drei festen Seed-Codes gefüllt und `/display`
+ * sprach ein komplett getrenntes PIN-System — ein am Display angezeigter Code ließ sich dadurch
+ * im Admin-Zuordnen nie tatsächlich einlösen.
+ */
+export function registerDeviceCode(): string {
+	const state = load();
+	const code = randomDeviceCode();
+	state.pendingDeviceCodes.push(code);
+	persist(state);
+	return code;
 }
 
 /**
@@ -434,10 +481,15 @@ export function assignDevice(veranstaltungId: string, deviceCode: string): Devic
 	const index = state.pendingDeviceCodes.indexOf(deviceCode);
 	if (index === -1) return undefined;
 	state.pendingDeviceCodes.splice(index, 1);
-	const device: Device = { id: state.nextId++, displayType: 'None', matchNo: null };
+	const device: StoredDevice = {
+		id: state.nextId++,
+		displayType: 'None',
+		matchNo: null,
+		deviceCode
+	};
 	(state.devices[veranstaltungId] ??= []).push(device);
 	persist(state);
-	return device;
+	return toPublicDevice(device);
 }
 
 export function updateDevice(
@@ -450,7 +502,36 @@ export function updateDevice(
 	if (!device) return undefined;
 	Object.assign(device, data);
 	persist(state);
-	return device;
+	return toPublicDevice(device);
+}
+
+export interface AssignedDeviceLookup {
+	veranstaltungId: string;
+	device: Device;
+}
+
+/**
+ * Löst den `deviceCode` eines registrierten Geräts auf seine Fixture-Zuordnung auf — treibt
+ * `GET /Display/data`. `undefined` heißt: registriert, aber noch keiner Fixture zugeordnet
+ * (Antwort dann `displayType: 'Unassigned'`, siehe `displays.ts`).
+ */
+export function findAssignedDeviceByCode(deviceCode: string): AssignedDeviceLookup | undefined {
+	const state = load();
+	for (const [veranstaltungId, list] of Object.entries(state.devices)) {
+		const device = list.find((d) => d.deviceCode === deviceCode);
+		if (device) return { veranstaltungId, device: toPublicDevice(device) };
+	}
+	return undefined;
+}
+
+/** Begegnungen des Matches mit dieser `nummer` (= `matchNo`), unabhängig davon, ob es gerade
+ * die freigegebene Runde ist — genutzt von `GET /Display/data`, um zu wissen, WELCHE Scheiben
+ * das einem Match zugeordnete Gerät zeigen soll. */
+export function begegnungenForMatch(veranstaltungId: string, matchNo: number): Begegnung[] {
+	const match = load().matches.find(
+		(m) => m.veranstaltung_id === veranstaltungId && m.nummer === matchNo
+	);
+	return match?.begegnungen ?? [];
 }
 
 /** Entspricht `PUT /fixtures/{fixtureId}/devices/{deviceId}/unassign`. */
@@ -514,23 +595,4 @@ export function mannschaftUndGegner(
 	return seite === 'a'
 		? { mannschaft: begegnung.mannschaft_a, gegner: begegnung.mannschaft_b }
 		: { mannschaft: begegnung.mannschaft_b, gegner: begegnung.mannschaft_a };
-}
-
-/**
- * Ungefiltert (kein Ownership-Check) — Display-Pairing per PIN ist kein Account-Auth-Vorgang.
- * PIN-Vergleich bewusst tolerant (getrimmt, groß/klein ignoriert): der Admin tippt den am
- * Display angezeigten Code von Hand ab, Tippfehler bei Groß-/Kleinschreibung sollen das
- * Pairing nicht unnötig verhindern.
- */
-export function findBildschirmByPin(pin: string): LegacyBildschirm | undefined {
-	const normalized = pin.trim().toUpperCase();
-	return load().bildschirme.find((b) => b.pin.trim().toUpperCase() === normalized);
-}
-
-/** Ungefiltert — wird nur für öffentlich lesbare Anzeige-Inhalte (Display-Tabellenmodus)
- * gebraucht, nicht für Admin-Zugriff (der läuft über findVeranstaltung mit Ownership-Check).
- * `id` ist der String-Schlüssel, wie ihn Bildschirm/Match auch verwenden — vergleicht daher
- * gegen `String(v.id)`, nicht gegen die numerische Fixture-ID direkt. */
-export function getVeranstaltungById(id: string): Veranstaltung | undefined {
-	return load().veranstaltungen.find((v) => String(v.id) === id);
 }

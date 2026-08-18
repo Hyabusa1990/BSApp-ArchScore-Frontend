@@ -9,6 +9,7 @@ import {
 	rotateTokens,
 	userFromAccessToken
 } from '../db';
+import { rotateDeviceTokens } from '../displays';
 
 /**
  * Pfade/Feldnamen folgen dem Fawkes-Auth-Kontrakt (`ArchScore-SpecsAndDocu/Fawkes-OpenApi.json`,
@@ -16,6 +17,11 @@ import {
  * Token-Shape ist camelCase `{accessToken, refreshToken, expiresIn}`.
  *
  * Login für alle Fixture-User (siehe fixtures.ts) mit Passwort: test1234
+ *
+ * `POST /Auth/refresh` ist laut Spec EIN generischer Endpunkt für jedes über `AuthController`
+ * ausgestellte Token-Paar, nicht nur für User-Accounts — Display-Geräte (`GET /Display/register`,
+ * `DisplayController`) nutzen ihn genauso (Issue #19). Der Mock hält Account- und Geräte-Token
+ * in getrennten Stores (`db.ts` vs. `displays.ts`), probiert deshalb hier beide nacheinander.
  */
 
 export const authHandlers = [
@@ -34,7 +40,9 @@ export const authHandlers = [
 
 	http.post(`${API_URL}/Auth/refresh`, async ({ request }) => {
 		const body = (await request.json()) as { refreshToken?: string };
-		const tokens = body.refreshToken ? rotateTokens(body.refreshToken) : null;
+		const tokens = body.refreshToken
+			? (rotateTokens(body.refreshToken) ?? rotateDeviceTokens(body.refreshToken))
+			: null;
 
 		if (!tokens) {
 			return HttpResponse.json(

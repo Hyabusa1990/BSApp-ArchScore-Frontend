@@ -9,12 +9,13 @@ import { apiClient } from './client';
  * `scheibe_b`/`mode`/`aktiv` mehr. Ein Gerät registriert sich selbst (`GET /Display/register`,
  * eigener, hier NICHT angefasster Mechanismus — siehe `displays.ts`/`handlers/display.ts`) und
  * bekommt dabei einen `deviceCode`. Der Admin ordnet dieses schon registrierte Gerät per
- * `deviceCode` einer Fixture zu (`assign`), danach nur noch `displayType` (`None`/`Match`) +
- * optional `matchNo` konfigurierbar. Welche zwei Scheiben bei `Match` angezeigt werden, leitet
- * das Backend selbst ab (`GET /Display/data`) — keine manuelle Scheiben-Paar-Auswahl mehr.
+ * `deviceCode` einer Fixture zu (`assign`), danach nur noch `displayType`
+ * (`None`/`Match`/`LigaTable`, Issue #18) + optional `matchNo` (nur bei `Match`) konfigurierbar.
+ * Welche zwei Scheiben bei `Match` angezeigt werden, leitet das Backend selbst ab
+ * (`GET /Display/data`) — keine manuelle Scheiben-Paar-Auswahl mehr.
  */
 
-export type DisplayType = 'None' | 'Match';
+export type DisplayType = 'None' | 'Match' | 'LigaTable';
 
 /** `Fawkes.Api.Controllers.DeviceManagementController.GetDeviceResponse`. */
 export interface Device {

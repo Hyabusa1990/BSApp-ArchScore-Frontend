@@ -1,38 +1,57 @@
-import type { DisplayContent, DisplaySeite, TabellenEintrag } from '$lib/api/display';
+import type { DeviceTokenResponse, DisplayDataResponse, DisplaySeite } from '$lib/api/display';
 import {
+	begegnungenForMatch,
 	findAktivesMatchFuerScheibe,
-	findBildschirmByPin,
-	getMatchPlayChart,
-	getVeranstaltungById,
-	mannschaftUndGegner
+	findAssignedDeviceByCode,
+	getLigaTable,
+	mannschaftUndGegner,
+	registerDeviceCode
 } from './veranstaltungen';
 import { berechneMatchStand, peekScoringState, ringSumme } from './shared-state';
 import { encodeShots } from './binoculars';
 
 /**
- * In-memory Fake-Backend-Zustand für Displays — Pairing/Inhalt kommen jetzt aus dem echten
- * Admin-Verwaltungs-Mock (#6–#9), siehe Issue #10. Ein Display gilt als gepaired, sobald ein
- * Bildschirm-Eintrag (#9) mit passendem PIN existiert — genau das ist der Pairing-Vorgang:
- * der Admin trägt den am Display angezeigten PIN im Bildschirm-Formular ein und speichert.
- * Nur JWT+PIN-Ausstellung selbst bleibt hier (eigenes Auth-Schema, siehe #1).
+ * In-memory Fake-Backend-Zustand für Displays (Issue #17) — folgt seit hier dem echten
+ * `GET /Display/register`/`GET /Display/data`-Kontrakt: ein Gerät registriert sich selbst und
+ * bekommt einen `deviceCode` (denselben Pool, den der Admin-Zuordnen-Flow prüft, siehe
+ * `veranstaltungen.ts`), danach ist es ein normaler Bearer-Client (`accessToken`). Zuordnung zu
+ * einer Fixture passiert ausschließlich admin-seitig (`assignDevice`) — dieses Modul liest den
+ * Zuordnungs-Zustand nur, es schreibt ihn nie. Token-Maps bewusst nur In-Memory (nicht in
+ * `localStorage`), analog zu `db.ts`s Account-Tokens — das Gerät merkt sich nur seine eigenen
+ * Token lokal (`+page.svelte`).
+ *
+ * Refresh-Rotation (Issue #19, Wunsch Gero 2026-08-18): der `deviceCode` soll erhalten bleiben,
+ * solange sich das Gerät irgendwie authentifizieren kann — ein abgelaufener `accessToken` allein
+ * darf keine Neu-Registrierung (= neuer `deviceCode`, der Admin müsste erneut zuordnen)
+ * auslösen, nur ein abgelaufenes/ungültiges `refreshToken`. Zwei Maps analog `db.ts`s
+ * `accessTokens`/`refreshTokens`, `rotateDeviceTokens` wird über den geteilten
+ * `POST /Auth/refresh`-Endpunkt aufgerufen (siehe `handlers/auth.ts`).
  */
 
-interface DisplayRecord {
-	pin: string;
+const accessTokens = new Map<string, string>(); // accessToken -> deviceCode
+const refreshTokens = new Map<string, string>(); // refreshToken -> deviceCode
+
+function issueDeviceTokens(deviceCode: string): DeviceTokenResponse {
+	const accessToken = `mock-display.${crypto.randomUUID()}`;
+	const refreshToken = `mock-display-refresh.${crypto.randomUUID()}`;
+	accessTokens.set(accessToken, deviceCode);
+	refreshTokens.set(refreshToken, deviceCode);
+	return { deviceCode, accessToken, refreshToken, expiresIn: 3600 };
 }
 
-const displays = new Map<string, DisplayRecord>();
-
-function generatePin(): string {
-	const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // ohne verwechselbare Zeichen (0/O, 1/I)
-	return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+/** Entspricht `GET /Display/register`. */
+export function registerDevice(): DeviceTokenResponse {
+	return issueDeviceTokens(registerDeviceCode());
 }
 
-export function registerDisplay(): { jwt: string; pin: string } {
-	const jwt = `mock-display.${crypto.randomUUID()}`;
-	const pin = generatePin();
-	displays.set(jwt, { pin });
-	return { jwt, pin };
+/** Refresh-Rotation für Geräte-Token — analog `db.ts`s `rotateTokens`, aber gegen den
+ * `deviceCode` statt eine User-ID. `undefined` = `refreshToken` unbekannt/schon verbraucht,
+ * der Aufrufer (`handlers/auth.ts`) probiert dann noch die User-Account-Rotation. */
+export function rotateDeviceTokens(refreshToken: string): DeviceTokenResponse | undefined {
+	const deviceCode = refreshTokens.get(refreshToken);
+	if (!deviceCode) return undefined;
+	refreshTokens.delete(refreshToken);
+	return issueDeviceTokens(deviceCode);
 }
 
 function leereSeite(targetNo: number | null): DisplaySeite {
@@ -101,47 +120,44 @@ function buildSeiteForScheibe(scheibennummer: number | null): DisplaySeite {
 	};
 }
 
-// Seit Issue #14 kommt die Tabelle aus der separaten MatchPlayChart-Ressource (echter
-// Fawkes-Kontrakt), nicht mehr embedded auf der Veranstaltung selbst.
-function tabelleFuerVeranstaltung(veranstaltungId: string): TabellenEintrag[] {
-	const v = getVeranstaltungById(veranstaltungId);
-	if (!v) return [];
-	const chart = getMatchPlayChart(v.id);
-	if (!chart) return [];
-	return chart.teams.map((team, i) => ({
-		mannschaft_id: i + 1,
-		mannschaft_name: team.name,
-		matchpunkte: team.matchPoints,
-		// Admin-Eingabe (#7) kennt nur eine einzelne Satzpunkte-Zahl (bereits netto) — kein
-		// separates Verlust-Matchpunkte-Feld wie im liga-Referenzprojekt.
-		matchpunkte_neg: 0,
-		satzpunkte_netto: team.setPoints
-	}));
-}
+/**
+ * Entspricht `GET /Display/data`. `undefined` = `accessToken` unbekannt/abgelaufen (401, siehe
+ * Handler). Solange der Admin den `deviceCode` noch keiner Fixture zugeordnet hat, bleibt
+ * `displayType` auf `Unassigned` — genau der Zustand, den die Konsum-Seite als Pairing-Screen
+ * zeigt (siehe `+page.svelte`).
+ *
+ * Zeigt bewusst nur die ERSTE Begegnung des zugeordneten Matches (`begegnungenForMatch`) — ein
+ * Match kann mehrere gleichzeitige Begegnungen (mehrere Scheiben-Paare) haben, ein einzelnes
+ * Gerät kennt aber nur `matchNo`, keine konkrete Scheibenpaar-Auswahl. Mehrere Begegnungen auf
+ * einem Gerät sauber darzustellen ist ein offenes Design-Thema, keine Backend-Kontraktfrage —
+ * hier bewusst nicht vorweggenommen.
+ *
+ * `LigaTable` (Issue #18) liest unabhängig vom `matches`/`currentRoundNo`-Zustand direkt aus
+ * `ligaTables` — die Ligatabelle läuft über den ganzen Wettkampftag, nicht pro Runde.
+ */
+export function getDisplayData(accessToken: string): DisplayDataResponse | undefined {
+	const deviceCode = accessTokens.get(accessToken);
+	if (!deviceCode) return undefined;
 
-export function getContentForJwt(jwt: string): DisplayContent | undefined {
-	const record = displays.get(jwt);
-	if (!record) return undefined;
+	const assigned = findAssignedDeviceByCode(deviceCode);
+	if (!assigned) return { displayType: 'Unassigned', targets: [], ligaTable: [] };
 
-	const bildschirm = findBildschirmByPin(record.pin);
-	if (!bildschirm || !bildschirm.aktiv) {
-		return { paired: false, mode: 'ergebnisse', scheibe_a: null, scheibe_b: null };
+	const { veranstaltungId, device } = assigned;
+
+	if (device.displayType === 'LigaTable') {
+		return { displayType: 'LigaTable', targets: [], ligaTable: getLigaTable(veranstaltungId) };
 	}
 
-	if (bildschirm.mode === 'tabelle') {
-		return {
-			paired: true,
-			mode: 'tabelle',
-			scheibe_a: null,
-			scheibe_b: null,
-			tabelle: tabelleFuerVeranstaltung(bildschirm.veranstaltung_id)
-		};
+	if (device.displayType !== 'Match' || device.matchNo === null) {
+		return { displayType: 'None', targets: [], ligaTable: [] };
 	}
+
+	const [begegnung] = begegnungenForMatch(veranstaltungId, device.matchNo);
+	if (!begegnung) return { displayType: 'None', targets: [], ligaTable: [] };
 
 	return {
-		paired: true,
-		mode: 'ergebnisse',
-		scheibe_a: buildSeiteForScheibe(bildschirm.scheibe_a),
-		scheibe_b: buildSeiteForScheibe(bildschirm.scheibe_b)
+		displayType: 'Match',
+		targets: [buildSeiteForScheibe(begegnung.scheibe_a), buildSeiteForScheibe(begegnung.scheibe_b)],
+		ligaTable: []
 	};
 }

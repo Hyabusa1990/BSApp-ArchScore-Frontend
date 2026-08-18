@@ -195,10 +195,18 @@
 								<div class="fw-bold">
 									{$_('bildschirme.device_label', { values: { id: d.id } })}
 								</div>
-								<Badge color={draft?.displayType === 'Match' ? 'success' : 'secondary'}>
+								<Badge
+									color={draft?.displayType === 'Match'
+										? 'success'
+										: draft?.displayType === 'LigaTable'
+											? 'info'
+											: 'secondary'}
+								>
 									{draft?.displayType === 'Match'
 										? $_('bildschirme.mode_match')
-										: $_('bildschirme.mode_none')}
+										: draft?.displayType === 'LigaTable'
+											? $_('bildschirme.mode_liga_table')
+											: $_('bildschirme.mode_none')}
 								</Badge>
 							</div>
 
@@ -214,6 +222,7 @@
 									>
 										<option value="None">{$_('bildschirme.mode_none')}</option>
 										<option value="Match">{$_('bildschirme.mode_match')}</option>
+										<option value="LigaTable">{$_('bildschirme.mode_liga_table')}</option>
 									</select>
 								</div>
 

@@ -80,7 +80,11 @@ export const deviceHandlers = [
 		const v = findVeranstaltung(user, Number(params.fixtureId));
 		if (!v) return notFound();
 		const body = (await request.json()) as Partial<UpdateDeviceData>;
-		if (body.displayType !== 'None' && body.displayType !== 'Match') {
+		if (
+			body.displayType !== 'None' &&
+			body.displayType !== 'Match' &&
+			body.displayType !== 'LigaTable'
+		) {
 			return HttpResponse.json({ detail: 'displayType fehlt oder ungültig' }, { status: 422 });
 		}
 		const device = updateDevice(String(v.id), Number(params.deviceId), {

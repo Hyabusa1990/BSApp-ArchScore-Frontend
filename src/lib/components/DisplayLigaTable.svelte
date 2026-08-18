@@ -1,8 +1,8 @@
 <script lang="ts">
-	import type { TabellenEintrag } from '$lib/api/display';
+	import type { LigaTableEintrag } from '$lib/api/display';
 	import { _ } from 'svelte-i18n';
 
-	let { eintraege } = $props<{ eintraege: TabellenEintrag[] }>();
+	let { eintraege } = $props<{ eintraege: LigaTableEintrag[] }>();
 
 	// Schriftgröße dynamisch aus der gemessenen Container-Höhe berechnen (ResizeObserver),
 	// NICHT über statisches CSS clamp()/vh — Vorbild: liga-Referenzprojekt (beamer-Route).
@@ -10,11 +10,15 @@
 	let mainEl = $state<HTMLElement | null>(null);
 	let fontSize = $state('1.5rem');
 
+	// Server liefert `position` explizit (nicht mehr aus der Array-Reihenfolge abgeleitet, siehe
+	// Issue #18) — defensiv sortieren statt Server-Reihenfolge blind zu vertrauen.
+	const sortiert = $derived([...eintraege].sort((a, b) => a.position - b.position));
+
 	$effect(() => {
-		if (!mainEl || eintraege.length === 0) return;
+		if (!mainEl || sortiert.length === 0) return;
 		const berechneFontSize = () => {
 			const h = mainEl!.clientHeight;
-			const fs = Math.floor((h / (eintraege.length + 1.5)) * 0.58);
+			const fs = Math.floor((h / (sortiert.length + 1.5)) * 0.58);
 			fontSize = `${Math.max(14, fs)}px`;
 		};
 		berechneFontSize();
@@ -25,7 +29,7 @@
 </script>
 
 <div class="tabelle-page" bind:this={mainEl}>
-	{#if eintraege.length === 0}
+	{#if sortiert.length === 0}
 		<p class="tabelle-status">{$_('display.tabelle_empty')}</p>
 	{:else}
 		<table class="tabelle" style="font-size: {fontSize}">
@@ -38,20 +42,17 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each eintraege as eintrag, i (eintrag.mannschaft_id)}
+				{#each sortiert as eintrag, i (eintrag.position)}
+					{@const spNetto = eintrag.setPlus - eintrag.setMinus}
 					<tr class:even={i % 2 === 1}>
-						<td class="col-pos">{i + 1}</td>
-						<td class="col-mannschaft">{eintrag.mannschaft_name}</td>
+						<td class="col-pos">{eintrag.position}</td>
+						<td class="col-mannschaft">{eintrag.teamName}</td>
 						<td class="col-mp">
-							<span class="mp-value">{eintrag.matchpunkte}</span>
-							<span class="mp-detail">({eintrag.matchpunkte}:{eintrag.matchpunkte_neg})</span>
+							<span class="mp-value">{eintrag.matchPlus}</span>
+							<span class="mp-detail">({eintrag.matchPlus}:{eintrag.matchMinus})</span>
 						</td>
-						<td
-							class="col-sp"
-							class:positive={eintrag.satzpunkte_netto >= 0}
-							class:negative={eintrag.satzpunkte_netto < 0}
-						>
-							{eintrag.satzpunkte_netto >= 0 ? '+' : ''}{eintrag.satzpunkte_netto}
+						<td class="col-sp" class:positive={spNetto >= 0} class:negative={spNetto < 0}>
+							{spNetto >= 0 ? '+' : ''}{spNetto}
 						</td>
 					</tr>
 				{/each}
@@ -74,19 +75,19 @@
 	.tabelle-status {
 		text-align: center;
 		font-size: 1.5rem;
-		color: #9aa4b2;
+		color: var(--monitor-muted);
 	}
 
 	.tabelle {
 		width: 100%;
 		border-collapse: collapse;
 		table-layout: fixed;
-		color: #f5f7fa;
+		color: var(--monitor-fg);
 		/* font-size wird per inline-style gesetzt */
 	}
 
 	.tabelle thead tr {
-		border-bottom: 2px solid rgba(255, 255, 255, 0.15);
+		border-bottom: 2px solid var(--monitor-divider-line);
 	}
 
 	.tabelle thead th {
@@ -94,17 +95,17 @@
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.08em;
-		color: #9aa4b2;
+		color: var(--monitor-muted);
 		padding: 0.3em 0.6rem;
 	}
 
 	.tabelle tbody tr {
-		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+		border-bottom: 1px solid var(--monitor-row-border);
 		line-height: 1.4;
 	}
 
 	.tabelle tbody tr.even {
-		background: rgba(255, 255, 255, 0.04);
+		background: var(--monitor-row-even);
 	}
 
 	.tabelle tbody td {
@@ -119,7 +120,7 @@
 		width: 7%;
 		text-align: center;
 		font-weight: 700;
-		color: #9aa4b2;
+		color: var(--monitor-muted);
 	}
 	.col-mannschaft {
 		text-align: left;
@@ -140,10 +141,11 @@
 	}
 	.mp-detail {
 		font-size: 0.65em;
-		color: #9aa4b2;
+		color: var(--monitor-muted);
 		margin-left: 0.3rem;
 	}
 
+	/* Bleiben in beiden Themes gleich — Ampelfarben lesen auf hell wie dunkel. */
 	.col-sp.positive {
 		color: #2f9e4f;
 	}

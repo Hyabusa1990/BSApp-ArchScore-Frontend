@@ -181,7 +181,8 @@
 		justify-content: center;
 		width: clamp(3rem, 7.5vh, 6rem);
 		height: clamp(3rem, 7.5vh, 6rem);
-		background: #2a323d;
+		background: var(--monitor-elevated);
+		color: var(--monitor-elevated-fg);
 		border-radius: 0.4rem;
 		font-size: clamp(1.6rem, 4vh, 3.2rem);
 		font-weight: 800;
@@ -216,7 +217,7 @@
 		font-size: clamp(1.2rem, 3.5vh, 2.5rem);
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
-		color: #9aa4b2;
+		color: var(--monitor-muted);
 	}
 
 	.monitor-schuetzen-grid {
@@ -228,7 +229,7 @@
 	}
 
 	.monitor-schuetze-chip {
-		background: rgba(255, 255, 255, 0.08);
+		background: var(--monitor-chip-bg);
 		border-radius: 0.75rem;
 		display: flex;
 		align-items: center;
@@ -297,35 +298,41 @@
 	}
 
 	.monitor-box-neutral {
-		background: #2a323d;
-		color: #f5f7fa;
+		background: var(--monitor-elevated);
+		color: var(--monitor-elevated-fg);
 	}
 
 	.monitor-box-punkte {
-		background: #495057;
-		color: #fff;
+		background: var(--monitor-points-bg);
+		color: var(--monitor-points-fg);
 	}
 
+	/* Führend/Rückstand bleiben in beiden Themes gleich — Ampelfarben lesen auf hell wie dunkel. */
 	.punkte-fuehrend {
 		background: #2f9e4f;
+		color: #fff;
 	}
 
 	.punkte-rueckstand {
 		background: #c8304a;
+		color: #fff;
 	}
 
-	/* Gleichstand im setScores-Vergleich (ZWISCHEN_SAETZEN) — hellgrau statt der neutralen
-	   dunklen monitor-box-neutral-Farbe, damit "gleich" optisch klar von "noch kein Vergleich
-	   möglich" unterscheidbar bleibt. */
+	/* Gleichstand im setScores-Vergleich (ZWISCHEN_SAETZEN) — neutrales Grau statt der
+	   Elevated-Farbe, damit "gleich" optisch klar von "noch kein Vergleich möglich"
+	   unterscheidbar bleibt. */
 	.punkte-gleich {
-		background: #ced4da;
-		color: #212529;
+		background: var(--monitor-compare-equal-bg);
+		color: var(--monitor-compare-equal-fg);
 	}
 
 	.ring-leer {
-		color: #6c757d;
-		background: rgba(255, 255, 255, 0.06);
+		color: var(--monitor-ring-empty-fg);
+		background: var(--monitor-ring-empty-bg);
 	}
+	/* Klassische Zielscheiben-Farben (gelb/rot/blau/schwarz/weiß/grün-Fehler) — bewusst in beiden
+	   Themes identisch, das sind Ring-Farben, keine UI-Farben. Schwarz UND Weiß bekommen immer
+	   einen Rand: Schwarz braucht ihn auf dunklem Grund, Weiß auf hellem — beide Fälle decken. */
 	.ring-gruen {
 		background: #198754;
 		color: #fff;
@@ -345,10 +352,11 @@
 	.ring-schwarz {
 		background: #212529;
 		color: #fff;
-		border: 1px solid #495057;
+		border: 1px solid var(--monitor-border);
 	}
 	.ring-weiss {
 		background: #fff;
 		color: #000;
+		border: 1px solid var(--monitor-border);
 	}
 </style>

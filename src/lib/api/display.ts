@@ -1,27 +1,36 @@
 import { apiClient } from './client';
 
 /**
- * Shapes angelehnt an das `scoring`-Referenzprojekt (`frontend/src/lib/api/display.ts`),
- * siehe FACHLICHKEIT.md "Migrations-Prinzip". Erweitert um `mode`/`paired`/`tabelle` sowie
- * `TabellenEintrag` (Shape aus dem `liga`-Referenzprojekt), da diese App zusätzlich zur
- * Trefferanzeige eine Tabellenansicht kennt.
+ * Shapes folgen seit Issue #17 1:1 dem echten Fawkes-`DisplayController`-Kontrakt
+ * (`ArchScore-SpecsAndDocu/Fawkes-OpenApi.json`) statt eines eigenen JWT+PIN-Fake-Schemas:
+ * `GET /Display/register` liefert einen `deviceCode` (denselben, den der Admin über
+ * `bildschirmeApi.assign` einer Fixture zuordnet, siehe `$lib/api/bildschirme.ts`) plus
+ * `accessToken`/`refreshToken`/`expiresIn` — das Gerät ist ab Registrierung ein normaler
+ * Bearer-Client. `GET /Display/data` liefert `displayType` (`Unassigned` bis der Admin
+ * zuordnet, sonst `None`/`Match`) + `targets`.
  *
- * Auth weicht bewusst vom Referenzprojekt ab: JWT + 6-stelliger PIN statt reiner UUID
- * (`display_token`). Das JWT wird wie ein normaler Access-Token an `apiClient` übergeben.
+ * `Table` existiert zwar im Spec-Enum von `DisplayController.DisplayType`, aber
+ * `DeviceManagementController.UpdateDeviceData` (Admin-seitige Zuordnung) kennt nur
+ * `None`/`Match`/`LigaTable` — kein Admin-Pfad setzt ein Gerät je auf `Table`. Bewusst nicht
+ * abgebildet, bis das vom Backend geklärt ist. `LigaTable` (Issue #18, Rücksprache
+ * Backend-Entwickler 2026-08-18) ersetzt das alte Mock-only `mode: 'tabelle'`-Konzept — die
+ * Ligatabelle kommt jetzt direkt eingebettet in `GET /Display/data` (`ligaTable`-Feld) statt
+ * separat aus `MatchPlayChart` abgeleitet zu werden, deshalb auch andere Feldnamen
+ * (`setPlus`/`setMinus`/`matchPlus`/`matchMinus`/`position` statt `setPoints`/`matchPoints`).
  *
- * `DisplaySeite` folgt seit Issue #16 1:1 `TargetDisplayData` aus `GET /Display/data`
- * (`ArchScore-SpecsAndDocu/Fawkes-OpenApi.json`, `DisplayController`) — bewusst die echten
- * (englischen, camelCase) Feldnamen statt der sonst in dieser App üblichen deutschen
- * snake_case-Konvention, um keine Übersetzungsschicht mit eigenem Bug-Potenzial einzuziehen.
- * Kein serverseitiges Status-Feld mehr (das alte 5-Status-Modell WARTET/SCHUETZEN_GEMELDET/
- * SATZ_LAEUFT/SATZ_FERTIG/MATCH_FERTIG gab es nur im `scoring`-Referenzprojekt) — der Status
- * wird jetzt client-seitig aus den drei Rohfeldern hergeleitet, siehe `deriveMonitorStatus`.
+ * `TargetDisplayData` folgt weiterhin 1:1 dem Fawkes-Feldnamen-Schema (englisch, camelCase),
+ * siehe bisherige Begründung unten bei `deriveMonitorStatus`.
  */
 
-export interface DisplayCreateResponse {
-	jwt: string;
-	pin: string;
+/** `Fawkes.Api.Controllers.DisplayController.DeviceTokenResponse`. */
+export interface DeviceTokenResponse {
+	deviceCode: string;
+	accessToken: string;
+	refreshToken: string;
+	expiresIn: number;
 }
+
+export type DisplayDataType = 'Unassigned' | 'None' | 'Match' | 'LigaTable';
 
 /** `Fawkes.Api.Controllers.DisplayController.TargetDisplayData`. */
 export interface DisplaySeite {
@@ -59,25 +68,45 @@ export function deriveMonitorStatus(seite: DisplaySeite | null): MonitorStatus {
 	return 'VOR_DEM_MATCH';
 }
 
-export interface TabellenEintrag {
-	mannschaft_id: number;
-	mannschaft_name: string;
-	matchpunkte: number;
-	matchpunkte_neg: number;
-	satzpunkte_netto: number;
+/** `Fawkes.Api.Controllers.DisplayController.LigaTableEntry` (Issue #18). */
+export interface LigaTableEintrag {
+	teamName: string;
+	setPlus: number;
+	setMinus: number;
+	matchPlus: number;
+	matchMinus: number;
+	position: number;
 }
 
-export interface DisplayContent {
-	paired: boolean;
-	mode: 'ergebnisse' | 'tabelle';
-	scheibe_a: DisplaySeite | null;
-	scheibe_b: DisplaySeite | null;
-	/** Nur gesetzt, wenn mode === 'tabelle'. */
-	tabelle?: TabellenEintrag[];
+/**
+ * `Fawkes.Api.Controllers.DisplayController.DisplayDataResponse`. Beide Arrays sind laut
+ * Rücksprache Backend-Entwickler (2026-08-18) IMMER Arrays, nie `null` — bei `displayType`
+ * `'LigaTable'` ist `targets` leer, bei `'Match'`/`'None'`/`'Unassigned'` ist `ligaTable` leer.
+ * Konsumierender Code darf sich also nie auf `null` verlassen, nur auf `.length`.
+ */
+export interface DisplayDataResponse {
+	displayType: DisplayDataType;
+	targets: DisplaySeite[];
+	/** Nur befüllt, wenn `displayType === 'LigaTable'` — sonst leer. */
+	ligaTable: LigaTableEintrag[];
+}
+
+/** `Fawkes.Api.Controllers.AuthController.TokenResponse` — generischer Refresh-Endpunkt, gilt
+ * laut Spec für jedes über `AuthController` ausgestellte Token-Paar, nicht nur User-Accounts
+ * (Issue #19). Kein eigenes `deviceCode`-Feld: der Code steckt weiterhin im JWT-Payload, ändert
+ * sich durch einen Refresh nicht. */
+export interface RefreshedDeviceToken {
+	accessToken: string;
+	refreshToken: string;
+	expiresIn: number;
 }
 
 export const displayApi = {
-	register: () => apiClient.post<DisplayCreateResponse>('/display/register', {}),
+	register: () => apiClient.get<DeviceTokenResponse>('/Display/register'),
 
-	getContent: (jwt: string) => apiClient.get<DisplayContent>('/display/content', jwt)
+	getData: (accessToken: string) =>
+		apiClient.get<DisplayDataResponse>('/Display/data', accessToken),
+
+	refresh: (refreshToken: string) =>
+		apiClient.post<RefreshedDeviceToken>('/Auth/refresh', { refreshToken })
 };
