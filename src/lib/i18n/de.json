@@ -113,11 +113,9 @@
 		"waiting_title": "Warte auf Freigabe",
 		"waiting_release_hint": "Diese Scheibe hat aktuell keine freigegebene Begegnung. Sobald die Runde freigegeben wird, startet die Erfassung automatisch.",
 		"completed_title": "Match beendet",
-		"set_badge": "Satz {set}/5",
-		"all_sets_done": "Alle 5 Sätze erfasst ✓",
-		"satz_ende_title": "Satz {set} abgeschlossen",
-		"satz_ende_confirm_btn": "Weiter zu Satz {next}",
-		"satz_ende_confirm_final_btn": "Fertig — alle Sätze erfasst",
+		"confirm_title": "Alle 6 Pfeile erfasst",
+		"confirm_btn": "Bestätigen",
+		"confirmed_waiting": "Bestätigt — warte auf Freigabe des nächsten Satzes",
 		"toggle_show_low": "Weitere Werte (1–5) einblenden",
 		"toggle_hide_low": "Weitere Werte ausblenden",
 		"korrektur_hint": "Pfeil {n} korrigieren — neuen Wert tippen",
@@ -126,8 +124,7 @@
 		"undo_btn": "↩ Zurücknehmen",
 		"undo_error": "Nichts zum Zurücknehmen.",
 		"pfeil_error": "Erfassung fehlgeschlagen. Bitte erneut versuchen.",
-		"satz_speichern_error": "Speichern fehlgeschlagen. Bitte erneut versuchen.",
-		"satz_gesperrt_info": "Dieser Satz wurde bereits vom Schützen abgeschlossen."
+		"satz_speichern_error": "Speichern fehlgeschlagen. Bitte erneut versuchen."
 	},
 	"veranstaltungen": {
 		"title": "Veranstaltungen",

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { binocularApi, type BinocularMatch, type VorlaeufigePasse } from '$lib/api/binocular';
+	import { binocularApi, decodeShot, type BinocularMatch } from '$lib/api/binocular';
 	import { APIError } from '$lib/api/client';
 	import { _ } from 'svelte-i18n';
 	import { Alert, Spinner } from '@sveltestrap/sveltestrap';
@@ -16,15 +16,12 @@
 	let actionError = $state<string | null>(null);
 	let sending = $state(false);
 
-	// ── Satz-Anzeige (alle 6 Pfeile, nicht nur die letzte Passe) ────────────────
-	// Lokal geführt (mirror der Backend-Positionslogik: Position = floor(n/2)+1),
-	// damit der Wechsel in den nächsten Satz erst nach aktiver Bestätigung durch
-	// den Spotter passiert — das Backend selbst kennt keinen "unbestätigten"
-	// Zustand, es zählt einfach weiter. Die Bestätigung ist rein UI-seitig: erst
-	// danach werden neue Pfeile für den nächsten Satz gesendet.
-	let satz = $state(1);
+	// ── Satz-Anzeige (alle 6 Pfeile des aktuellen Satzes) ───────────────────────
+	// Welcher Satz gerade läuft, entscheidet allein die Turnierleitung über die
+	// Match-Freigabe (roundNo, #10) — das Backend leitet den Satz-Fortschritt aus
+	// den Spotter-Confirms ab. Der Client kennt daher keine Satznummer/Navigation
+	// mehr, sondern zeigt nur noch matchData.shots des aktuell laufenden Satzes.
 	let arrows = $state<(number | null)[]>(emptyArrows());
-	let confirmingSatzEnde = $state(false);
 	let satzSaving = $state(false);
 	let zeigeNiedrigeWerte = $state(false);
 	// Index (0-5) eines bereits erfassten Pfeils, der gerade korrigiert wird —
@@ -35,47 +32,26 @@
 		return [null, null, null, null, null, null];
 	}
 
-	function arrowsFromPassen(passen: VorlaeufigePasse[]): (number | null)[] {
-		const a = emptyArrows();
-		for (const p of passen) {
-			a[(p.position - 1) * 2] = p.ringzahl_pfeil1;
-			a[(p.position - 1) * 2 + 1] = p.ringzahl_pfeil2;
-		}
-		return a;
+	function arrowsFromShots(shots: string): (number | null)[] {
+		const chars = shots.split('');
+		return Array.from({ length: 6 }, (_, i) => (i < chars.length ? decodeShot(chars[i]) : null));
 	}
 
 	const gefuellteAnzahl = $derived(arrows.filter((v) => v !== null).length);
 	const aktivePosition = $derived(Math.min(Math.floor(gefuellteAnzahl / 2), 2));
+	// Alle 6 Pfeile erfasst, aber noch nicht bestätigt -> Bestätigen-Button zeigen.
+	const confirming = $derived(
+		matchData !== null && !matchData.isConfirmed && gefuellteAnzahl === 6
+	);
+	// Vom Spotter final bestätigt -> Eingabe gesperrt, bis die Turnierleitung den
+	// nächsten Satz freigibt (erkennbar am nächsten Poll: leerer shots-Stand).
+	const locked = $derived(matchData?.isConfirmed === true);
 
 	function uebernehmeMatchDaten(md: BinocularMatch) {
 		matchData = md;
-		satz = md.aktueller_satz;
-		arrows = arrowsFromPassen(md.vorlaeufige_passen);
-		confirmingSatzEnde = false;
+		arrows = arrowsFromShots(md.shots);
 		korrekturIndex = null;
 		actionError = null;
-	}
-
-	// Nach 423 (Satz bereits vom Schützen final bestätigt): frischen Stand holen und lokal
-	// zum nächsten noch nicht final bestätigten Satz weiterschalten. Das Backend zählt
-	// aktueller_satz rein über vorlaeufige_passen weiter, kennt schuetze_bestaetigte_saetze
-	// dabei nicht — das Weiterschalten übernimmt bewusst das Frontend.
-	async function handleSatzGesperrt(gesperrterSatz: number) {
-		actionError = $_('binocular.satz_gesperrt_info');
-		try {
-			const fresh = await binocularApi.getScheibe(token, scheibennummer);
-			matchData = fresh;
-			let naechsterSatz = gesperrterSatz;
-			while (naechsterSatz <= 5 && fresh.schuetze_bestaetigte_saetze.includes(naechsterSatz)) {
-				naechsterSatz += 1;
-			}
-			satz = naechsterSatz;
-			arrows = emptyArrows();
-			confirmingSatzEnde = false;
-			korrekturIndex = null;
-		} catch {
-			/* Fehleranzeige oben reicht, wenn auch das fehlschlägt */
-		}
 	}
 
 	// ── Laden ─────────────────────────────────────────────────────────────────
@@ -107,10 +83,14 @@
 	});
 
 	// ── Polling ──────────────────────────────────────────────────────────────
-	// In READY mit UNVERÄNDERTEM Match: rührt bewusst nicht an satz/arrows — das würde
-	// die lokale Bestätigungslogik durcheinanderbringen (siehe Kommentar oben). In WARTET
-	// oder wenn sich extern_match_id ändert (Rundenwechsel auf derselben Scheibe): vollständig
-	// neu übernehmen, sonst blieben Satz-Stand/Korrekturmodus vom alten Match hängen.
+	// In READY mit UNVERÄNDERTEM Match und ohne laufende Aktion (!sending): Server-Stand
+	// direkt übernehmen — das ist jetzt immer die Wahrheit (keine lokale Satz-Buchführung
+	// mehr zu schützen). Genau darüber erkennt die UI auch die Freigabe des nächsten Satzes
+	// durch die Turnierleitung: shots wird leer, isConfirmed fällt zurück auf false.
+	// Während einer laufenden Aktion (sending) wird nicht synchronisiert, um ein
+	// optimistisches Tap-Update nicht mit einer zwischenzeitlich veralteten Poll-Antwort zu
+	// überschreiben. In WARTET oder bei geändertem extern_match_id (neues Match auf
+	// derselben Scheibe): vollständig neu übernehmen.
 	$effect(() => {
 		if (view !== 'READY' && view !== 'WARTET') return;
 		const interval = setInterval(async () => {
@@ -119,8 +99,9 @@
 				if (view === 'WARTET' || matchData?.extern_match_id !== md.extern_match_id) {
 					uebernehmeMatchDaten(md);
 					view = 'READY';
-				} else {
-					matchData = { ...matchData, status: md.status };
+				} else if (!sending) {
+					matchData = md;
+					arrows = arrowsFromShots(md.shots);
 				}
 			} catch (err) {
 				if (err instanceof APIError && err.status === 404) {
@@ -182,41 +163,35 @@
 	}
 
 	async function handleKey(ringzahl: number) {
-		if (sending || confirmingSatzEnde || satz > 5) return;
+		if (sending || locked) return;
 		const n = gefuellteAnzahl;
 		if (n >= 6) return;
 
 		// Optimistisch sofort anzeigen — der Spotter tippt im Takt, ohne auf das
-		// Netzwerk zu warten.
+		// Netzwerk zu warten (postPfeil macht seit #9 intern einen GET+PUT-Roundtrip).
 		const updated = [...arrows];
 		updated[n] = ringzahl;
 		arrows = updated;
-		if (n === 5) confirmingSatzEnde = true;
 
 		sending = true;
 		actionError = null;
 		try {
 			matchData = await binocularApi.postPfeil(token, scheibennummer, ringzahl);
+			arrows = arrowsFromShots(matchData.shots);
 		} catch (err) {
 			// Fehlgeschlagen — optimistische Anzeige zurücknehmen
 			const reverted = [...arrows];
 			reverted[n] = null;
 			arrows = reverted;
-			if (n === 5) confirmingSatzEnde = false;
-
-			if (err instanceof APIError && err.status === 423) {
-				await handleSatzGesperrt(satz);
-			} else {
-				const detail = err instanceof APIError ? (err.data as { detail?: string })?.detail : null;
-				actionError = detail ?? $_('binocular.pfeil_error');
-			}
+			const detail = err instanceof APIError ? (err.data as { detail?: string })?.detail : null;
+			actionError = detail ?? $_('binocular.pfeil_error');
 		} finally {
 			sending = false;
 		}
 	}
 
 	function toggleKorrektur(index: number) {
-		if (sending || arrows[index] === null) return;
+		if (sending || locked || arrows[index] === null) return;
 		korrekturIndex = korrekturIndex === index ? null : index;
 	}
 
@@ -249,78 +224,55 @@
 				md = await binocularApi.postPfeil(token, scheibennummer, v);
 			}
 			matchData = md!;
-			confirmingSatzEnde = totalFilledBefore === 6;
+			arrows = arrowsFromShots(md!.shots);
 		} catch (err) {
-			if (err instanceof APIError && err.status === 423) {
-				await handleSatzGesperrt(satz);
-			} else {
-				// Bei einem Fehler mitten in der Korrektur-Sequenz ist der lokale Stand
-				// nicht mehr zuverlässig — Server-Stand neu laden statt zu raten.
-				try {
-					const fresh = await binocularApi.getScheibe(token, scheibennummer);
-					matchData = fresh;
-					arrows = arrowsFromPassen(fresh.vorlaeufige_passen);
-					confirmingSatzEnde = arrows.every((v) => v !== null);
-				} catch {
-					/* Fehleranzeige unten reicht, wenn auch das fehlschlägt */
-				}
-				const detail = err instanceof APIError ? (err.data as { detail?: string })?.detail : null;
-				actionError = detail ?? $_('binocular.korrektur_error');
+			// Bei einem Fehler mitten in der Korrektur-Sequenz ist der lokale Stand
+			// nicht mehr zuverlässig — Server-Stand neu laden statt zu raten.
+			try {
+				const fresh = await binocularApi.getScheibe(token, scheibennummer);
+				matchData = fresh;
+				arrows = arrowsFromShots(fresh.shots);
+			} catch {
+				/* Fehleranzeige unten reicht, wenn auch das fehlschlägt */
 			}
+			const detail = err instanceof APIError ? (err.data as { detail?: string })?.detail : null;
+			actionError = detail ?? $_('binocular.korrektur_error');
 		} finally {
 			sending = false;
 		}
 	}
 
-	// Schreibt den gerade abgeschlossenen Satz final ans Backend — vorher zählte
-	// das hier nur lokal weiter, ohne den Server je zu erreichen. Erst nach Erfolg lokal
-	// weiterschalten; die rohe Server-Antwort wird nur zur Erfolgsprüfung genutzt.
-	async function bestaetigeSatzEnde() {
+	// Bestätigt den aktuellen Satz final ans Backend (PUT .../spotter/shots/confirm) —
+	// danach sperrt matchData.isConfirmed die Eingabe, bis die Turnierleitung den
+	// nächsten Satz freigibt (siehe Polling oben).
+	async function bestaetigen() {
 		if (satzSaving) return;
 		satzSaving = true;
 		actionError = null;
 		try {
-			await binocularApi.postBestaetigeSatz(token, scheibennummer);
-			satz += 1;
-			arrows = emptyArrows();
-			confirmingSatzEnde = false;
+			matchData = await binocularApi.postBestaetigeSatz(token, scheibennummer);
+			arrows = arrowsFromShots(matchData.shots);
+			korrekturIndex = null;
 		} catch (err) {
-			if (err instanceof APIError && err.status === 409) {
-				// Der Schütze hat den Satz bereits über den eigenen Schusszettel final
-				// bestätigt, während der Spotter noch auf "Weiter zu Satz X" stand — das
-				// Ziel (weiter zum nächsten Satz) ist damit ohnehin schon erreicht.
-				// handleSatzGesperrt lädt den frischen Stand und schaltet automatisch
-				// weiter, statt den Spotter mit einer Fehlermeldung hängen zu lassen.
-				await handleSatzGesperrt(satz);
-			} else {
-				const detail = err instanceof APIError ? (err.data as { detail?: string })?.detail : null;
-				actionError = detail ?? $_('binocular.satz_speichern_error');
-			}
+			const detail = err instanceof APIError ? (err.data as { detail?: string })?.detail : null;
+			actionError = detail ?? $_('binocular.satz_speichern_error');
 		} finally {
 			satzSaving = false;
 		}
 	}
 
 	async function handleUndo() {
-		if (sending) return;
+		if (sending || locked) return;
 		korrekturIndex = null;
 		sending = true;
 		actionError = null;
 		try {
-			// Undo ist immer autoritativ vom Server — bildet auch den Fall ab, dass
-			// über eine Satzgrenze zurückgenommen wird.
 			const md = await binocularApi.postUndo(token, scheibennummer);
 			matchData = md;
-			satz = md.aktueller_satz;
-			arrows = arrowsFromPassen(md.vorlaeufige_passen);
-			confirmingSatzEnde = false;
+			arrows = arrowsFromShots(md.shots);
 		} catch (err) {
-			if (err instanceof APIError && err.status === 423) {
-				await handleSatzGesperrt(satz);
-			} else {
-				const detail = err instanceof APIError ? (err.data as { detail?: string })?.detail : null;
-				actionError = detail ?? $_('binocular.undo_error');
-			}
+			const detail = err instanceof APIError ? (err.data as { detail?: string })?.detail : null;
+			actionError = detail ?? $_('binocular.undo_error');
 		} finally {
 			sending = false;
 		}
@@ -353,16 +305,9 @@
 {:else if view === 'READY' && matchData}
 	<div class="binocular-page">
 		<div class="binocular-header border-bottom px-3 py-2">
-			<div class="d-flex justify-content-between align-items-center">
-				<span class="small text-muted"
-					>{$_('binocular.lane_label', { values: { lane: scheibennummer } })}</span
-				>
-				{#if matchData.status === 'ACTIVE'}
-					<span class="small text-muted"
-						>{$_('binocular.set_badge', { values: { set: satz } })}</span
-					>
-				{/if}
-			</div>
+			<span class="small text-muted"
+				>{$_('binocular.lane_label', { values: { lane: scheibennummer } })}</span
+			>
 			<div class="fw-bold text-truncate">{matchData.mannschaft_name}</div>
 		</div>
 
@@ -376,16 +321,16 @@
 							: $_('binocular.waiting_title')}
 					</h5>
 				</Alert>
-			{:else if satz > 5}
-				<p class="text-muted text-center fw-semibold">{$_('binocular.all_sets_done')}</p>
 			{:else}
 				<!-- Satzweise Anzeige: alle 6 Pfeile des aktuellen Satzes. Bereits erfasste
-				     Pfeile sind antippbar, um sie nachträglich zu korrigieren. -->
+				     Pfeile sind antippbar, um sie nachträglich zu korrigieren (solange nicht
+				     bestätigt/gesperrt). -->
 				<div class="satz-grid">
 					{#each [0, 1, 2] as posIdx (posIdx)}
 						<div
 							class="passe-row {posIdx === aktivePosition &&
-							!confirmingSatzEnde &&
+							!confirming &&
+							!locked &&
 							korrekturIndex === null
 								? 'passe-aktiv'
 								: ''}"
@@ -396,7 +341,7 @@
 									class="pfeil-feld {pfeilColorClass(arrows[idx])} {korrekturIndex === idx
 										? 'pfeil-korrektur'
 										: ''}"
-									disabled={arrows[idx] === null || sending}
+									disabled={arrows[idx] === null || sending || locked}
 									onclick={() => toggleKorrektur(idx)}
 								>
 									{pfeilLabel(arrows[idx])}
@@ -417,23 +362,24 @@
 							{$_('binocular.korrektur_cancel')}
 						</button>
 					</Alert>
-				{:else if confirmingSatzEnde}
+				{:else if confirming}
 					<Alert color="success" class="text-center mt-3 mb-0 w-100">
-						<div class="fw-bold mb-2">
-							{$_('binocular.satz_ende_title', { values: { set: satz } })}
-						</div>
+						<div class="fw-bold mb-2">{$_('binocular.confirm_title')}</div>
 						<button
 							class="btn btn-success w-100 py-2 fw-bold"
 							disabled={satzSaving}
-							onclick={bestaetigeSatzEnde}
+							onclick={bestaetigen}
 						>
 							{#if satzSaving}
 								<Spinner size="sm" class="me-2" />
 							{/if}
-							{satz < 5
-								? $_('binocular.satz_ende_confirm_btn', { values: { next: satz + 1 } })
-								: $_('binocular.satz_ende_confirm_final_btn')}
+							{$_('binocular.confirm_btn')}
 						</button>
+					</Alert>
+				{:else if locked}
+					<Alert color="info" class="text-center mt-3 mb-0 w-100 py-3">
+						<i class="bi bi-check2-circle fs-2 d-block mb-2"></i>
+						{$_('binocular.confirmed_waiting')}
 					</Alert>
 				{/if}
 			{/if}
@@ -445,9 +391,9 @@
 			</div>
 		{/if}
 
-		{#if matchData.status === 'ACTIVE'}
+		{#if matchData.status === 'ACTIVE' && !locked}
 			<div class="binocular-keypad border-top bg-white p-2">
-				{#if korrekturIndex !== null || (!confirmingSatzEnde && satz <= 5)}
+				{#if korrekturIndex !== null || !confirming}
 					<div class="row g-2 mb-2">
 						{#each primaryKeys as row, rowIdx (rowIdx)}
 							{#each row as key (key)}

@@ -112,11 +112,9 @@
 		"waiting_title": "Waiting for release",
 		"waiting_release_hint": "This lane has no released match right now. Recording will start automatically once the round is released.",
 		"completed_title": "Match finished",
-		"set_badge": "Set {set}/5",
-		"all_sets_done": "All 5 sets recorded ✓",
-		"satz_ende_title": "Set {set} complete",
-		"satz_ende_confirm_btn": "Continue to set {next}",
-		"satz_ende_confirm_final_btn": "Done — all sets recorded",
+		"confirm_title": "All 6 arrows recorded",
+		"confirm_btn": "Confirm",
+		"confirmed_waiting": "Confirmed — waiting for the next set to be released",
 		"toggle_show_low": "Show more values (1–5)",
 		"toggle_hide_low": "Hide more values",
 		"korrektur_hint": "Correcting arrow {n} — tap the new value",
@@ -125,8 +123,7 @@
 		"undo_btn": "↩ Undo",
 		"undo_error": "Nothing to undo.",
 		"pfeil_error": "Recording failed. Please try again.",
-		"satz_speichern_error": "Saving failed. Please try again.",
-		"satz_gesperrt_info": "This set was already completed by the archer."
+		"satz_speichern_error": "Saving failed. Please try again."
 	},
 	"veranstaltungen": {
 		"title": "Events",
