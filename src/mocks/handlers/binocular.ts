@@ -1,10 +1,11 @@
 import { http, HttpResponse } from 'msw';
 import { API_URL } from '$lib/config';
-import { applyPfeil, bestaetigeSatz, getScheibe, undoLast } from '../binoculars';
+import { bestaetigeSatz, getScheibe, setShots } from '../binoculars';
 
 /**
- * Token steht im URL-Pfad (nicht im Authorization-Header wie bei Display, #1) — siehe
- * binocular.ts und Issue #4. 401 bei unbekanntem Token, 404 mit `detail: 'Event nicht
+ * Pfade folgen dem Fawkes-Spotter-Kontrakt (siehe binocular.ts) — Token im URL-Pfad ist die
+ * `fixtureUniqueId`, kein Authorization-Header nötig (Auth läuft über die schwer zu erratende
+ * `fixtureUniqueId` selbst). 401 bei unbekanntem Token, 404 mit `detail: 'Event nicht
  * gefunden'` bei bekanntem Token ohne aktives Match auf dieser Scheibe.
  */
 
@@ -22,27 +23,28 @@ function toResponse(outcome: ReturnType<typeof getScheibe>) {
 }
 
 export const binocularHandlers = [
-	http.get(`${API_URL}/binocular/:token/:scheibennummer`, ({ params }) => {
+	http.get(`${API_URL}/fixtures/:token/targets/:scheibennummer/spotter/info`, ({ params }) => {
 		const scheibennummer = Number(params.scheibennummer);
 		return toResponse(getScheibe(String(params.token), scheibennummer));
 	}),
 
-	http.post(`${API_URL}/binocular/:token/:scheibennummer/pfeil`, async ({ params, request }) => {
-		const scheibennummer = Number(params.scheibennummer);
-		const body = (await request.json()) as { ringzahl?: number };
-		if (typeof body.ringzahl !== 'number') {
-			return HttpResponse.json({ detail: 'ringzahl fehlt oder ungültig' }, { status: 422 });
+	http.put(
+		`${API_URL}/fixtures/:token/targets/:scheibennummer/spotter/shots`,
+		async ({ params, request }) => {
+			const scheibennummer = Number(params.scheibennummer);
+			const body = (await request.json()) as { shots?: string };
+			if (typeof body.shots !== 'string') {
+				return HttpResponse.json({ detail: 'shots fehlt oder ungültig' }, { status: 422 });
+			}
+			return toResponse(setShots(String(params.token), scheibennummer, body.shots));
 		}
-		return toResponse(applyPfeil(String(params.token), scheibennummer, body.ringzahl));
-	}),
+	),
 
-	http.post(`${API_URL}/binocular/:token/:scheibennummer/undo`, ({ params }) => {
-		const scheibennummer = Number(params.scheibennummer);
-		return toResponse(undoLast(String(params.token), scheibennummer));
-	}),
-
-	http.post(`${API_URL}/binocular/:token/:scheibennummer/bestaetige_satz`, ({ params }) => {
-		const scheibennummer = Number(params.scheibennummer);
-		return toResponse(bestaetigeSatz(String(params.token), scheibennummer));
-	})
+	http.put(
+		`${API_URL}/fixtures/:token/targets/:scheibennummer/spotter/shots/confirm`,
+		({ params }) => {
+			const scheibennummer = Number(params.scheibennummer);
+			return toResponse(bestaetigeSatz(String(params.token), scheibennummer));
+		}
+	)
 ];

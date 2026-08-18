@@ -1,4 +1,4 @@
-import type { BinocularMatch } from '$lib/api/binocular';
+import { decodeShot, encodeShot, type BinocularMatch } from '$lib/api/binocular';
 import {
 	findAktivesMatchFuerScheibe,
 	findTabletPairing,
@@ -43,6 +43,17 @@ function resolvePairing(token: string, scheibennummer: number): ResolveOutcome {
 	};
 }
 
+/** Passen des aktuellen Satzes, Position-sortiert, -> Fawkes-shots-String (siehe binocular.ts). */
+function encodeShots(passenImSatz: BinocularMatch['vorlaeufige_passen']): string {
+	const sortiert = [...passenImSatz].sort((a, b) => a.position - b.position);
+	const chars: string[] = [];
+	for (const p of sortiert) {
+		if (p.ringzahl_pfeil1 !== null) chars.push(encodeShot(p.ringzahl_pfeil1));
+		if (p.ringzahl_pfeil2 !== null) chars.push(encodeShot(p.ringzahl_pfeil2));
+	}
+	return chars.join('');
+}
+
 function buildMatch(scheibennummer: number, { found, scoring }: Resolved): BinocularMatch {
 	const gegnerScheibe = found.seite === 'a' ? found.begegnung.scheibe_b : found.begegnung.scheibe_a;
 	const stand = berechneMatchStand(
@@ -50,6 +61,14 @@ function buildMatch(scheibennummer: number, { found, scoring }: Resolved): Binoc
 		found.seite === 'a' ? gegnerScheibe : scheibennummer
 	);
 	const { mannschaft, gegner } = mannschaftUndGegner(found.begegnung, found.seite);
+	// Nur der aktuelle Satz — 1:1 wie im scoring-Referenzprojekt (_binocular_dict filtert
+	// dort genauso). scoring.vorlaeufige_passen selbst sammelt alle Sätze (für
+	// liveSatzErgebnisse/berechneMatchStand gebraucht), aber die Binocular-UI indiziert
+	// Pfeile rein über "position" (1-3) ohne lfd_nr — ungefiltert würden sich mehrere
+	// Sätze in der Anzeige überlagern, sobald mehr als ein Satz gelaufen ist.
+	const passenImSatz = scoring.vorlaeufige_passen.filter(
+		(p) => p.lfd_nr === scoring.aktueller_satz
+	);
 
 	return {
 		extern_match_id: scoring.externMatchId,
@@ -59,15 +78,10 @@ function buildMatch(scheibennummer: number, { found, scoring }: Resolved): Binoc
 		// Admin-Modell kennt keine Schützen-Aufstellung pro Begegnung — bewusst leer.
 		selected_members: [],
 		aktueller_satz: scoring.aktueller_satz,
-		// Nur der aktuelle Satz — 1:1 wie im scoring-Referenzprojekt (_binocular_dict filtert
-		// dort genauso). scoring.vorlaeufige_passen selbst sammelt alle Sätze (für
-		// liveSatzErgebnisse/berechneMatchStand gebraucht), aber die Binocular-UI indiziert
-		// Pfeile rein über "position" (1-3) ohne lfd_nr — ungefiltert würden sich mehrere
-		// Sätze in der Anzeige überlagern, sobald mehr als ein Satz gelaufen ist.
-		vorlaeufige_passen: scoring.vorlaeufige_passen.filter(
-			(p) => p.lfd_nr === scoring.aktueller_satz
-		),
-		schuetze_bestaetigte_saetze: scoring.schuetze_bestaetigte_saetze
+		vorlaeufige_passen: passenImSatz,
+		schuetze_bestaetigte_saetze: scoring.schuetze_bestaetigte_saetze,
+		shots: encodeShots(passenImSatz),
+		isConfirmed: scoring.schuetze_bestaetigte_saetze.includes(scoring.aktueller_satz)
 	};
 }
 
@@ -82,60 +96,37 @@ export function getScheibe(token: string, scheibennummer: number): ResolveResult
 	return { kind: 'ok', match: buildMatch(scheibennummer, outcome.resolved) };
 }
 
-function pfeileInSatz(passen: BinocularMatch['vorlaeufige_passen'], lfdNr: number): number {
-	return passen
-		.filter((p) => p.lfd_nr === lfdNr)
-		.reduce(
-			(n, p) => n + (p.ringzahl_pfeil1 !== null ? 1 : 0) + (p.ringzahl_pfeil2 !== null ? 1 : 0),
-			0
-		);
-}
-
-export function applyPfeil(token: string, scheibennummer: number, ringzahl: number): ResolveResult {
-	const outcome = resolvePairing(token, scheibennummer);
-	if (outcome.kind !== 'ok') return outcome;
-
-	const { scoring } = outcome.resolved;
-	const lfdNr = scoring.aktueller_satz;
-	const count = pfeileInSatz(scoring.vorlaeufige_passen, lfdNr);
-	if (count < 6) {
-		const position = Math.floor(count / 2) + 1;
-		let passe = scoring.vorlaeufige_passen.find(
-			(p) => p.lfd_nr === lfdNr && p.position === position
-		);
+/** Fawkes-shots-String -> Passen des aktuellen Satzes (Gegenrichtung zu encodeShots). */
+function decodeShots(shots: string, lfdNr: number): BinocularMatch['vorlaeufige_passen'] {
+	const passen: BinocularMatch['vorlaeufige_passen'] = [];
+	for (let i = 0; i < shots.length; i++) {
+		const position = Math.floor(i / 2) + 1;
+		let passe = passen.find((p) => p.position === position);
 		if (!passe) {
 			passe = { position, lfd_nr: lfdNr, ringzahl_pfeil1: null, ringzahl_pfeil2: null };
-			scoring.vorlaeufige_passen.push(passe);
+			passen.push(passe);
 		}
-		if (passe.ringzahl_pfeil1 === null) passe.ringzahl_pfeil1 = ringzahl;
+		const ringzahl = decodeShot(shots[i]);
+		if (i % 2 === 0) passe.ringzahl_pfeil1 = ringzahl;
 		else passe.ringzahl_pfeil2 = ringzahl;
 	}
-
-	saveScoringState(scheibennummer, scoring);
-	return { kind: 'ok', match: buildMatch(scheibennummer, outcome.resolved) };
+	return passen;
 }
 
-export function undoLast(token: string, scheibennummer: number): ResolveResult {
+// PUT .../spotter/shots überschreibt den kompletten shots-String des aktuellen Satzes bei
+// jedem Aufruf (kein separater Einzelpfeil-/Undo-Endpunkt) — ersetzt die bisherigen
+// applyPfeil/undoLast: der übergebene String wird komplett neu dekodiert und die Passen des
+// aktuellen Satzes werden vollständig ersetzt.
+export function setShots(token: string, scheibennummer: number, shots: string): ResolveResult {
 	const outcome = resolvePairing(token, scheibennummer);
 	if (outcome.kind !== 'ok') return outcome;
 
 	const { scoring } = outcome.resolved;
 	const lfdNr = scoring.aktueller_satz;
-	const passenInSatz = scoring.vorlaeufige_passen
-		.filter((p) => p.lfd_nr === lfdNr)
-		.sort((a, b) => b.position - a.position);
-
-	for (const p of passenInSatz) {
-		if (p.ringzahl_pfeil2 !== null) {
-			p.ringzahl_pfeil2 = null;
-			break;
-		}
-		if (p.ringzahl_pfeil1 !== null) {
-			p.ringzahl_pfeil1 = null;
-			scoring.vorlaeufige_passen = scoring.vorlaeufige_passen.filter((x) => x !== p);
-			break;
-		}
-	}
+	scoring.vorlaeufige_passen = [
+		...scoring.vorlaeufige_passen.filter((p) => p.lfd_nr !== lfdNr),
+		...decodeShots(shots, lfdNr)
+	];
 
 	saveScoringState(scheibennummer, scoring);
 	return { kind: 'ok', match: buildMatch(scheibennummer, outcome.resolved) };
