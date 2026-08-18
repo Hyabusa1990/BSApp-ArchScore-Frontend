@@ -1,23 +1,32 @@
 import { apiClient } from './client';
 
 /**
- * Bildschirm- und Tablet-Verwaltung, siehe FACHLICHKEIT.md "Bildschirm-Pairing"/
- * "Tablet-Pairing". Displays werden paarweise pro Scheiben-Paar mit PIN verwaltet
- * (`Bildschirm`); Tablets pro einzelner Scheibe über einen QR-Code-Token (`TabletPairing`)
- * — zwei unabhängige Pairing-Mechanismen, nicht verwechseln.
+ * Geräteverwaltung, siehe FACHLICHKEIT.md "Bildschirm-Pairing". Seit Issue #15 gegen den
+ * echten Fawkes-`DeviceManagementController` verdrahtet — Tablets pro einzelner Scheibe
+ * (`TabletPairing`) bleiben ein eigener, unveränderter Mechanismus (kein Fawkes-Kontrakt dafür).
+ *
+ * Wichtige Verhaltensänderung ggü. dem alten Mock-only-Modell: kein `pin`/`scheibe_a`/
+ * `scheibe_b`/`mode`/`aktiv` mehr. Ein Gerät registriert sich selbst (`GET /Display/register`,
+ * eigener, hier NICHT angefasster Mechanismus — siehe `displays.ts`/`handlers/display.ts`) und
+ * bekommt dabei einen `deviceCode`. Der Admin ordnet dieses schon registrierte Gerät per
+ * `deviceCode` einer Fixture zu (`assign`), danach nur noch `displayType` (`None`/`Match`) +
+ * optional `matchNo` konfigurierbar. Welche zwei Scheiben bei `Match` angezeigt werden, leitet
+ * das Backend selbst ab (`GET /Display/data`) — keine manuelle Scheiben-Paar-Auswahl mehr.
  */
 
-export interface Bildschirm {
-	id: string;
-	veranstaltung_id: string;
-	/** null bei freien Zusatz-Bildschirmen ohne festes Scheiben-Paar (z. B. "Beamer"). */
-	scheibe_a: number | null;
-	scheibe_b: number | null;
-	/** Freier Name — nur bei Zusatz-Bildschirmen gesetzt, sonst null (Anzeige dann "Scheibe X+Y"). */
-	name: string | null;
-	pin: string;
-	aktiv: boolean;
-	mode: 'ergebnisse' | 'tabelle';
+export type DisplayType = 'None' | 'Match';
+
+/** `Fawkes.Api.Controllers.DeviceManagementController.GetDeviceResponse`. */
+export interface Device {
+	id: number;
+	displayType: DisplayType;
+	/** Nur relevant bei `displayType === 'Match'`. */
+	matchNo: number | null;
+}
+
+export interface UpdateDeviceData {
+	displayType: DisplayType;
+	matchNo: number | null;
 }
 
 export interface TabletPairing {
@@ -25,32 +34,25 @@ export interface TabletPairing {
 	token: string;
 }
 
-export interface UpdateBildschirmData {
-	pin?: string;
-	aktiv?: boolean;
-	mode?: Bildschirm['mode'];
-}
-
 export const bildschirmeApi = {
-	list: (token: string, veranstaltungId: string) =>
-		apiClient.get<Bildschirm[]>(`/veranstaltungen/${veranstaltungId}/bildschirme`, token),
+	list: (token: string, fixtureId: number) =>
+		apiClient.get<Device[]>(`/fixtures/${fixtureId}/devices`, token),
 
-	update: (
-		token: string,
-		veranstaltungId: string,
-		bildschirmId: string,
-		data: UpdateBildschirmData
-	) =>
-		apiClient.patch<Bildschirm>(
-			`/veranstaltungen/${veranstaltungId}/bildschirme/${bildschirmId}`,
-			data,
-			token
-		),
+	get: (token: string, fixtureId: number, deviceId: number) =>
+		apiClient.get<Device>(`/fixtures/${fixtureId}/devices/${deviceId}`, token),
 
-	// "Bildschirm hinzufügen": freier Zusatz-Bildschirm ohne festes Scheiben-Paar.
-	create: (token: string, veranstaltungId: string, name: string) =>
-		apiClient.post<Bildschirm>(`/veranstaltungen/${veranstaltungId}/bildschirme`, { name }, token),
+	// Setzt voraus, dass sich das Gerät bereits selbst registriert hat (deviceCode existiert).
+	assign: (token: string, fixtureId: number, deviceCode: string) =>
+		apiClient.put<Device>(`/fixtures/${fixtureId}/devices/assign`, { deviceCode }, token),
 
+	update: (token: string, fixtureId: number, deviceId: number, data: UpdateDeviceData) =>
+		apiClient.put<Device>(`/fixtures/${fixtureId}/devices/${deviceId}`, data, token),
+
+	unassign: (token: string, fixtureId: number, deviceId: number) =>
+		apiClient.put<void>(`/fixtures/${fixtureId}/devices/${deviceId}/unassign`, undefined, token),
+
+	// Tablet-Pairing bleibt eigener Mock-only-Mechanismus (kein Fawkes-Endpunkt für Scheiben-
+	// Enumeration) — veranstaltungId ist der Routen-String-Parameter, nicht die Fixture-ID.
 	generateTabletToken: (token: string, veranstaltungId: string, scheibennummer: number) =>
 		apiClient.post<TabletPairing>(
 			`/veranstaltungen/${veranstaltungId}/tablet-token`,

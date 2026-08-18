@@ -7,7 +7,7 @@ import type {
 	MatchPlayChartTeam
 } from '$lib/api/veranstaltung';
 import type { Match, Begegnung } from '$lib/api/matchkontrolle';
-import type { Bildschirm } from '$lib/api/bildschirme';
+import type { Device, UpdateDeviceData } from '$lib/api/bildschirme';
 import { users } from './fixtures';
 import { loadState, saveState } from './persist';
 
@@ -37,6 +37,23 @@ interface TabletPairingRecord {
 	scheibennummer: number;
 }
 
+/**
+ * Bewusst NICHT mehr `$lib/api/bildschirme` (das Modul modelliert seit Issue #15 nur noch das
+ * echte Device-CRUD, `pin`/`scheibe_a`/`scheibe_b`/`mode`/`aktiv` existieren dort nicht mehr).
+ * Dieser Typ treibt ausschließlich die weiterhin unangetastete, JWT+PIN-basierte
+ * Display-Konsum-Seite (`displays.ts`/`handlers/display.ts`) — bewusste Nahtstelle, siehe #15.
+ */
+interface LegacyBildschirm {
+	id: string;
+	veranstaltung_id: string;
+	scheibe_a: number | null;
+	scheibe_b: number | null;
+	name: string | null;
+	pin: string;
+	aktiv: boolean;
+	mode: 'ergebnisse' | 'tabelle';
+}
+
 /** Intern gespeicherte Match-Daten ohne `aktiv` — das Freigabe-Flag ist seit #10 rein aus
  * `currentRoundNo` (Fawkes-`roundNo`) abgeleitet, nicht mehr selbst persistiert. */
 type StoredMatch = Omit<Match, 'aktiv'>;
@@ -44,7 +61,7 @@ type StoredMatch = Omit<Match, 'aktiv'>;
 interface State {
 	veranstaltungen: Veranstaltung[];
 	matches: StoredMatch[];
-	bildschirme: Bildschirm[];
+	bildschirme: LegacyBildschirm[];
 	tabletPairings: TabletPairingRecord[];
 	/** Veranstaltungs-ID (String) -> aktuell freigegebene Runde (Fawkes-`roundNo`, Issue #10). */
 	currentRoundNo: Record<string, number>;
@@ -52,6 +69,12 @@ interface State {
 	fixtureUsers: Record<string, FixtureUser[]>;
 	/** Veranstaltungs-ID (String) -> initiale Tabelle (`GetMatchPlayChartResponse`, Issue #14). */
 	matchPlayCharts: Record<string, MatchPlayChart>;
+	/** Veranstaltungs-ID (String) -> zugewiesene Geräte (Fawkes `GetDeviceResponse[]`, Issue #15). */
+	devices: Record<string, Device[]>;
+	/** deviceCodes, die sich schon "selbst registriert" haben, aber noch keiner Fixture
+	 * zugeordnet sind (simuliert `/Display/register`, hier NICHT nachgebaut — nur ein Pool zum
+	 * Testen von `assign`, siehe Issue #15). */
+	pendingDeviceCodes: string[];
 	nextId: number;
 }
 
@@ -202,6 +225,10 @@ function seedState(): State {
 				]
 			}
 		},
+		devices: {
+			'1001': [{ id: 500, displayType: 'Match', matchNo: 1 }]
+		},
+		pendingDeviceCodes: ['DEV-A1B2C3', 'DEV-D4E5F6', 'DEV-G7H8I9'],
 		nextId: 2000
 	};
 }
@@ -218,11 +245,6 @@ function persist(state: State): void {
 
 function generateId(state: State, prefix: string): string {
 	return `${prefix}-${state.nextId++}`;
-}
-
-function generatePin(): string {
-	const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-	return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
 // Sichtbarkeit läuft seit #14 über echte Fixture-Mitgliedschaft (usersFor/fixtureUsers, #13)
@@ -392,40 +414,55 @@ export function setCurrentRoundNo(veranstaltungId: string, roundNo: number): Mat
 	return matchesFor(veranstaltungId);
 }
 
-export function bildschirmeFor(veranstaltungId: string): Bildschirm[] {
-	return load().bildschirme.filter((b) => b.veranstaltung_id === veranstaltungId);
+// ── Geräteverwaltung (Fawkes `DeviceManagementController`, siehe Issue #15) ────────────────
+
+export function devicesFor(veranstaltungId: string): Device[] {
+	return load().devices[veranstaltungId] ?? [];
 }
 
-export function updateBildschirm(
+export function findDevice(veranstaltungId: string, deviceId: number): Device | undefined {
+	return devicesFor(veranstaltungId).find((d) => d.id === deviceId);
+}
+
+/**
+ * Ordnet ein bereits "registriertes" Gerät (Pool simulierter deviceCodes, siehe
+ * `pendingDeviceCodes`) einer Fixture zu — entspricht `PUT /fixtures/{fixtureId}/devices/assign`.
+ * `undefined` = deviceCode unbekannt oder schon zugewiesen.
+ */
+export function assignDevice(veranstaltungId: string, deviceCode: string): Device | undefined {
+	const state = load();
+	const index = state.pendingDeviceCodes.indexOf(deviceCode);
+	if (index === -1) return undefined;
+	state.pendingDeviceCodes.splice(index, 1);
+	const device: Device = { id: state.nextId++, displayType: 'None', matchNo: null };
+	(state.devices[veranstaltungId] ??= []).push(device);
+	persist(state);
+	return device;
+}
+
+export function updateDevice(
 	veranstaltungId: string,
-	bildschirmId: string,
-	data: Partial<Pick<Bildschirm, 'pin' | 'aktiv' | 'mode'>>
-): Bildschirm | undefined {
+	deviceId: number,
+	data: UpdateDeviceData
+): Device | undefined {
 	const state = load();
-	const b = state.bildschirme.find(
-		(b) => b.id === bildschirmId && b.veranstaltung_id === veranstaltungId
-	);
-	if (!b) return undefined;
-	Object.assign(b, data);
+	const device = (state.devices[veranstaltungId] ?? []).find((d) => d.id === deviceId);
+	if (!device) return undefined;
+	Object.assign(device, data);
 	persist(state);
-	return b;
+	return device;
 }
 
-export function createBildschirm(veranstaltungId: string, name: string): Bildschirm {
+/** Entspricht `PUT /fixtures/{fixtureId}/devices/{deviceId}/unassign`. */
+export function unassignDevice(veranstaltungId: string, deviceId: number): boolean {
 	const state = load();
-	const b: Bildschirm = {
-		id: generateId(state, 'b'),
-		veranstaltung_id: veranstaltungId,
-		scheibe_a: null,
-		scheibe_b: null,
-		name,
-		pin: generatePin(),
-		aktiv: true,
-		mode: 'tabelle'
-	};
-	state.bildschirme.push(b);
+	const list = state.devices[veranstaltungId];
+	if (!list) return false;
+	const index = list.findIndex((d) => d.id === deviceId);
+	if (index === -1) return false;
+	list.splice(index, 1);
 	persist(state);
-	return b;
+	return true;
 }
 
 // Anders als vorher (#9, zustandslos erzeugt) merkt sich das jetzt ausgestellte Tokens —
@@ -485,7 +522,7 @@ export function mannschaftUndGegner(
  * Display angezeigten Code von Hand ab, Tippfehler bei Groß-/Kleinschreibung sollen das
  * Pairing nicht unnötig verhindern.
  */
-export function findBildschirmByPin(pin: string): Bildschirm | undefined {
+export function findBildschirmByPin(pin: string): LegacyBildschirm | undefined {
 	const normalized = pin.trim().toUpperCase();
 	return load().bildschirme.find((b) => b.pin.trim().toUpperCase() === normalized);
 }

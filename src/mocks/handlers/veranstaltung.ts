@@ -5,9 +5,7 @@ import type { MatchPlayChartTeam } from '$lib/api/veranstaltung';
 import { userFromAccessToken } from '../db';
 import {
 	addFixtureUser,
-	bildschirmeFor,
 	connectLiga,
-	createBildschirm,
 	createMatchPlayChart,
 	createVeranstaltung,
 	findVeranstaltung,
@@ -19,7 +17,6 @@ import {
 	removeFixtureUser,
 	removeVeranstaltung,
 	setCurrentRoundNo,
-	updateBildschirm,
 	usersFor,
 	visibleVeranstaltungen
 } from '../veranstaltungen';
@@ -186,43 +183,10 @@ export const veranstaltungHandlers = [
 		return HttpResponse.json({ roundNo: body.roundNo, fixtureId });
 	}),
 
-	http.get(`${API_URL}/veranstaltungen/:id/bildschirme`, ({ request, params }) => {
-		const user = requireUser(request);
-		if (!user) return unauthorized();
-		const v = findVeranstaltung(user, Number(params.id));
-		if (!v) return notFound();
-		return HttpResponse.json(bildschirmeFor(String(v.id)));
-	}),
-
-	http.patch(
-		`${API_URL}/veranstaltungen/:id/bildschirme/:bildschirmId`,
-		async ({ request, params }) => {
-			const user = requireUser(request);
-			if (!user) return unauthorized();
-			const v = findVeranstaltung(user, Number(params.id));
-			if (!v) return notFound();
-			const body = await request.json();
-			const updated = updateBildschirm(
-				String(v.id),
-				String(params.bildschirmId),
-				body as Parameters<typeof updateBildschirm>[2]
-			);
-			if (!updated)
-				return HttpResponse.json({ detail: 'Bildschirm nicht gefunden' }, { status: 404 });
-			return HttpResponse.json(updated);
-		}
-	),
-
-	http.post(`${API_URL}/veranstaltungen/:id/bildschirme`, async ({ request, params }) => {
-		const user = requireUser(request);
-		if (!user) return unauthorized();
-		const v = findVeranstaltung(user, Number(params.id));
-		if (!v) return notFound();
-		const body = (await request.json()) as { name?: string };
-		return HttpResponse.json(createBildschirm(String(v.id), body.name ?? 'Bildschirm'), {
-			status: 201
-		});
-	}),
+	// Alte `/veranstaltungen/:id/bildschirme...`-CRUD-Endpunkte (Mock-only) sind seit #15 durch
+	// die echten `/fixtures/:fixtureId/devices...`-Endpunkte ersetzt (siehe handlers/devices.ts).
+	// Der zugrundeliegende Bildschirm/PIN-Zustand bleibt bestehen (siehe veranstaltungen.ts),
+	// treibt aber nur noch die unangetastete Display-Konsum-Seite, nicht mehr die Admin-UI.
 
 	http.post(`${API_URL}/veranstaltungen/:id/tablet-token`, async ({ request, params }) => {
 		const user = requireUser(request);
