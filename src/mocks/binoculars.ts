@@ -2,6 +2,7 @@ import { decodeShot, encodeShot, type BinocularMatch } from '$lib/api/binocular'
 import {
 	findAktivesMatchFuerScheibe,
 	findTabletPairing,
+	findVeranstaltungByFixtureUniqueId,
 	mannschaftUndGegner,
 	type AktivesMatchFuerScheibe
 } from './veranstaltungen';
@@ -30,9 +31,15 @@ type ResolveOutcome =
 	| { kind: 'no-match' }
 	| { kind: 'ok'; resolved: Resolved };
 
+// Zwei gültige Token-Arten für denselben Spotter-Info-Call: das Tablet-Pairing-Token (echte
+// Spotter-Seite, ein Token pro Scheibe) oder die fixtureUniqueId der Veranstaltung (Matchkontrolle
+// ruft #10 denselben Endpunkt direkt auf, um den Confirm-Status pro Scheibe zu lesen — echter
+// Fawkes-Kontrakt, kein Tablet-Pairing nötig).
 function resolvePairing(token: string, scheibennummer: number): ResolveOutcome {
-	const pairing = findTabletPairing(token);
-	if (!pairing || pairing.scheibennummer !== scheibennummer) return { kind: 'invalid-token' };
+	const gueltigerToken =
+		findTabletPairing(token)?.scheibennummer === scheibennummer ||
+		findVeranstaltungByFixtureUniqueId(token) !== undefined;
+	if (!gueltigerToken) return { kind: 'invalid-token' };
 
 	const found = findAktivesMatchFuerScheibe(scheibennummer);
 	if (!found) return { kind: 'no-match' };

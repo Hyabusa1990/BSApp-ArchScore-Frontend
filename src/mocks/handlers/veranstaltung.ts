@@ -3,16 +3,17 @@ import { API_URL } from '$lib/config';
 import type { User } from '$lib/api/auth';
 import { userFromAccessToken } from '../db';
 import {
-	activateMatch,
 	bildschirmeFor,
 	clearTabelle,
 	connectLiga,
 	createBildschirm,
-	deactivateMatch,
 	findVeranstaltung,
+	findVeranstaltungByFixtureId,
 	generateTabletToken,
+	getCurrentRoundNo,
 	matchesFor,
 	removeVeranstaltung,
+	setCurrentRoundNo,
 	setTabelle,
 	updateBildschirm,
 	visibleVeranstaltungen,
@@ -111,24 +112,30 @@ export const veranstaltungHandlers = [
 		return HttpResponse.json(matchesFor(v.id));
 	}),
 
-	http.post(`${API_URL}/veranstaltungen/:id/matches/:matchId/activate`, ({ request, params }) => {
+	// Fawkes-`DosController`-Kontrakt (siehe Issue #10, korrigiert #5/#7/#8): fixtureId statt
+	// Veranstaltungs-UUID im Pfad, nur roundNo — kein setNo mehr.
+	http.get(`${API_URL}/fixtures/:fixtureId/phase`, ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
-		const v = findVeranstaltung(user, String(params.id));
+		const fixtureId = Number(params.fixtureId);
+		const v = findVeranstaltungByFixtureId(user, fixtureId);
 		if (!v) return notFound();
-		const updated = activateMatch(v.id, String(params.matchId));
-		if (!updated) return HttpResponse.json({ detail: 'Match nicht gefunden' }, { status: 404 });
-		return HttpResponse.json(updated);
+		const roundNo = getCurrentRoundNo(v.id) ?? 1;
+		return HttpResponse.json({ roundNo, fixtureId });
 	}),
 
-	http.post(`${API_URL}/veranstaltungen/:id/matches/:matchId/deactivate`, ({ request, params }) => {
+	http.put(`${API_URL}/fixtures/:fixtureId/phase`, async ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
-		const v = findVeranstaltung(user, String(params.id));
+		const fixtureId = Number(params.fixtureId);
+		const v = findVeranstaltungByFixtureId(user, fixtureId);
 		if (!v) return notFound();
-		const updated = deactivateMatch(v.id, String(params.matchId));
-		if (!updated) return HttpResponse.json({ detail: 'Match nicht gefunden' }, { status: 404 });
-		return HttpResponse.json(updated);
+		const body = (await request.json()) as { roundNo?: number };
+		if (typeof body.roundNo !== 'number') {
+			return HttpResponse.json({ detail: 'roundNo fehlt oder ungültig' }, { status: 422 });
+		}
+		setCurrentRoundNo(v.id, body.roundNo);
+		return HttpResponse.json({ roundNo: body.roundNo, fixtureId });
 	}),
 
 	http.get(`${API_URL}/veranstaltungen/:id/bildschirme`, ({ request, params }) => {

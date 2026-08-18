@@ -35,6 +35,15 @@ export interface Veranstaltung {
 	datenquelle: 'tabelle' | 'liga' | null;
 	tabelle?: InitialeTabelleEintrag[];
 	liga?: LigaVerbindung;
+	/**
+	 * Fawkes-Fixture, die diese Veranstaltung repräsentiert — Annahme 1 Veranstaltung = 1
+	 * Fixture (passt zur Fixture-Granularität "3. Wettkampftag"/"Finale"), vom Backend nicht
+	 * bestätigt (siehe Issue #10). `fixtureId` (numerisch, Bearer-authentifiziert) steuert
+	 * `PUT/GET /fixtures/{fixtureId}/phase`, `fixtureUniqueId` (schwer zu erraten, Bearer-frei)
+	 * die Spotter-Info-Abfragen für die Confirm-Status-Anzeige.
+	 */
+	fixtureId: number;
+	fixtureUniqueId: string;
 }
 
 export const veranstaltungApi = {

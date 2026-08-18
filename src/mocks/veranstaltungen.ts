@@ -28,12 +28,22 @@ interface TabletPairingRecord {
 	scheibennummer: number;
 }
 
+/** Intern gespeicherte Match-Daten ohne `aktiv` — das Freigabe-Flag ist seit #10 rein aus
+ * `currentRoundNo` (Fawkes-`roundNo`) abgeleitet, nicht mehr selbst persistiert. */
+type StoredMatch = Omit<Match, 'aktiv'>;
+
 interface State {
 	veranstaltungen: Veranstaltung[];
-	matches: Match[];
+	matches: StoredMatch[];
 	bildschirme: Bildschirm[];
 	tabletPairings: TabletPairingRecord[];
+	/** Veranstaltungs-ID -> aktuell freigegebene Runde (Fawkes-`roundNo`, siehe Issue #10). */
+	currentRoundNo: Record<string, number>;
 	nextId: number;
+}
+
+function toMatch(state: State, m: StoredMatch): Match {
+	return { ...m, aktiv: state.currentRoundNo[m.veranstaltung_id] === m.nummer };
 }
 
 function seedState(): State {
@@ -43,6 +53,8 @@ function seedState(): State {
 				id: 'v-1',
 				owner_id: OWNER_ADMIN,
 				name: '1. WKT Bundesliga',
+				fixtureId: 1001,
+				fixtureUniqueId: 'f1e57000-0000-4000-8000-000000000001',
 				datenquelle: 'tabelle',
 				tabelle: [
 					{ platz: 1, mannschaft_name: 'BSC Abendau', satzpunkte: 15, matchpunkte: 14 },
@@ -59,6 +71,8 @@ function seedState(): State {
 				id: 'v-2',
 				owner_id: OWNER_USER,
 				name: 'Kreisliga Ost',
+				fixtureId: 1002,
+				fixtureUniqueId: 'f1e57000-0000-4000-8000-000000000002',
 				datenquelle: 'liga',
 				liga: {
 					liga_app: 'BSApp Liga',
@@ -73,7 +87,6 @@ function seedState(): State {
 				id: 'm-1',
 				veranstaltung_id: 'v-1',
 				nummer: 1,
-				aktiv: true,
 				begegnungen: [
 					{
 						scheibe_a: 1,
@@ -93,7 +106,6 @@ function seedState(): State {
 				id: 'm-2',
 				veranstaltung_id: 'v-1',
 				nummer: 2,
-				aktiv: false,
 				begegnungen: [
 					{ scheibe_a: 1, scheibe_b: 2, mannschaft_a: 'SV Vogelwiese', mannschaft_b: 'BSC Abendau' }
 				]
@@ -102,7 +114,6 @@ function seedState(): State {
 				id: 'm-3',
 				veranstaltung_id: 'v-1',
 				nummer: 3,
-				aktiv: false,
 				begegnungen: [
 					{
 						scheibe_a: 1,
@@ -166,6 +177,7 @@ function seedState(): State {
 			}
 		],
 		tabletPairings: [],
+		currentRoundNo: { 'v-1': 1 },
 		nextId: 100
 	};
 }
@@ -202,12 +214,36 @@ export function findVeranstaltung(user: User, id: string): Veranstaltung | undef
 	return v && canSee(user, v) ? v : undefined;
 }
 
+/** Bearer-authentifizierter Lookup für den Fawkes-Phase-Endpunkt (`fixtureId` numerisch statt
+ * Veranstaltungs-UUID) — Ownership-Check identisch zu `findVeranstaltung` (siehe Issue #10). */
+export function findVeranstaltungByFixtureId(
+	user: User,
+	fixtureId: number
+): Veranstaltung | undefined {
+	const v = load().veranstaltungen.find((v) => v.fixtureId === fixtureId);
+	return v && canSee(user, v) ? v : undefined;
+}
+
+/** Ungefiltert wie `findBildschirmByPin`/`findTabletPairing` weiter unten — der echte
+ * Spotter-Info-Endpunkt ist laut Fawkes-Spec Bearer-frei, die schwer zu erratende
+ * `fixtureUniqueId` selbst ist die Absicherung (siehe binocular.ts). Jetzt auch von der
+ * Matchkontrolle direkt genutzt, um den Confirm-Status pro Scheibe zu lesen (Issue #10). */
+export function findVeranstaltungByFixtureUniqueId(
+	fixtureUniqueId: string
+): Veranstaltung | undefined {
+	return load().veranstaltungen.find((v) => v.fixtureUniqueId === fixtureUniqueId);
+}
+
 export function createVeranstaltung(user: User, name: string): Veranstaltung {
 	const state = load();
 	const v: Veranstaltung = {
 		id: generateId(state, 'v'),
 		owner_id: user.id,
 		name,
+		// Mock-Annahme 1 Veranstaltung = 1 Fixture (siehe Issue #10) — fixtureId hier einfach
+		// hochgezählt, echte Fawkes-Fixture-Anlage ist Backend-Sache.
+		fixtureId: state.nextId,
+		fixtureUniqueId: crypto.randomUUID(),
 		datenquelle: null
 	};
 	state.veranstaltungen.push(v);
@@ -235,7 +271,6 @@ function ensureDemoMatch(state: State, v: Veranstaltung) {
 		id: generateId(state, 'm'),
 		veranstaltung_id: v.id,
 		nummer: 1,
-		aktiv: true,
 		begegnungen: [
 			{
 				scheibe_a: 1,
@@ -245,6 +280,7 @@ function ensureDemoMatch(state: State, v: Veranstaltung) {
 			}
 		]
 	});
+	state.currentRoundNo[v.id] = 1;
 }
 
 function findInState(state: State, id: string): Veranstaltung | undefined {
@@ -287,33 +323,28 @@ export function connectLiga(
 }
 
 export function matchesFor(veranstaltungId: string): Match[] {
-	return load().matches.filter((m) => m.veranstaltung_id === veranstaltungId);
+	const state = load();
+	return state.matches
+		.filter((m) => m.veranstaltung_id === veranstaltungId)
+		.map((m) => toMatch(state, m));
 }
 
-/** Aktiviert das gewählte Match, deaktiviert automatisch jedes andere derselben Veranstaltung. */
-export function activateMatch(veranstaltungId: string, matchId: string): Match[] | undefined {
-	const state = load();
-	const target = state.matches.find(
-		(m) => m.id === matchId && m.veranstaltung_id === veranstaltungId
-	);
-	if (!target) return undefined;
-	for (const m of state.matches) {
-		if (m.veranstaltung_id === veranstaltungId) m.aktiv = m.id === matchId;
-	}
-	persist(state);
-	return state.matches.filter((m) => m.veranstaltung_id === veranstaltungId);
+/** Aktuell freigegebene Runde (Fawkes-`roundNo`) der Veranstaltung, falls schon gesetzt. */
+export function getCurrentRoundNo(veranstaltungId: string): number | undefined {
+	return load().currentRoundNo[veranstaltungId];
 }
 
-/** Deaktiviert das gewählte Match, ohne ein anderes zu aktivieren. */
-export function deactivateMatch(veranstaltungId: string, matchId: string): Match[] | undefined {
+/**
+ * Setzt die freigegebene Runde — entspricht `PUT /fixtures/{fixtureId}/phase` (nur `roundNo`,
+ * siehe Issue #10, korrigiert #5/#7/#8: keine `setNo`-Auswahl mehr bei der Freigabe selbst).
+ * `Match.aktiv` wird dadurch nicht mehr direkt gesetzt, sondern beim nächsten `matchesFor`-Read
+ * aus `nummer === roundNo` abgeleitet — siehe `toMatch`.
+ */
+export function setCurrentRoundNo(veranstaltungId: string, roundNo: number): Match[] {
 	const state = load();
-	const target = state.matches.find(
-		(m) => m.id === matchId && m.veranstaltung_id === veranstaltungId
-	);
-	if (!target) return undefined;
-	target.aktiv = false;
+	state.currentRoundNo[veranstaltungId] = roundNo;
 	persist(state);
-	return state.matches.filter((m) => m.veranstaltung_id === veranstaltungId);
+	return matchesFor(veranstaltungId);
 }
 
 export function bildschirmeFor(veranstaltungId: string): Bildschirm[] {
@@ -381,11 +412,14 @@ export interface AktivesMatchFuerScheibe {
 export function findAktivesMatchFuerScheibe(
 	scheibennummer: number
 ): AktivesMatchFuerScheibe | undefined {
-	for (const m of load().matches) {
-		if (!m.aktiv) continue;
+	const state = load();
+	for (const m of state.matches) {
+		if (state.currentRoundNo[m.veranstaltung_id] !== m.nummer) continue;
 		for (const begegnung of m.begegnungen) {
-			if (begegnung.scheibe_a === scheibennummer) return { match: m, begegnung, seite: 'a' };
-			if (begegnung.scheibe_b === scheibennummer) return { match: m, begegnung, seite: 'b' };
+			if (begegnung.scheibe_a === scheibennummer)
+				return { match: toMatch(state, m), begegnung, seite: 'a' };
+			if (begegnung.scheibe_b === scheibennummer)
+				return { match: toMatch(state, m), begegnung, seite: 'b' };
 		}
 	}
 	return undefined;

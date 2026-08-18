@@ -173,12 +173,14 @@
 		"back_btn": "Back to event",
 		"empty": "No matches yet — create a schedule or connect a league management first.",
 		"error_load": "Could not load matches.",
-		"error_toggle": "Action failed. State reloaded.",
+		"error_freigeben": "Release failed. State reloaded.",
 		"match_label": "Match {n}",
 		"aktiv": "ACTIVE",
 		"inaktiv": "INACTIVE",
-		"activate_btn": "Activate",
-		"deactivate_btn": "Deactivate"
+		"freigeben_btn": "Release",
+		"scheibe_label": "Target {n}",
+		"bestaetigt": "confirmed",
+		"ausstehend": "pending"
 	},
 	"bildschirme": {
 		"title": "Screen and Tablet Management",

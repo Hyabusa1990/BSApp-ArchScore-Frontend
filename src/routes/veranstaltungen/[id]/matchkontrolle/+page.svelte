@@ -2,9 +2,9 @@
 	import { _ } from 'svelte-i18n';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { SvelteSet } from 'svelte/reactivity';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { matchkontrolleApi, type Match } from '$lib/api/matchkontrolle';
+	import { veranstaltungApi, type Veranstaltung } from '$lib/api/veranstaltung';
+	import { matchkontrolleApi, type Match, type ConfirmStatus } from '$lib/api/matchkontrolle';
 	import {
 		Container,
 		Card,
@@ -19,22 +19,48 @@
 	let { data } = $props<{ data: { id: string } }>();
 	const veranstaltungId = $derived(data.id);
 
+	let veranstaltung = $state<Veranstaltung | null>(null);
 	let matches = $state<Match[]>([]);
+	let confirmStatus = $state<ConfirmStatus>({});
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
-	// Match-IDs, die gerade eine Aktivieren/Deaktivieren-Anfrage laufen haben — verhindert
-	// Doppelklicks und zeigt einen kleinen Spinner auf genau der betroffenen Karte.
-	const pending = new SvelteSet<string>();
+	// Match-ID, deren Freigabe-Anfrage gerade läuft — verhindert Doppelklicks/Parallel-Freigaben.
+	let freigebend = $state<string | null>(null);
 
 	$effect(() => {
 		if (auth.initialized && !auth.isAuthenticated) goto(resolve('/login'));
 	});
 
+	function scheibenFuer(match: Match): number[] {
+		return match.begegnungen.flatMap((b) => [b.scheibe_a, b.scheibe_b]);
+	}
+
+	// Confirm-Status kommt aus keinem eigenen Matchkontrolle-Endpunkt (Fawkes kennt keinen),
+	// sondern pro Scheibe des aktiven Matches über denselben Spotter-Info-Call wie die
+	// Binocular-Seite selbst — siehe matchkontrolle.ts.
+	async function ladeConfirmStatus() {
+		if (!veranstaltung) return;
+		const aktivesMatch = matches.find((m) => m.aktiv);
+		confirmStatus = aktivesMatch
+			? await matchkontrolleApi.getConfirmStatus(
+					veranstaltung.fixtureUniqueId,
+					scheibenFuer(aktivesMatch)
+				)
+			: {};
+	}
+
 	async function load() {
 		loading = true;
 		loadError = null;
 		try {
-			matches = await matchkontrolleApi.list(auth.accessToken!, veranstaltungId);
+			const [v, ms] = await Promise.all([
+				veranstaltungApi.get(auth.accessToken!, veranstaltungId),
+				matchkontrolleApi.list(auth.accessToken!, veranstaltungId)
+			]);
+			veranstaltung = v;
+			const phase = await matchkontrolleApi.getPhase(auth.accessToken!, v.fixtureId);
+			matches = ms.map((m) => ({ ...m, aktiv: m.nummer === phase.roundNo }));
+			await ladeConfirmStatus();
 		} catch {
 			loadError = $_('matchkontrolle.error_load');
 		} finally {
@@ -46,27 +72,30 @@
 		if (auth.isAuthenticated) load();
 	});
 
-	async function toggle(match: Match) {
-		if (pending.has(match.id)) return;
-		pending.add(match.id);
+	// Confirm-Status des aktiven Matches regelmäßig aktualisieren, ohne die Match-Liste/Freigabe
+	// selbst neu zu laden (gleiche Poll-Kadenz wie die Binocular-Seite, siehe #4).
+	$effect(() => {
+		if (loading || loadError) return;
+		const interval = setInterval(ladeConfirmStatus, 3000);
+		return () => clearInterval(interval);
+	});
 
-		// Optimistisch sofort anzeigen: Aktivieren deaktiviert alle anderen lokal,
-		// Deaktivieren nur die eine Karte.
-		const wasAktiv = match.aktiv;
-		matches = matches.map((m) => ({
-			...m,
-			aktiv: wasAktiv ? (m.id === match.id ? false : m.aktiv) : m.id === match.id
-		}));
+	async function freigeben(match: Match) {
+		if (!veranstaltung || freigebend) return;
+		freigebend = match.id;
+
+		// Optimistisch sofort anzeigen: genau die angeklickte Karte wird aktiv, alle anderen inaktiv.
+		const vorherigeMatches = matches;
+		matches = matches.map((m) => ({ ...m, aktiv: m.id === match.id }));
 
 		try {
-			matches = wasAktiv
-				? await matchkontrolleApi.deactivate(auth.accessToken!, veranstaltungId, match.id)
-				: await matchkontrolleApi.activate(auth.accessToken!, veranstaltungId, match.id);
+			await matchkontrolleApi.setPhase(auth.accessToken!, veranstaltung.fixtureId, match.nummer);
+			await ladeConfirmStatus();
 		} catch {
-			loadError = $_('matchkontrolle.error_toggle');
-			await load(); // Optimistischen Stand verwerfen, echten Serverstand nachladen
+			loadError = $_('matchkontrolle.error_freigeben');
+			matches = vorherigeMatches; // Optimistischen Stand verwerfen
 		} finally {
-			pending.delete(match.id);
+			freigebend = null;
 		}
 	}
 </script>
@@ -103,21 +132,33 @@
 							<Badge color={match.aktiv ? 'success' : 'warning'} class="px-3 py-2 fs-6">
 								{match.aktiv ? $_('matchkontrolle.aktiv') : $_('matchkontrolle.inaktiv')}
 							</Badge>
-							<button
-								type="button"
-								class="btn btn-sm {match.aktiv
-									? 'btn-link text-warning'
-									: 'btn-link text-success'} text-decoration-none"
-								disabled={pending.has(match.id)}
-								onclick={() => toggle(match)}
-							>
-								{#if pending.has(match.id)}
-									<Spinner size="sm" class="me-1" />
-								{/if}
-								{match.aktiv
-									? $_('matchkontrolle.deactivate_btn')
-									: $_('matchkontrolle.activate_btn')}
-							</button>
+							{#if match.aktiv}
+								<div class="d-flex flex-wrap justify-content-center gap-2 mt-1">
+									{#each scheibenFuer(match) as scheibe (scheibe)}
+										<Badge
+											color={confirmStatus[scheibe] ? 'success' : 'secondary'}
+											class="fw-normal"
+										>
+											{$_('matchkontrolle.scheibe_label', { values: { n: scheibe } })}:
+											{confirmStatus[scheibe]
+												? $_('matchkontrolle.bestaetigt')
+												: $_('matchkontrolle.ausstehend')}
+										</Badge>
+									{/each}
+								</div>
+							{:else}
+								<button
+									type="button"
+									class="btn btn-sm btn-link text-success text-decoration-none"
+									disabled={freigebend !== null}
+									onclick={() => freigeben(match)}
+								>
+									{#if freigebend === match.id}
+										<Spinner size="sm" class="me-1" />
+									{/if}
+									{$_('matchkontrolle.freigeben_btn')}
+								</button>
+							{/if}
 						</CardBody>
 					</Card>
 				</Col>
