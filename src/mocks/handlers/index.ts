@@ -1,5 +1,4 @@
 import { authHandlers } from './auth';
-import { configHandlers } from './config';
 import { displayHandlers } from './display';
 import { binocularHandlers } from './binocular';
 import { veranstaltungHandlers } from './veranstaltung';
@@ -11,7 +10,6 @@ import { veranstaltungHandlers } from './veranstaltung';
  */
 export const handlers = [
 	...authHandlers,
-	...configHandlers,
 	...displayHandlers,
 	...binocularHandlers,
 	...veranstaltungHandlers

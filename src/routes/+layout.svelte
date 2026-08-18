@@ -5,7 +5,7 @@
 	import { setLocale, languages } from '$lib/i18n';
 	import favicon from '$lib/assets/favicon.svg';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { appConfig } from '$lib/stores/config.svelte';
+	import { ALLOW_REGISTRATION } from '$lib/config';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -41,7 +41,6 @@
 
 	onMount(() => {
 		auth.init();
-		appConfig.load();
 	});
 
 	async function logout() {
@@ -91,7 +90,7 @@
 					<NavItem>
 						<NavLink href="/login" onclick={closeNav}>{$_('nav.login')}</NavLink>
 					</NavItem>
-					{#if appConfig.allowRegistration}
+					{#if ALLOW_REGISTRATION}
 						<NavItem class="mb-1 mb-md-0">
 							<NavLink
 								href="/register"

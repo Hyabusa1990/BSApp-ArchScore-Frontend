@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { _ } from 'svelte-i18n';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { appConfig } from '$lib/stores/config.svelte';
+	import { ALLOW_REGISTRATION } from '$lib/config';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { APIError } from '$lib/api/client';
@@ -17,7 +17,7 @@
 	let success = $state(false);
 
 	$effect(() => {
-		if (appConfig.loaded && !appConfig.allowRegistration) {
+		if (!ALLOW_REGISTRATION) {
 			goto(resolve('/login'));
 		}
 	});
