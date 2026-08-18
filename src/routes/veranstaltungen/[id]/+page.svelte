@@ -175,10 +175,11 @@
 						<Button color="primary" onclick={() => (chosenSource = 'tabelle')}>
 							{$_('veranstaltungen.choose_tabelle_btn')}
 						</Button>
-						<Button color="outline-primary" onclick={() => (chosenSource = 'liga')}>
+						<Button color="outline-primary" disabled title={$_('veranstaltungen.liga_coming_soon')}>
 							{$_('veranstaltungen.choose_liga_btn')}
 						</Button>
 					</div>
+					<p class="text-muted small mb-0 mt-2">{$_('veranstaltungen.liga_coming_soon')}</p>
 				</CardBody>
 			</Card>
 		{:else if chosenSource === 'tabelle'}
@@ -190,8 +191,9 @@
 						</h6>
 						<button
 							type="button"
-							class="btn btn-link btn-sm text-decoration-none p-0"
-							onclick={() => (chosenSource = 'liga')}
+							class="btn btn-link btn-sm text-decoration-none p-0 text-muted"
+							disabled
+							title={$_('veranstaltungen.liga_coming_soon')}
 						>
 							{$_('veranstaltungen.switch_to_liga')}
 						</button>

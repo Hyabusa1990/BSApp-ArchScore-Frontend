@@ -149,6 +149,7 @@
 		"choose_hint": "How should matches for this event be created?",
 		"choose_tabelle_btn": "Enter initial table",
 		"choose_liga_btn": "Connect to league management",
+		"liga_coming_soon": "Coming in a later version",
 		"tabelle_heading": "Initial table + schedule",
 		"tabelle_platz": "Rank",
 		"tabelle_mannschaft": "Team",
