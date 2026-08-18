@@ -35,7 +35,6 @@
 		try {
 			await auth.register(email, password);
 			success = true;
-			setTimeout(() => goto(resolve('/login')), 2000);
 		} catch (err) {
 			if (err instanceof APIError) {
 				const msg = (err.data as { detail?: string })?.detail;
@@ -54,6 +53,9 @@
 <AuthCard title={$_('register.title')}>
 	{#if success}
 		<Alert color="success">{$_('register.success')}</Alert>
+		<p class="text-center text-muted small mt-3 mb-0">
+			<a href={resolve('/login')} class="text-decoration-none">{$_('nav.login')}</a>
+		</p>
 	{:else}
 		<Form onsubmit={handleSubmit}>
 			<FormField

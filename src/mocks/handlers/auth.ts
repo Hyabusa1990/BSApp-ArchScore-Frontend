@@ -71,7 +71,32 @@ export const authHandlers = [
 		const newUser: User = { id, email: body.email!, role: 'user' };
 		db.usersByEmail.set(newUser.email, newUser);
 		db.usersById.set(id, newUser);
-		return HttpResponse.json({ code: 'REGISTERED', message: 'Konto erstellt.' }, { status: 200 });
+
+		// E-Mail-Verifizierung (#12): kein echter Mail-Versand im Mock, daher der Token direkt
+		// in der Nachricht sichtbar — so lässt sich der Verify-Link lokal ohne Mailserver testen.
+		const verifyToken = crypto.randomUUID();
+		db.pendingVerifications.set(verifyToken, id);
+		return HttpResponse.json(
+			{
+				code: 'REGISTERED',
+				message: `Konto erstellt. Bitte E-Mail bestätigen. (Dev-Token: ${verifyToken})`
+			},
+			{ status: 200 }
+		);
+	}),
+
+	// Kein Invite-Flow, sondern E-Mail-Verifizierung nach POST /Auth/register (siehe Issue #12).
+	http.post(`${API_URL}/Auth/register/:token`, ({ params }) => {
+		const token = String(params.token);
+		const userId = db.pendingVerifications.get(token);
+		if (!userId) {
+			return HttpResponse.json(
+				{ code: 'UNAUTHORIZED', message: 'Token ungültig oder abgelaufen' },
+				{ status: 401 }
+			);
+		}
+		db.pendingVerifications.delete(token);
+		return HttpResponse.json({ code: 'VERIFIED', message: 'E-Mail-Adresse bestätigt.' });
 	}),
 
 	// Fawkes-Kontrakt (#11): camelCase Body, kein new_password_confirm mehr (Mismatch-Check

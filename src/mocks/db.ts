@@ -19,7 +19,11 @@ export const db = {
 	refreshTokens: new Map<string, string>(), // token -> user id
 	// user id -> per Auth/change-password (#11) gesetztes Passwort, überschreibt DEV_PASSWORD
 	// für genau diesen User für den Rest des Mock-Laufs.
-	passwordOverrides: new Map<string, string>()
+	passwordOverrides: new Map<string, string>(),
+	// Verify-Token (siehe Issue #12) -> user id, ausgestellt bei POST /Auth/register, verbraucht
+	// bei POST /Auth/register/{token}. Kein echter Mail-Versand im Mock — der Token wird der
+	// Register-Antwort als Dev-Komfort direkt beigelegt.
+	pendingVerifications: new Map<string, string>()
 };
 
 /** Aktuell gültiges Passwort des Users — DEV_PASSWORD, außer per change-password überschrieben. */

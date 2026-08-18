@@ -33,6 +33,11 @@ export const authApi = {
 	register: (email: string, password: string) =>
 		apiClient.post<MessageResponse>('/Auth/register', { email, password }),
 
+	// /Auth/register/{token} ist kein Invite-Flow, sondern E-Mail-Verifizierung NACH der
+	// Registrierung (siehe Issue #12) — kein Bearer laut Spec, kein Body.
+	verifyRegistration: (token: string) =>
+		apiClient.post<MessageResponse>(`/Auth/register/${token}`, undefined),
+
 	me: (token: string) => apiClient.get<User>('/Auth/me', token),
 
 	// Eigenständige Funktion, nicht Teil des in #3 entfernten Profil-Edit-Formulars.

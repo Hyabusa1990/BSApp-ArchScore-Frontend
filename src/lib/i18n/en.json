@@ -38,8 +38,14 @@
 		"error_unexpected": "An unexpected error occurred.",
 		"loading": "Creating account…",
 		"submit": "Register",
-		"success": "Account created! Redirecting to login…",
+		"success": "Account created! Please confirm your email address via the link in the confirmation email before you log in.",
 		"have_account": "Already have an account?"
+	},
+	"register_verify": {
+		"title": "Email confirmation",
+		"success": "Email address confirmed. You can now log in.",
+		"error": "This confirmation link is invalid or has expired.",
+		"back_to_login_btn": "Go to login"
 	},
 	"profile": {
 		"title": "Profile",

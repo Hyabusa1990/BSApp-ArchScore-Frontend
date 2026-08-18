@@ -39,8 +39,14 @@
 		"error_unexpected": "Ein unerwarteter Fehler ist aufgetreten.",
 		"loading": "Konto wird erstellt…",
 		"submit": "Registrieren",
-		"success": "Konto erstellt! Weiterleitung zur Anmeldung…",
+		"success": "Konto erstellt! Bitte bestätige deine E-Mail-Adresse über den Link in der Bestätigungsmail, bevor du dich anmeldest.",
 		"have_account": "Bereits ein Konto?"
+	},
+	"register_verify": {
+		"title": "E-Mail-Bestätigung",
+		"success": "E-Mail-Adresse bestätigt. Du kannst dich jetzt anmelden.",
+		"error": "Der Bestätigungslink ist ungültig oder abgelaufen.",
+		"back_to_login_btn": "Zur Anmeldung"
 	},
 	"profile": {
 		"title": "Profil",
