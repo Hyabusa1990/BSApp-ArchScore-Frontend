@@ -1,5 +1,5 @@
 import type { User } from '$lib/api/auth';
-import type { Veranstaltung } from '$lib/api/veranstaltung';
+import type { Veranstaltung, FixtureUser } from '$lib/api/veranstaltung';
 import type { Match, Begegnung } from '$lib/api/matchkontrolle';
 import type { Bildschirm } from '$lib/api/bildschirme';
 import { users } from './fixtures';
@@ -39,6 +39,8 @@ interface State {
 	tabletPairings: TabletPairingRecord[];
 	/** Veranstaltungs-ID -> aktuell freigegebene Runde (Fawkes-`roundNo`, siehe Issue #10). */
 	currentRoundNo: Record<string, number>;
+	/** Veranstaltungs-ID -> Fixture-Mitglieder (Fawkes `GetUserResponse[]`, siehe Issue #13). */
+	fixtureUsers: Record<string, FixtureUser[]>;
 	nextId: number;
 }
 
@@ -178,6 +180,10 @@ function seedState(): State {
 		],
 		tabletPairings: [],
 		currentRoundNo: { 'v-1': 1 },
+		fixtureUsers: {
+			'v-1': [{ userName: users.admin.email, isOwner: true }],
+			'v-2': [{ userName: users.member.email, isOwner: true }]
+		},
 		nextId: 100
 	};
 }
@@ -234,6 +240,35 @@ export function findVeranstaltungByFixtureUniqueId(
 	return load().veranstaltungen.find((v) => v.fixtureUniqueId === fixtureUniqueId);
 }
 
+export function usersFor(veranstaltungId: string): FixtureUser[] {
+	return load().fixtureUsers[veranstaltungId] ?? [];
+}
+
+export function isFixtureOwner(veranstaltungId: string, userName: string): boolean {
+	return usersFor(veranstaltungId).some((u) => u.userName === userName && u.isOwner);
+}
+
+/** Fügt einen Nicht-Owner hinzu (Owner-Check läuft im Handler, nicht hier) — no-op bei bereits
+ * vorhandenem userName statt Duplikat. */
+export function addFixtureUser(veranstaltungId: string, userName: string): FixtureUser[] {
+	const state = load();
+	const list = (state.fixtureUsers[veranstaltungId] ??= []);
+	if (!list.some((u) => u.userName === userName)) {
+		list.push({ userName, isOwner: false });
+	}
+	persist(state);
+	return list;
+}
+
+export function removeFixtureUser(veranstaltungId: string, userName: string): FixtureUser[] {
+	const state = load();
+	state.fixtureUsers[veranstaltungId] = usersFor(veranstaltungId).filter(
+		(u) => u.userName !== userName
+	);
+	persist(state);
+	return state.fixtureUsers[veranstaltungId];
+}
+
 export function createVeranstaltung(user: User, name: string): Veranstaltung {
 	const state = load();
 	const v: Veranstaltung = {
@@ -247,6 +282,8 @@ export function createVeranstaltung(user: User, name: string): Veranstaltung {
 		datenquelle: null
 	};
 	state.veranstaltungen.push(v);
+	// Ersteller wird automatisch Owner (Rücksprache Backend-Entwickler 2026-08-17, Issue #13).
+	state.fixtureUsers[v.id] = [{ userName: user.email, isOwner: true }];
 	persist(state);
 	return v;
 }

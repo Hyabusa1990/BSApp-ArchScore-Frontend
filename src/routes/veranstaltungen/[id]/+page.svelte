@@ -7,9 +7,20 @@
 		veranstaltungApi,
 		type Veranstaltung,
 		type InitialeTabelleEintrag,
-		type LigaVerbindung
+		type LigaVerbindung,
+		type FixtureUser
 	} from '$lib/api/veranstaltung';
-	import { Container, Card, CardBody, Alert, Button, Spinner } from '@sveltestrap/sveltestrap';
+	import { APIError } from '$lib/api/client';
+	import {
+		Container,
+		Card,
+		CardBody,
+		Alert,
+		Badge,
+		Button,
+		Form,
+		Spinner
+	} from '@sveltestrap/sveltestrap';
 	import FormField from '$lib/components/FormField.svelte';
 
 	let { data } = $props<{ data: { id: string } }>();
@@ -34,6 +45,18 @@
 	let ligaPin = $state('');
 	let digitalerSchusszettel = $state(false);
 
+	// Fixture-Mitgliedschaft (#13) — eigene Achse ggü. Account-role, Owner-Status kommt aus der
+	// geladenen Mitgliederliste selbst (kein separates Feld an Veranstaltung).
+	let fixtureUsers = $state<FixtureUser[]>([]);
+	let usersLoading = $state(true);
+	let usersError = $state<string | null>(null);
+	let newUserName = $state('');
+	let addingUser = $state(false);
+	let removingUserName = $state<string | null>(null);
+	const currentUserIsOwner = $derived(
+		fixtureUsers.some((u) => u.userName === auth.user?.email && u.isOwner)
+	);
+
 	$effect(() => {
 		if (auth.initialized && !auth.isAuthenticated) goto(resolve('/login'));
 	});
@@ -56,10 +79,64 @@
 				ligaPin = veranstaltung.liga.login_pin;
 				digitalerSchusszettel = veranstaltung.liga.digitaler_schusszettel;
 			}
+			await loadUsers();
 		} catch {
 			loadError = $_('veranstaltungen.error_load');
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadUsers() {
+		if (!veranstaltung) return;
+		usersLoading = true;
+		usersError = null;
+		try {
+			fixtureUsers = await veranstaltungApi.listUsers(auth.accessToken!, veranstaltung.fixtureId);
+		} catch {
+			usersError = $_('veranstaltungen.mitglieder_error_load');
+		} finally {
+			usersLoading = false;
+		}
+	}
+
+	async function addMember(e: Event) {
+		e.preventDefault();
+		if (!veranstaltung || !newUserName.trim()) return;
+		addingUser = true;
+		usersError = null;
+		try {
+			await veranstaltungApi.addUser(
+				auth.accessToken!,
+				veranstaltung.fixtureId,
+				newUserName.trim()
+			);
+			newUserName = '';
+			await loadUsers();
+		} catch (err) {
+			usersError =
+				err instanceof APIError && err.status === 403
+					? $_('veranstaltungen.mitglieder_forbidden')
+					: $_('veranstaltungen.mitglieder_error_add');
+		} finally {
+			addingUser = false;
+		}
+	}
+
+	async function removeMember(userName: string) {
+		if (!veranstaltung || removingUserName) return;
+		removingUserName = userName;
+		usersError = null;
+		try {
+			await veranstaltungApi.removeUser(auth.accessToken!, veranstaltung.fixtureId, userName);
+			await loadUsers();
+		} catch (err) {
+			usersError =
+				err instanceof APIError && err.status === 403
+					? $_('veranstaltungen.mitglieder_forbidden')
+					: $_('veranstaltungen.mitglieder_error_remove');
+		} finally {
+			removingUserName = null;
 		}
 	}
 
@@ -162,6 +239,70 @@
 				{/if}
 			</div>
 		</div>
+
+		<Card class="shadow-sm mb-4">
+			<CardBody class="p-4">
+				<h6 class="text-muted text-uppercase small fw-semibold mb-3">
+					{$_('veranstaltungen.mitglieder_heading')}
+				</h6>
+				{#if usersLoading}
+					<div class="d-flex justify-content-center py-3"><Spinner size="sm" /></div>
+				{:else}
+					{#if usersError}
+						<Alert color="danger" class="py-2">{usersError}</Alert>
+					{/if}
+					{#if fixtureUsers.length === 0}
+						<p class="text-muted small mb-3">{$_('veranstaltungen.mitglieder_empty')}</p>
+					{:else}
+						<ul class="list-unstyled mb-3">
+							{#each fixtureUsers as u (u.userName)}
+								<li class="d-flex justify-content-between align-items-center py-1">
+									<span>
+										{u.userName}
+										{#if u.isOwner}
+											<Badge color="secondary" class="ms-2">
+												{$_('veranstaltungen.mitglieder_owner_badge')}
+											</Badge>
+										{/if}
+									</span>
+									{#if currentUserIsOwner}
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-danger"
+											disabled={removingUserName === u.userName}
+											onclick={() => removeMember(u.userName)}
+										>
+											{#if removingUserName === u.userName}
+												<Spinner size="sm" />
+											{:else}
+												{$_('veranstaltungen.mitglieder_remove_btn')}
+											{/if}
+										</button>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+					{/if}
+					{#if currentUserIsOwner}
+						<Form onsubmit={addMember} class="d-flex gap-2">
+							<input
+								class="form-control form-control-sm"
+								bind:value={newUserName}
+								placeholder={$_('veranstaltungen.mitglieder_username_placeholder')}
+								required
+							/>
+							<Button color="primary" size="sm" type="submit" disabled={addingUser}>
+								{#if addingUser}
+									<Spinner size="sm" />
+								{:else}
+									{$_('veranstaltungen.mitglieder_add_btn')}
+								{/if}
+							</Button>
+						</Form>
+					{/if}
+				{/if}
+			</CardBody>
+		</Card>
 
 		{#if saveError}
 			<Alert color="danger">{saveError}</Alert>

@@ -46,6 +46,19 @@ export interface Veranstaltung {
 	fixtureUniqueId: string;
 }
 
+/**
+ * Fixture-bezogene Mitgliedschaft (`Fawkes.Api.Controllers.FixtureController.GetUserResponse`),
+ * separate Achse von der Account-`role` (siehe CLAUDE.md "Permissions/roles") — Ersteller einer
+ * Fixture (`POST /Fixture`) wird automatisch Owner, nur Owner dürfen Mitglieder verwalten
+ * (Rücksprache Backend-Entwickler 2026-08-17, siehe Issue #13). `userName` = die E-Mail-Adresse
+ * des Accounts (kein separates Username-Feld sonst im Kontrakt, ASP.NET-Identity-Standard) —
+ * vom Backend nicht bestätigt.
+ */
+export interface FixtureUser {
+	userName: string;
+	isOwner: boolean;
+}
+
 export const veranstaltungApi = {
 	list: (token: string) => apiClient.get<Veranstaltung[]>('/veranstaltungen', token),
 
@@ -65,5 +78,15 @@ export const veranstaltungApi = {
 		apiClient.delete<Veranstaltung>(`/veranstaltungen/${id}/tabelle`, token),
 
 	connectLiga: (token: string, id: string, data: LigaVerbindung) =>
-		apiClient.post<Veranstaltung>(`/veranstaltungen/${id}/liga`, data, token)
+		apiClient.post<Veranstaltung>(`/veranstaltungen/${id}/liga`, data, token),
+
+	listUsers: (token: string, fixtureId: number) =>
+		apiClient.get<FixtureUser[]>(`/Fixture/${fixtureId}/users`, token),
+
+	// Antwort laut Spec nur bare 200 ohne Body-Schema — Aufrufer lädt die Liste danach neu.
+	addUser: (token: string, fixtureId: number, userName: string) =>
+		apiClient.post<void>(`/Fixture/${fixtureId}/users/add`, { userName }, token),
+
+	removeUser: (token: string, fixtureId: number, userName: string) =>
+		apiClient.delete<void>(`/Fixture/${fixtureId}/users/${encodeURIComponent(userName)}`, token)
 };

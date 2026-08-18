@@ -3,6 +3,7 @@ import { API_URL } from '$lib/config';
 import type { User } from '$lib/api/auth';
 import { userFromAccessToken } from '../db';
 import {
+	addFixtureUser,
 	bildschirmeFor,
 	clearTabelle,
 	connectLiga,
@@ -11,11 +12,14 @@ import {
 	findVeranstaltungByFixtureId,
 	generateTabletToken,
 	getCurrentRoundNo,
+	isFixtureOwner,
 	matchesFor,
+	removeFixtureUser,
 	removeVeranstaltung,
 	setCurrentRoundNo,
 	setTabelle,
 	updateBildschirm,
+	usersFor,
 	visibleVeranstaltungen,
 	createVeranstaltung
 } from '../veranstaltungen';
@@ -41,6 +45,13 @@ function unauthorized() {
 
 function notFound() {
 	return HttpResponse.json({ detail: 'Veranstaltung nicht gefunden' }, { status: 404 });
+}
+
+function forbidden() {
+	return HttpResponse.json(
+		{ code: 'FORBIDDEN', message: 'Nur Owner dürfen Mitglieder verwalten' },
+		{ status: 403 }
+	);
 }
 
 export const veranstaltungHandlers = [
@@ -184,5 +195,37 @@ export const veranstaltungHandlers = [
 			return HttpResponse.json({ detail: 'scheibennummer fehlt oder ungültig' }, { status: 422 });
 		}
 		return HttpResponse.json(generateTabletToken(v.id, body.scheibennummer));
+	}),
+
+	// Fixture-Mitgliedschaft (Fawkes `FixtureController`, siehe Issue #13) — eigene Achse
+	// gegenüber der Account-`role`, gated auf `isOwner` PRO Fixture, nicht global.
+	http.get(`${API_URL}/Fixture/:fixtureId/users`, ({ request, params }) => {
+		const user = requireUser(request);
+		if (!user) return unauthorized();
+		const v = findVeranstaltungByFixtureId(user, Number(params.fixtureId));
+		if (!v) return notFound();
+		return HttpResponse.json(usersFor(v.id));
+	}),
+
+	http.post(`${API_URL}/Fixture/:fixtureId/users/add`, async ({ request, params }) => {
+		const user = requireUser(request);
+		if (!user) return unauthorized();
+		const v = findVeranstaltungByFixtureId(user, Number(params.fixtureId));
+		if (!v) return notFound();
+		if (!isFixtureOwner(v.id, user.email)) return forbidden();
+		const body = (await request.json()) as { userName?: string };
+		if (!body.userName) {
+			return HttpResponse.json({ detail: 'userName fehlt' }, { status: 422 });
+		}
+		return HttpResponse.json(addFixtureUser(v.id, body.userName));
+	}),
+
+	http.delete(`${API_URL}/Fixture/:fixtureId/users/:userName`, ({ request, params }) => {
+		const user = requireUser(request);
+		if (!user) return unauthorized();
+		const v = findVeranstaltungByFixtureId(user, Number(params.fixtureId));
+		if (!v) return notFound();
+		if (!isFixtureOwner(v.id, user.email)) return forbidden();
+		return HttpResponse.json(removeFixtureUser(v.id, decodeURIComponent(String(params.userName))));
 	})
 ];
