@@ -11,7 +11,8 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",
-		"format": "prettier --write ."
+		"format": "prettier --write .",
+		"test-api": "tsx --tsconfig scripts/tsconfig.test-api.json scripts/test-api-server.ts"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.4",
@@ -30,6 +31,7 @@
 		"prettier-plugin-svelte": "^3.5.1",
 		"svelte": "^5.55.3",
 		"svelte-check": "^4.4.6",
+		"tsx": "^4.23.12",
 		"typescript": "^6.0.2",
 		"typescript-eslint": "^8.58.1",
 		"vite": "^8.0.7"

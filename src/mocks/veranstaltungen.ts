@@ -6,7 +6,7 @@ import type {
 	MatchPlayChart,
 	MatchPlayChartTeam
 } from '$lib/api/veranstaltung';
-import type { LigaTableEintrag } from '$lib/api/display';
+import type { LeagueTableEintrag } from '$lib/api/display';
 import type { Match, Begegnung } from '$lib/api/matchkontrolle';
 import type { Device, UpdateDeviceData } from '$lib/api/bildschirme';
 import { users } from './fixtures';
@@ -63,10 +63,10 @@ interface State {
 	fixtureUsers: Record<string, FixtureUser[]>;
 	/** Veranstaltungs-ID (String) -> initiale Tabelle (`GetMatchPlayChartResponse`, Issue #14). */
 	matchPlayCharts: Record<string, MatchPlayChart>;
-	/** Veranstaltungs-ID (String) -> Ligatabelle, wie sie ein `LigaTable`-Gerät anzeigt (Issue
+	/** Veranstaltungs-ID (String) -> Ligatabelle, wie sie ein `LeagueTable`-Gerät anzeigt (Issue
 	 * #18) — eigene Datenquelle ggü. `matchPlayCharts` (andere Feldnamen, siehe `display.ts`),
 	 * bewusst nur für Veranstaltungen mit `datenquelle === 'liga'` gepflegt. */
-	ligaTables: Record<string, LigaTableEintrag[]>;
+	leagueTables: Record<string, LeagueTableEintrag[]>;
 	/** Veranstaltungs-ID (String) -> zugewiesene Geräte (Fawkes `GetDeviceResponse[]`, Issue #15). */
 	devices: Record<string, StoredDevice[]>;
 	/** deviceCodes, die sich schon selbst registriert haben (`GET /Display/register`, Issue #17),
@@ -172,40 +172,40 @@ function seedState(): State {
 		},
 		devices: {
 			'1001': [{ id: 500, displayType: 'Match', matchNo: 1, deviceCode: 'DEV-SEED01' }],
-			'1002': [{ id: 501, displayType: 'LigaTable', matchNo: null, deviceCode: 'DEV-SEED02' }]
+			'1002': [{ id: 501, displayType: 'LeagueTable', matchNo: null, deviceCode: 'DEV-SEED02' }]
 		},
-		ligaTables: {
+		leagueTables: {
 			'1002': [
 				{
 					teamName: 'BSC Nordlicht',
-					setPlus: 22,
-					setMinus: 6,
-					matchPlus: 12,
-					matchMinus: 2,
+					setPointsWon: 22,
+					setPointsLost: 6,
+					matchPointsWon: 12,
+					matchPointsLost: 2,
 					position: 1
 				},
 				{
 					teamName: 'SV Kreisstadt',
-					setPlus: 18,
-					setMinus: 10,
-					matchPlus: 9,
-					matchMinus: 5,
+					setPointsWon: 18,
+					setPointsLost: 10,
+					matchPointsWon: 9,
+					matchPointsLost: 5,
 					position: 2
 				},
 				{
 					teamName: 'BS Ostwind',
-					setPlus: 15,
-					setMinus: 13,
-					matchPlus: 8,
-					matchMinus: 6,
+					setPointsWon: 15,
+					setPointsLost: 13,
+					matchPointsWon: 8,
+					matchPointsLost: 6,
 					position: 3
 				},
 				{
 					teamName: 'SGi Talblick',
-					setPlus: 12,
-					setMinus: 16,
-					matchPlus: 6,
-					matchMinus: 8,
+					setPointsWon: 12,
+					setPointsLost: 16,
+					matchPointsWon: 6,
+					matchPointsLost: 8,
 					position: 4
 				}
 			]
@@ -340,32 +340,32 @@ export function getMatchPlayChart(fixtureId: number): MatchPlayChart | undefined
  * aus dem Vorzeichen rekonstruiert (negativ -> komplett in Minus, sonst komplett in Plus) — reine
  * Mock-Annäherung, keine echte Sieg/Niederlage-Historie.
  */
-function toLigaTableEintraege(teams: MatchPlayChartTeam[]): LigaTableEintrag[] {
+function toLeagueTableEintraege(teams: MatchPlayChartTeam[]): LeagueTableEintrag[] {
 	return [...teams]
 		.sort((a, b) => b.matchPoints - a.matchPoints || b.setPoints - a.setPoints)
 		.map((team, i) => ({
 			teamName: team.name,
-			setPlus: Math.max(team.setPoints, 0),
-			setMinus: Math.max(-team.setPoints, 0),
-			matchPlus: Math.max(team.matchPoints, 0),
-			matchMinus: Math.max(-team.matchPoints, 0),
+			setPointsWon: Math.max(team.setPoints, 0),
+			setPointsLost: Math.max(-team.setPoints, 0),
+			matchPointsWon: Math.max(team.matchPoints, 0),
+			matchPointsLost: Math.max(-team.matchPoints, 0),
 			position: i + 1
 		}));
 }
 
 /**
- * Ligatabelle für ein `LigaTable`-Gerät (Issue #18) — leeres Array, wenn (noch) keine Daten
+ * Ligatabelle für ein `LeagueTable`-Gerät (Issue #18) — leeres Array, wenn (noch) keine Daten
  * vorliegen, nicht `undefined`, damit `getDisplayData` nicht extra unterscheiden muss. Explizit
- * gepflegte `ligaTables` (externe Liga-Anbindung) haben Vorrang; ohne die fällt es auf die
+ * gepflegte `leagueTables` (externe Liga-Anbindung) haben Vorrang; ohne die fällt es auf die
  * initiale Tabelle zurück (`matchPlayCharts`, "Tabelle eintragen" im Veranstaltungs-Formular) —
  * dieselben Standings, die auch in der Verwaltungsoberfläche angezeigt werden.
  */
-export function getLigaTable(veranstaltungId: string): LigaTableEintrag[] {
+export function getLeagueTable(veranstaltungId: string): LeagueTableEintrag[] {
 	const state = load();
-	const explizit = state.ligaTables[veranstaltungId];
+	const explizit = state.leagueTables[veranstaltungId];
 	if (explizit) return explizit;
 	const chart = state.matchPlayCharts[veranstaltungId];
-	return chart ? toLigaTableEintraege(chart.teams) : [];
+	return chart ? toLeagueTableEintraege(chart.teams) : [];
 }
 
 /**

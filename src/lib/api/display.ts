@@ -11,12 +11,13 @@ import { apiClient } from './client';
  *
  * `Table` existiert zwar im Spec-Enum von `DisplayController.DisplayType`, aber
  * `DeviceManagementController.UpdateDeviceData` (Admin-seitige Zuordnung) kennt nur
- * `None`/`Match`/`LigaTable` — kein Admin-Pfad setzt ein Gerät je auf `Table`. Bewusst nicht
- * abgebildet, bis das vom Backend geklärt ist. `LigaTable` (Issue #18, Rücksprache
- * Backend-Entwickler 2026-08-18) ersetzt das alte Mock-only `mode: 'tabelle'`-Konzept — die
- * Ligatabelle kommt jetzt direkt eingebettet in `GET /Display/data` (`ligaTable`-Feld) statt
- * separat aus `MatchPlayChart` abgeleitet zu werden, deshalb auch andere Feldnamen
- * (`setPlus`/`setMinus`/`matchPlus`/`matchMinus`/`position` statt `setPoints`/`matchPoints`).
+ * `None`/`Match`/`LeagueTable` — kein Admin-Pfad setzt ein Gerät je auf `Table`. Bewusst nicht
+ * abgebildet, bis das vom Backend geklärt ist. `LeagueTable` (Issue #18, Rücksprache
+ * Backend-Entwickler 2026-08-18, Wording auf `LeagueTable`/`leagueTable` korrigiert 2026-08-18)
+ * ersetzt das alte Mock-only `mode: 'tabelle'`-Konzept — die Ligatabelle kommt jetzt direkt
+ * eingebettet in `GET /Display/data` (`leagueTable`-Feld) statt separat aus `MatchPlayChart`
+ * abgeleitet zu werden, deshalb auch andere Feldnamen (`setPointsWon`/`setPointsLost`/
+ * `matchPointsWon`/`matchPointsLost`/`position` statt `setPoints`/`matchPoints`).
  *
  * `TargetDisplayData` folgt weiterhin 1:1 dem Fawkes-Feldnamen-Schema (englisch, camelCase),
  * siehe bisherige Begründung unten bei `deriveMonitorStatus`.
@@ -30,7 +31,7 @@ export interface DeviceTokenResponse {
 	expiresIn: number;
 }
 
-export type DisplayDataType = 'Unassigned' | 'None' | 'Match' | 'LigaTable';
+export type DisplayDataType = 'Unassigned' | 'None' | 'Match' | 'LeagueTable';
 
 /** `Fawkes.Api.Controllers.DisplayController.TargetDisplayData`. */
 export interface DisplaySeite {
@@ -68,27 +69,27 @@ export function deriveMonitorStatus(seite: DisplaySeite | null): MonitorStatus {
 	return 'VOR_DEM_MATCH';
 }
 
-/** `Fawkes.Api.Controllers.DisplayController.LigaTableEntry` (Issue #18). */
-export interface LigaTableEintrag {
-	teamName: string;
-	setPlus: number;
-	setMinus: number;
-	matchPlus: number;
-	matchMinus: number;
+/** `Fawkes.Api.Controllers.DisplayController.LeagueTableEntry` (Issue #18). */
+export interface LeagueTableEintrag {
 	position: number;
+	teamName: string;
+	setPointsWon: number;
+	setPointsLost: number;
+	matchPointsWon: number;
+	matchPointsLost: number;
 }
 
 /**
  * `Fawkes.Api.Controllers.DisplayController.DisplayDataResponse`. Beide Arrays sind laut
  * Rücksprache Backend-Entwickler (2026-08-18) IMMER Arrays, nie `null` — bei `displayType`
- * `'LigaTable'` ist `targets` leer, bei `'Match'`/`'None'`/`'Unassigned'` ist `ligaTable` leer.
- * Konsumierender Code darf sich also nie auf `null` verlassen, nur auf `.length`.
+ * `'LeagueTable'` ist `targets` leer, bei `'Match'`/`'None'`/`'Unassigned'` ist `leagueTable`
+ * leer. Konsumierender Code darf sich also nie auf `null` verlassen, nur auf `.length`.
  */
 export interface DisplayDataResponse {
 	displayType: DisplayDataType;
 	targets: DisplaySeite[];
-	/** Nur befüllt, wenn `displayType === 'LigaTable'` — sonst leer. */
-	ligaTable: LigaTableEintrag[];
+	/** Nur befüllt, wenn `displayType === 'LeagueTable'` — sonst leer. */
+	leagueTable: LeagueTableEintrag[];
 }
 
 /** `Fawkes.Api.Controllers.AuthController.TokenResponse` — generischer Refresh-Endpunkt, gilt

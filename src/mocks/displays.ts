@@ -3,7 +3,7 @@ import {
 	begegnungenForMatch,
 	findAktivesMatchFuerScheibe,
 	findAssignedDeviceByCode,
-	getLigaTable,
+	getLeagueTable,
 	mannschaftUndGegner,
 	registerDeviceCode
 } from './veranstaltungen';
@@ -154,32 +154,36 @@ function buildSeiteForScheibe(scheibennummer: number | null): DisplaySeite {
  * einem Gerät sauber darzustellen ist ein offenes Design-Thema, keine Backend-Kontraktfrage —
  * hier bewusst nicht vorweggenommen.
  *
- * `LigaTable` (Issue #18) liest unabhängig vom `matches`/`currentRoundNo`-Zustand direkt aus
- * `ligaTables` — die Ligatabelle läuft über den ganzen Wettkampftag, nicht pro Runde.
+ * `LeagueTable` (Issue #18) liest unabhängig vom `matches`/`currentRoundNo`-Zustand direkt aus
+ * `leagueTables` — die Ligatabelle läuft über den ganzen Wettkampftag, nicht pro Runde.
  */
 export function getDisplayData(accessToken: string): DisplayDataResponse | undefined {
 	const deviceCode = loadSessions().accessTokens[accessToken];
 	if (!deviceCode) return undefined;
 
 	const assigned = findAssignedDeviceByCode(deviceCode);
-	if (!assigned) return { displayType: 'Unassigned', targets: [], ligaTable: [] };
+	if (!assigned) return { displayType: 'Unassigned', targets: [], leagueTable: [] };
 
 	const { veranstaltungId, device } = assigned;
 
-	if (device.displayType === 'LigaTable') {
-		return { displayType: 'LigaTable', targets: [], ligaTable: getLigaTable(veranstaltungId) };
+	if (device.displayType === 'LeagueTable') {
+		return {
+			displayType: 'LeagueTable',
+			targets: [],
+			leagueTable: getLeagueTable(veranstaltungId)
+		};
 	}
 
 	if (device.displayType !== 'Match' || device.matchNo === null) {
-		return { displayType: 'None', targets: [], ligaTable: [] };
+		return { displayType: 'None', targets: [], leagueTable: [] };
 	}
 
 	const [begegnung] = begegnungenForMatch(veranstaltungId, device.matchNo);
-	if (!begegnung) return { displayType: 'None', targets: [], ligaTable: [] };
+	if (!begegnung) return { displayType: 'None', targets: [], leagueTable: [] };
 
 	return {
 		displayType: 'Match',
 		targets: [buildSeiteForScheibe(begegnung.scheibe_a), buildSeiteForScheibe(begegnung.scheibe_b)],
-		ligaTable: []
+		leagueTable: []
 	};
 }

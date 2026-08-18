@@ -83,7 +83,7 @@ export const deviceHandlers = [
 		if (
 			body.displayType !== 'None' &&
 			body.displayType !== 'Match' &&
-			body.displayType !== 'LigaTable'
+			body.displayType !== 'LeagueTable'
 		) {
 			return HttpResponse.json({ detail: 'displayType fehlt oder ungültig' }, { status: 422 });
 		}

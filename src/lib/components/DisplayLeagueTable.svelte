@@ -1,8 +1,8 @@
 <script lang="ts">
-	import type { LigaTableEintrag } from '$lib/api/display';
+	import type { LeagueTableEintrag } from '$lib/api/display';
 	import { _ } from 'svelte-i18n';
 
-	let { eintraege } = $props<{ eintraege: LigaTableEintrag[] }>();
+	let { eintraege } = $props<{ eintraege: LeagueTableEintrag[] }>();
 
 	// Schriftgröße dynamisch aus der gemessenen Container-Höhe berechnen (ResizeObserver),
 	// NICHT über statisches CSS clamp()/vh — Vorbild: liga-Referenzprojekt (beamer-Route).
@@ -43,13 +43,13 @@
 			</thead>
 			<tbody>
 				{#each sortiert as eintrag, i (eintrag.position)}
-					{@const spNetto = eintrag.setPlus - eintrag.setMinus}
+					{@const spNetto = eintrag.setPointsWon - eintrag.setPointsLost}
 					<tr class:even={i % 2 === 1}>
 						<td class="col-pos">{eintrag.position}</td>
 						<td class="col-mannschaft">{eintrag.teamName}</td>
 						<td class="col-mp">
-							<span class="mp-value">{eintrag.matchPlus}</span>
-							<span class="mp-detail">({eintrag.matchPlus}:{eintrag.matchMinus})</span>
+							<span class="mp-value">{eintrag.matchPointsWon}</span>
+							<span class="mp-detail">({eintrag.matchPointsWon}:{eintrag.matchPointsLost})</span>
 						</td>
 						<td class="col-sp" class:positive={spNetto >= 0} class:negative={spNetto < 0}>
 							{spNetto >= 0 ? '+' : ''}{spNetto}

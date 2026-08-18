@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { displayApi, type DisplaySeite, type LigaTableEintrag } from '$lib/api/display';
+	import { displayApi, type DisplaySeite, type LeagueTableEintrag } from '$lib/api/display';
 	import { APIError } from '$lib/api/client';
 	import { _ } from 'svelte-i18n';
 	import { Spinner } from '@sveltestrap/sveltestrap';
 	import MonitorTeamBlock from '$lib/components/MonitorTeamBlock.svelte';
-	import DisplayLigaTable from '$lib/components/DisplayLigaTable.svelte';
+	import DisplayLeagueTable from '$lib/components/DisplayLeagueTable.svelte';
 	import type { DisplayTheme } from './+page';
 
 	let { data } = $props<{ data: { theme: DisplayTheme } }>();
@@ -14,13 +14,13 @@
 	const REFRESH_TOKEN_KEY = 'display_refresh_token';
 	const DEVICE_CODE_KEY = 'display_device_code';
 
-	type ViewState = 'LOADING' | 'PAIRING' | 'IDLE' | 'CONTENT' | 'LIGA_TABLE';
+	type ViewState = 'LOADING' | 'PAIRING' | 'IDLE' | 'CONTENT' | 'LEAGUE_TABLE';
 
 	let view = $state<ViewState>('LOADING');
 	let pairingCode = $state<string | null>(null);
 	let scheibeA = $state<DisplaySeite | null>(null);
 	let scheibeB = $state<DisplaySeite | null>(null);
-	let ligaTable = $state<LigaTableEintrag[]>([]);
+	let leagueTable = $state<LeagueTableEintrag[]>([]);
 	let loadError = $state<string | null>(null);
 
 	// Satzpunkte kommen unverändert aus der aufbereiteten Backend-Antwort — Vergleich nur zur
@@ -108,9 +108,9 @@
 					scheibeA = data.targets[0];
 					scheibeB = data.targets[1];
 					view = 'CONTENT';
-				} else if (data.displayType === 'LigaTable') {
-					ligaTable = data.ligaTable;
-					view = 'LIGA_TABLE';
+				} else if (data.displayType === 'LeagueTable') {
+					leagueTable = data.leagueTable;
+					view = 'LEAGUE_TABLE';
 				} else {
 					scheibeA = null;
 					scheibeB = null;
@@ -159,8 +159,8 @@
 		<div class="monitor-center">
 			<p class="monitor-pairing-hint">{$_('display.idle_hint')}</p>
 		</div>
-	{:else if view === 'LIGA_TABLE'}
-		<DisplayLigaTable eintraege={ligaTable} />
+	{:else if view === 'LEAGUE_TABLE'}
+		<DisplayLeagueTable eintraege={leagueTable} />
 	{:else if view === 'CONTENT' && scheibeA && scheibeB}
 		<div class="monitor-content">
 			<MonitorTeamBlock
@@ -187,7 +187,7 @@
 	 * überschreibt unten nur die Werte, die sich ändern (Ring-/Status-Farben wie
 	 * grün/rot/gelb/blau bleiben in beiden Themes gleich, das sind Zielscheiben-Farben, keine
 	 * UI-Farben). Custom Properties kaskadieren über den DOM-Baum, nicht über Sveltes
-	 * Style-Scoping — `MonitorTeamBlock`/`DisplayLigaTable` können `var(--monitor-*)` deshalb
+	 * Style-Scoping — `MonitorTeamBlock`/`DisplayLeagueTable` können `var(--monitor-*)` deshalb
 	 * ohne eigenes Theme-Prop einfach mitlesen, solange sie irgendwo unter `.monitor-page`
 	 * gerendert werden. Default (kein `.theme-light`) = `dark`, siehe `+page.ts`.
 	 */

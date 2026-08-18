@@ -219,7 +219,7 @@
 		"display_type_label": "Display mode",
 		"mode_none": "Off",
 		"mode_match": "Match",
-		"mode_liga_table": "League table",
+		"mode_league_table": "League table",
 		"match_no_label": "Match number",
 		"save_btn": "Save",
 		"unassign_btn": "Remove",

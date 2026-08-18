@@ -198,14 +198,14 @@
 								<Badge
 									color={draft?.displayType === 'Match'
 										? 'success'
-										: draft?.displayType === 'LigaTable'
+										: draft?.displayType === 'LeagueTable'
 											? 'info'
 											: 'secondary'}
 								>
 									{draft?.displayType === 'Match'
 										? $_('bildschirme.mode_match')
-										: draft?.displayType === 'LigaTable'
-											? $_('bildschirme.mode_liga_table')
+										: draft?.displayType === 'LeagueTable'
+											? $_('bildschirme.mode_league_table')
 											: $_('bildschirme.mode_none')}
 								</Badge>
 							</div>
@@ -222,7 +222,7 @@
 									>
 										<option value="None">{$_('bildschirme.mode_none')}</option>
 										<option value="Match">{$_('bildschirme.mode_match')}</option>
-										<option value="LigaTable">{$_('bildschirme.mode_liga_table')}</option>
+										<option value="LeagueTable">{$_('bildschirme.mode_league_table')}</option>
 									</select>
 								</div>
 
