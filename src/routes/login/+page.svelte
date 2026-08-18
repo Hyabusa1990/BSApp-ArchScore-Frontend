@@ -9,7 +9,7 @@
 	import AuthCard from '$lib/components/AuthCard.svelte';
 	import FormField from '$lib/components/FormField.svelte';
 
-	let username = $state('');
+	let email = $state('');
 	let password = $state('');
 	let errorKey = $state<string | null>(null);
 
@@ -17,7 +17,7 @@
 		e.preventDefault();
 		errorKey = null;
 		try {
-			await auth.login(username, password);
+			await auth.login(email, password);
 			goto(resolve('/'));
 		} catch (err) {
 			errorKey =
@@ -33,13 +33,14 @@
 <AuthCard title={$_('login.title')}>
 	<Form onsubmit={handleSubmit}>
 		<FormField
-			id="username"
-			label={$_('login.username')}
-			bind:value={username}
-			placeholder={$_('login.username_placeholder')}
+			id="email"
+			label={$_('login.email')}
+			type="email"
+			bind:value={email}
+			placeholder={$_('login.email_placeholder')}
 			required
-			autocomplete="username"
-			icon="person"
+			autocomplete="email"
+			icon="envelope"
 		/>
 		<FormField
 			id="password"

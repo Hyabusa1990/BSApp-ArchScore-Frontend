@@ -9,7 +9,7 @@
 	<Container class="text-center">
 		{#if auth.isAuthenticated}
 			<h1 class="display-5 mb-2">
-				{$_('home.welcome_user', { values: { username: auth.user?.username } })}
+				{$_('home.welcome_user', { values: { email: auth.user?.email } })}
 			</h1>
 			<p class="lead text-muted">{$_('home.logged_in')}</p>
 		{:else}

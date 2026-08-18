@@ -1,28 +1,39 @@
 import { apiClient } from './client';
 
-export interface TokenPair {
-	access: string;
-	refresh: string;
+export interface TokenResponse {
+	accessToken: string;
+	refreshToken: string;
+	expiresIn: number;
+}
+
+export interface MessageResponse {
+	code: string;
+	message: string;
 }
 
 export type Role = 'user' | 'admin';
 
 export interface User {
 	id: string;
-	username: string;
 	email: string;
-	role: Role;
+	/**
+	 * Nicht Teil des Fawkes-Kontrakts (`GET /Auth/me` liefert nur `{id, email}`) — optional/
+	 * unused bis zur separaten Klärung des Ownership-Modells, s. CLAUDE.md "Permissions/roles".
+	 */
+	role?: Role;
 }
 
 export const authApi = {
-	login: (username: string, password: string) =>
-		apiClient.post<TokenPair>('/token/pair', { username, password }),
+	login: (email: string, password: string) =>
+		apiClient.post<TokenResponse>('/Auth/login', { email, password }),
 
 	refresh: (refreshToken: string) =>
-		apiClient.post<Pick<TokenPair, 'access'>>('/token/refresh', { refresh: refreshToken }),
+		apiClient.post<TokenResponse>('/Auth/refresh', { refreshToken }),
 
-	register: (email: string, password: string, password_confirm: string) =>
-		apiClient.post<User>('/auth/register', { email, password, password_confirm }),
+	register: (email: string, password: string) =>
+		apiClient.post<MessageResponse>('/Auth/register', { email, password }),
 
-	me: (token: string) => apiClient.get<User>('/auth/me', token)
+	me: (token: string) => apiClient.get<User>('/Auth/me', token),
+
+	logout: (token: string) => apiClient.post<void>('/Auth/logout', undefined, token)
 };

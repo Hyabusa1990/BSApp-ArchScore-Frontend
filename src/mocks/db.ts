@@ -13,22 +13,26 @@ function clone<T>(value: T): T {
 }
 
 export const db = {
-	usersByUsername: new Map<string, User>(Object.values(users).map((u) => [u.username, clone(u)])),
+	usersByEmail: new Map<string, User>(Object.values(users).map((u) => [u.email, clone(u)])),
 	usersById: new Map<string, User>(Object.values(users).map((u) => [u.id, clone(u)])),
 	accessTokens: new Map<string, string>(), // token -> user id
 	refreshTokens: new Map<string, string>() // token -> user id
 };
 
+const ACCESS_TOKEN_TTL_SECONDS = 3600;
+
 export function issueTokens(user: User) {
-	const access = `mock-access.${user.id}.${crypto.randomUUID()}`;
-	const refresh = `mock-refresh.${user.id}.${crypto.randomUUID()}`;
-	db.accessTokens.set(access, user.id);
-	db.refreshTokens.set(refresh, user.id);
-	return { access, refresh };
+	const accessToken = `mock-access.${user.id}.${crypto.randomUUID()}`;
+	const refreshToken = `mock-refresh.${user.id}.${crypto.randomUUID()}`;
+	db.accessTokens.set(accessToken, user.id);
+	db.refreshTokens.set(refreshToken, user.id);
+	return { accessToken, refreshToken, expiresIn: ACCESS_TOKEN_TTL_SECONDS };
 }
 
 /** Refresh-Rotation: altes Refresh-Token ungültig machen, neues Paar ausstellen. */
-export function rotateTokens(refreshToken: string): { access: string; refresh: string } | null {
+export function rotateTokens(
+	refreshToken: string
+): { accessToken: string; refreshToken: string; expiresIn: number } | null {
 	const userId = db.refreshTokens.get(refreshToken);
 	if (!userId) return null;
 	db.refreshTokens.delete(refreshToken);

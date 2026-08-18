@@ -44,9 +44,9 @@
 		appConfig.load();
 	});
 
-	function logout() {
+	async function logout() {
 		isNavOpen = false;
-		auth.logout();
+		await auth.logout();
 		goto(resolve('/login'));
 	}
 
@@ -69,7 +69,7 @@
 					<NavItem>
 						<Dropdown>
 							<DropdownToggle color="outline-secondary" size="sm" caret>
-								<Icon name="person-circle" class="me-1" />{auth.user?.username ?? '…'}
+								<Icon name="person-circle" class="me-1" />{auth.user?.email ?? '…'}
 							</DropdownToggle>
 							<DropdownMenu end>
 								<DropdownItem href="/profile" onclick={closeNav}>

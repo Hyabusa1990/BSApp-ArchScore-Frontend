@@ -7,7 +7,7 @@
 		"veranstaltungen": "Events"
 	},
 	"home": {
-		"welcome_user": "Welcome, {username}!",
+		"welcome_user": "Welcome, {email}!",
 		"logged_in": "You are logged in.",
 		"welcome": "Welcome to WebApp",
 		"login_hint_1": "Please",
@@ -15,8 +15,8 @@
 	},
 	"login": {
 		"title": "Login",
-		"username": "Username",
-		"username_placeholder": "your_username",
+		"email": "Email",
+		"email_placeholder": "you@example.com",
 		"password": "Password",
 		"error_invalid": "Invalid credentials",
 		"error_failed": "Login failed. Please try again.",

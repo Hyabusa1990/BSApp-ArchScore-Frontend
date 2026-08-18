@@ -33,7 +33,7 @@
 		}
 
 		try {
-			await auth.register(email, password, passwordConfirm);
+			await auth.register(email, password);
 			success = true;
 			setTimeout(() => goto(resolve('/login')), 2000);
 		} catch (err) {

@@ -7,7 +7,7 @@
 		"veranstaltungen": "Veranstaltungen"
 	},
 	"home": {
-		"welcome_user": "Willkommen, {username}!",
+		"welcome_user": "Willkommen, {email}!",
 		"logged_in": "Du bist eingeloggt.",
 		"welcome": "Willkommen bei WebApp",
 		"login_hint_1": "Bitte",
@@ -15,8 +15,8 @@
 	},
 	"login": {
 		"title": "Anmelden",
-		"username": "Benutzername",
-		"username_placeholder": "benutzername",
+		"email": "E-Mail",
+		"email_placeholder": "du@beispiel.de",
 		"password": "Passwort",
 		"error_invalid": "Ungültige Anmeldedaten",
 		"error_failed": "Anmeldung fehlgeschlagen. Bitte erneut versuchen.",
