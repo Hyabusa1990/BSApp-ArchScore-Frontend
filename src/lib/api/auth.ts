@@ -36,7 +36,7 @@ export const authApi = {
 	// /Auth/register/{token} ist kein Invite-Flow, sondern E-Mail-Verifizierung NACH der
 	// Registrierung (siehe Issue #12) — kein Bearer laut Spec, kein Body.
 	verifyRegistration: (token: string) =>
-		apiClient.post<MessageResponse>(`/Auth/register/${token}`, undefined),
+		apiClient.post<MessageResponse>(`/Auth/register/${encodeURIComponent(token)}`, undefined),
 
 	me: (token: string) => apiClient.get<User>('/Auth/me', token),
 

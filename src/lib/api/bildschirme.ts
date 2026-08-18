@@ -56,7 +56,7 @@ export const bildschirmeApi = {
 	// Enumeration) — veranstaltungId ist der Routen-String-Parameter, nicht die Fixture-ID.
 	generateTabletToken: (token: string, veranstaltungId: string, scheibennummer: number) =>
 		apiClient.post<TabletPairing>(
-			`/veranstaltungen/${veranstaltungId}/tablet-token`,
+			`/veranstaltungen/${encodeURIComponent(veranstaltungId)}/tablet-token`,
 			{ scheibennummer },
 			token
 		)

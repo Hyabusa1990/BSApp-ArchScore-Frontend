@@ -38,7 +38,10 @@ export type ConfirmStatus = Record<number, boolean>;
 
 export const matchkontrolleApi = {
 	list: (token: string, veranstaltungId: string) =>
-		apiClient.get<Match[]>(`/veranstaltungen/${veranstaltungId}/matches`, token),
+		apiClient.get<Match[]>(
+			`/veranstaltungen/${encodeURIComponent(veranstaltungId)}/matches`,
+			token
+		),
 
 	getPhase: (token: string, fixtureId: number) =>
 		apiClient.get<Phase>(`/fixtures/${fixtureId}/phase`, token),

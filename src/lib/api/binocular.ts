@@ -56,41 +56,40 @@ export function decodeShot(char: string): number {
 	return Number(char);
 }
 
+// `token` (die `fixtureUniqueId`) kommt aus dem URL-Pfad und kann ein URL-dekodiertes `/`
+// enthalten (z. B. `%2F` in einem präparierten Link) — ohne Encoding würde das zusätzliche
+// Pfadsegmente in die Fawkes-Anfrage einschleusen (Issue #17). `scheibennummer` ist `number`
+// und bleibt unencodiert, ein TS-`number` kann strukturell kein `/` transportieren.
+function spotterPath(token: string, scheibennummer: number): string {
+	return `/fixtures/${encodeURIComponent(token)}/targets/${scheibennummer}/spotter`;
+}
+
 async function currentShots(token: string, scheibennummer: number): Promise<string> {
 	const info = await apiClient.get<Pick<BinocularMatch, 'shots'>>(
-		`/fixtures/${token}/targets/${scheibennummer}/spotter/info`
+		`${spotterPath(token, scheibennummer)}/info`
 	);
 	return info.shots ?? '';
 }
 
 export const binocularApi = {
 	getScheibe: (token: string, scheibennummer: number) =>
-		apiClient.get<BinocularMatch>(`/fixtures/${token}/targets/${scheibennummer}/spotter/info`),
+		apiClient.get<BinocularMatch>(`${spotterPath(token, scheibennummer)}/info`),
 
 	// PUT überschreibt bei jedem Aufruf den kompletten shots-String des aktuellen Satzes
 	// (kein Einzelpfeil-Endpunkt) — daher hier erst den aktuellen Stand per GET holen, das
 	// neue Zeichen anhängen und den vollen String senden.
 	postPfeil: async (token: string, scheibennummer: number, ringzahl: number) => {
 		const shots = (await currentShots(token, scheibennummer)) + encodeShot(ringzahl);
-		return apiClient.put<BinocularMatch>(
-			`/fixtures/${token}/targets/${scheibennummer}/spotter/shots`,
-			{ shots }
-		);
+		return apiClient.put<BinocularMatch>(`${spotterPath(token, scheibennummer)}/shots`, { shots });
 	},
 
 	// Kein serverseitiger Undo-Call mehr: letztes Zeichen vom aktuellen shots-String
 	// entfernen, verkürzten String per PUT senden.
 	postUndo: async (token: string, scheibennummer: number) => {
 		const shots = (await currentShots(token, scheibennummer)).slice(0, -1);
-		return apiClient.put<BinocularMatch>(
-			`/fixtures/${token}/targets/${scheibennummer}/spotter/shots`,
-			{ shots }
-		);
+		return apiClient.put<BinocularMatch>(`${spotterPath(token, scheibennummer)}/shots`, { shots });
 	},
 
 	postBestaetigeSatz: (token: string, scheibennummer: number) =>
-		apiClient.put<BinocularMatch>(
-			`/fixtures/${token}/targets/${scheibennummer}/spotter/shots/confirm`,
-			undefined
-		)
+		apiClient.put<BinocularMatch>(`${spotterPath(token, scheibennummer)}/shots/confirm`, undefined)
 };
