@@ -41,6 +41,11 @@
 	$effect(() => {
 		if (!browser) return;
 		document.body.style.background = data.theme === 'light' ? '#f4f5f7' : '#10151c';
+		// Sagt der Rendering-Engine explizit, welches Theme aktiv ist — ohne das greift auf
+		// Android (WebView "Force Dark", betrifft auch Android-TV-Browser wie Fully Kiosk)
+		// automatische Dunkel-Invertierung, selbst wenn die Seite selbst schon Light-Farben
+		// setzt (System denkt sonst "Seite kennt kein Dark/Light, ich muss eingreifen").
+		document.documentElement.style.colorScheme = data.theme;
 	});
 
 	// ── Pairing + Polling in einer Schleife ─────────────────────────────────────
@@ -137,6 +142,7 @@
 
 <svelte:head>
 	<title>{$_('display.page_title')}</title>
+	<meta name="color-scheme" content={data.theme} />
 </svelte:head>
 
 <div class="monitor-page" class:theme-light={data.theme === 'light'}>
