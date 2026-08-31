@@ -95,11 +95,17 @@ export const veranstaltungApi = {
 
 	// "Spielplan anlegen": Tabelle eintragen -> Backend berechnet Begegnungen/Matches
 	// (targetAssignments bewusst weggelassen, siehe FACHLICHKEIT.md "keine eigenen Ergebnisse
-	// berechnen"). hardOverride bewusst nicht gesetzt (#14) — Standardverhalten: Fehler, wenn
-	// für diese Fixture schon Daten existieren. Kein Lösch-/Reset-Endpunkt verifiziert, daher
-	// gibt es hier absichtlich kein clearTabelle-Äquivalent mehr.
-	createMatchPlayChart: (token: string, fixtureId: number, teams: MatchPlayChartTeam[]) =>
-		apiClient.post<MatchPlayChart>(`/MatchPlayChart/${fixtureId}`, { teams }, token),
+	// berechnen"). Ohne hardOverride schlägt der Request fehl, sobald für diese Fixture schon
+	// Daten existieren. hardOverride: true überschreibt trotzdem — löscht dabei alle bereits
+	// erfassten Ergebnisse und erstellt den Spielplan neu (mit Backend-Entwickler bestätigt,
+	// UI muss also vor dem Aufruf warnen, siehe veranstaltungen/[id]/+page.svelte).
+	createMatchPlayChart: (
+		token: string,
+		fixtureId: number,
+		teams: MatchPlayChartTeam[],
+		hardOverride = false
+	) =>
+		apiClient.post<MatchPlayChart>(`/MatchPlayChart/${fixtureId}`, { teams, hardOverride }, token),
 
 	// Kein Fawkes-Endpunkt für Ligaverwaltungs-Verbindung (siehe Issue #14) — bleibt vollständig
 	// Mock-only, eigener Custom-Pfad.

@@ -39,10 +39,17 @@
 	// schon gespeichert wird — erst der jeweilige Submit-Button persistiert.
 	let chosenSource = $state<'tabelle' | 'liga' | null>(null);
 
-	// Sobald eine Tabelle einmal angelegt ist, gibt es keinen echten Bearbeiten-/Reset-Endpunkt
-	// (POST /MatchPlayChart schlägt ohne hardOverride fehl, wenn schon Daten existieren, siehe
-	// Issue #14 — hardOverride bewusst nicht verifiziert). Ab dann nur noch Leseansicht.
+	// Sobald eine Tabelle einmal angelegt ist, zeigt die UI standardmäßig nur noch eine
+	// Leseansicht — POST /MatchPlayChart schlägt ohne hardOverride fehl, wenn für diese Fixture
+	// schon Daten existieren (Standardverhalten laut Spec). Mit hardOverride: true überschreibt
+	// derselbe Endpunkt aber trotzdem (mit Backend-Entwickler bestätigt, 2026-08-31) — löscht
+	// dabei alle bisher erfassten Ergebnisse. `editingTabelle` schaltet die Leseansicht erst nach
+	// expliziter Bestätigung der Warnung (siehe startEditTabelle) wieder auf editierbar um.
 	let chartCreated = $state(false);
+	let editingTabelle = $state(false);
+	// Snapshot der geladenen Tabelle, um bei "Abbrechen" die editierten Felder wieder zu verwerfen.
+	let rowsBeforeEdit = $state<TabelleRow[]>([]);
+	const tabelleEditable = $derived(!chartCreated || editingTabelle);
 
 	type TabelleRow = { mannschaft_name: string; satzpunkte: number; matchpunkte: number };
 	let rows = $state<TabelleRow[]>([]);
@@ -175,7 +182,7 @@
 		rows = rows.filter((_, i) => i !== index);
 	}
 
-	async function saveTabelle() {
+	async function saveTabelle(hardOverride: boolean) {
 		saveError = null;
 		const teams = rows
 			.filter((r) => r.mannschaft_name.trim())
@@ -192,9 +199,15 @@
 		}
 		saving = true;
 		try {
-			await veranstaltungApi.createMatchPlayChart(auth.accessToken!, fixtureId, teams);
+			await veranstaltungApi.createMatchPlayChart(
+				auth.accessToken!,
+				fixtureId,
+				teams,
+				hardOverride
+			);
 			if (veranstaltung) veranstaltung = { ...veranstaltung, datenquelle: 'tabelle' };
 			chartCreated = true;
+			editingTabelle = false;
 		} catch (err) {
 			saveError =
 				err instanceof APIError && err.status === 409
@@ -203,6 +216,22 @@
 		} finally {
 			saving = false;
 		}
+	}
+
+	// Warnt vor dem Datenverlust, bevor die Tabelle überhaupt wieder editierbar wird — das
+	// eigentliche Löschen passiert zwar erst beim Speichern (hardOverride: true), aber der Nutzer
+	// soll die Konsequenz schon beim Öffnen des Formulars kennen, nicht erst am Submit-Button.
+	function startEditTabelle() {
+		if (!confirm($_('veranstaltungen.tabelle_hard_override_confirm'))) return;
+		rowsBeforeEdit = rows.map((r) => ({ ...r }));
+		saveError = null;
+		editingTabelle = true;
+	}
+
+	function cancelEditTabelle() {
+		rows = rowsBeforeEdit.map((r) => ({ ...r }));
+		saveError = null;
+		editingTabelle = false;
 	}
 
 	async function connectLiga() {
@@ -368,14 +397,14 @@
 									<th>{$_('veranstaltungen.tabelle_mannschaft')}</th>
 									<th style="width: 8rem;">{$_('veranstaltungen.tabelle_satzpunkte')}</th>
 									<th style="width: 8rem;">{$_('veranstaltungen.tabelle_matchpunkte')}</th>
-									{#if !chartCreated}<th style="width: 3rem;"></th>{/if}
+									{#if tabelleEditable}<th style="width: 3rem;"></th>{/if}
 								</tr>
 							</thead>
 							<tbody>
 								{#each rows as row, i (i)}
 									<tr>
 										<td class="fw-bold text-muted">{i + 1}</td>
-										{#if chartCreated}
+										{#if !tabelleEditable}
 											<td>{row.mannschaft_name}</td>
 											<td>{row.satzpunkte}</td>
 											<td>{row.matchpunkte}</td>
@@ -417,7 +446,7 @@
 						</table>
 					</div>
 
-					{#if !chartCreated}
+					{#if tabelleEditable}
 						<button
 							type="button"
 							class="btn btn-outline-secondary btn-sm mb-3"
@@ -427,14 +456,30 @@
 							+ {$_('veranstaltungen.tabelle_add_row')}
 						</button>
 
+						{#if editingTabelle}
+							<Alert color="warning" class="py-2">
+								{$_('veranstaltungen.tabelle_override_warning')}
+							</Alert>
+						{/if}
+
 						<div class="d-flex gap-2">
-							<Button color="success" disabled={saving} onclick={saveTabelle}>
+							<Button color="success" disabled={saving} onclick={() => saveTabelle(chartCreated)}>
 								{#if saving}<Spinner size="sm" class="me-2" />{/if}
-								{$_('veranstaltungen.tabelle_anlegen_btn')}
+								{editingTabelle
+									? $_('veranstaltungen.tabelle_override_btn')
+									: $_('veranstaltungen.tabelle_anlegen_btn')}
 							</Button>
+							{#if editingTabelle}
+								<Button color="outline-secondary" disabled={saving} onclick={cancelEditTabelle}>
+									{$_('veranstaltungen.tabelle_cancel_edit_btn')}
+								</Button>
+							{/if}
 						</div>
 					{:else}
-						<p class="text-muted small mb-0">{$_('veranstaltungen.tabelle_readonly_hint')}</p>
+						<p class="text-muted small mb-2">{$_('veranstaltungen.tabelle_readonly_hint')}</p>
+						<Button color="outline-danger" size="sm" onclick={startEditTabelle}>
+							{$_('veranstaltungen.tabelle_neu_erstellen_btn')}
+						</Button>
 					{/if}
 				</CardBody>
 			</Card>

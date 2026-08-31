@@ -375,11 +375,19 @@ export function getLeagueTable(veranstaltungId: string): LeagueTableEintrag[] {
  */
 export function createMatchPlayChart(
 	v: Veranstaltung,
-	teams: MatchPlayChartTeam[]
+	teams: MatchPlayChartTeam[],
+	hardOverride = false
 ): MatchPlayChart | undefined {
 	const state = load();
 	const id = String(v.id);
-	if (state.matchPlayCharts[id]) return undefined;
+	if (state.matchPlayCharts[id] && !hardOverride) return undefined;
+
+	if (hardOverride) {
+		// Spiegelt das echte `hardOverride`-Verhalten (Rücksprache Gero, 2026-08-31): löscht
+		// alle bisher erfassten Ergebnisse dieser Fixture, bevor der Spielplan neu erstellt wird.
+		state.matches = state.matches.filter((m) => m.veranstaltung_id !== id);
+		delete state.currentRoundNo[id];
+	}
 
 	const chart: MatchPlayChart = { fixtureId: v.id, teams };
 	state.matchPlayCharts[id] = chart;

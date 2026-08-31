@@ -119,18 +119,22 @@ export const veranstaltungHandlers = [
 		return HttpResponse.json(chart);
 	}),
 
-	// Kein hardOverride im Request (#14) -> 409, falls für diese Fixture schon eine Tabelle
-	// existiert (Standardverhalten laut Spec: Fehler statt Überschreiben).
+	// Ohne hardOverride -> 409, falls für diese Fixture schon eine Tabelle existiert
+	// (Standardverhalten laut Spec: Fehler statt Überschreiben). Mit hardOverride: true wird
+	// überschrieben und alle bisher erfassten Ergebnisse gelöscht, siehe createMatchPlayChart.
 	http.post(`${API_URL}/MatchPlayChart/:fixtureId`, async ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		const v = findVeranstaltung(user, Number(params.fixtureId));
 		if (!v) return notFound();
-		const body = (await request.json()) as { teams?: MatchPlayChartTeam[] };
+		const body = (await request.json()) as {
+			teams?: MatchPlayChartTeam[];
+			hardOverride?: boolean;
+		};
 		if (!Array.isArray(body.teams) || body.teams.length === 0) {
 			return HttpResponse.json({ detail: 'teams fehlt oder ist leer' }, { status: 422 });
 		}
-		const chart = createMatchPlayChart(v, body.teams);
+		const chart = createMatchPlayChart(v, body.teams, body.hardOverride === true);
 		if (!chart) {
 			return HttpResponse.json(
 				{ detail: 'Für diese Fixture existiert bereits eine Tabelle' },
