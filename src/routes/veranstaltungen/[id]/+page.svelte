@@ -21,6 +21,7 @@
 		Spinner
 	} from '@sveltestrap/sveltestrap';
 	import FormField from '$lib/components/FormField.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	let { data } = $props<{ data: { id: string } }>();
 	const id = $derived(data.id);
@@ -44,7 +45,8 @@
 	// schon Daten existieren (Standardverhalten laut Spec). Mit hardOverride: true überschreibt
 	// derselbe Endpunkt aber trotzdem (mit Backend-Entwickler bestätigt, 2026-08-31) — löscht
 	// dabei alle bisher erfassten Ergebnisse. `editingTabelle` schaltet die Leseansicht erst nach
-	// expliziter Bestätigung der Warnung (siehe startEditTabelle) wieder auf editierbar um.
+	// expliziter Bestätigung der Warnung im ConfirmModal (siehe confirmHardOverride) wieder auf
+	// editierbar um.
 	let chartCreated = $state(false);
 	let editingTabelle = $state(false);
 	// Snapshot der geladenen Tabelle, um bei "Abbrechen" die editierten Felder wieder zu verwerfen.
@@ -221,11 +223,13 @@
 	// Warnt vor dem Datenverlust, bevor die Tabelle überhaupt wieder editierbar wird — das
 	// eigentliche Löschen passiert zwar erst beim Speichern (hardOverride: true), aber der Nutzer
 	// soll die Konsequenz schon beim Öffnen des Formulars kennen, nicht erst am Submit-Button.
-	function startEditTabelle() {
-		if (!confirm($_('veranstaltungen.tabelle_hard_override_confirm'))) return;
+	let showHardOverrideConfirm = $state(false);
+
+	function confirmHardOverride() {
 		rowsBeforeEdit = rows.map((r) => ({ ...r }));
 		saveError = null;
 		editingTabelle = true;
+		showHardOverrideConfirm = false;
 	}
 
 	function cancelEditTabelle() {
@@ -477,7 +481,11 @@
 						</div>
 					{:else}
 						<p class="text-muted small mb-2">{$_('veranstaltungen.tabelle_readonly_hint')}</p>
-						<Button color="outline-danger" size="sm" onclick={startEditTabelle}>
+						<Button
+							color="outline-danger"
+							size="sm"
+							onclick={() => (showHardOverrideConfirm = true)}
+						>
 							{$_('veranstaltungen.tabelle_neu_erstellen_btn')}
 						</Button>
 					{/if}
@@ -544,3 +552,14 @@
 		{/if}
 	{/if}
 </Container>
+
+<ConfirmModal
+	isOpen={showHardOverrideConfirm}
+	title={$_('veranstaltungen.tabelle_hard_override_title')}
+	message={$_('veranstaltungen.tabelle_hard_override_confirm')}
+	confirmLabel={$_('veranstaltungen.tabelle_neu_erstellen_btn')}
+	cancelLabel={$_('veranstaltungen.cancel_btn')}
+	confirmColor="danger"
+	onConfirm={confirmHardOverride}
+	onCancel={() => (showHardOverrideConfirm = false)}
+/>

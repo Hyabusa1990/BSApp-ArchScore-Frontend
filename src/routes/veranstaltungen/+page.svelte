@@ -19,11 +19,14 @@
 		Icon
 	} from '@sveltestrap/sveltestrap';
 	import FormField from '$lib/components/FormField.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	let veranstaltungen = $state<Veranstaltung[]>([]);
 	let loading = $state(true);
 	let showNewForm = $state(false);
 	let loadError = $state<string | null>(null);
+	let deleteTarget = $state<Veranstaltung | null>(null);
+	let deleting = $state(false);
 
 	// Fixture-Felder (#14) statt eines einzelnen name-Feldes.
 	let newLeagueName = $state('');
@@ -81,14 +84,17 @@
 		}
 	}
 
-	async function handleDelete(v: Veranstaltung) {
-		if (!confirm($_('veranstaltungen.delete_confirm', { values: { name: anzeigename(v) } })))
-			return;
+	async function handleDelete() {
+		if (!deleteTarget) return;
+		deleting = true;
 		try {
-			await veranstaltungApi.remove(auth.accessToken!, v.id);
-			veranstaltungen = veranstaltungen.filter((x) => x.id !== v.id);
+			await veranstaltungApi.remove(auth.accessToken!, deleteTarget.id);
+			veranstaltungen = veranstaltungen.filter((x) => x.id !== deleteTarget!.id);
+			deleteTarget = null;
 		} catch {
 			loadError = $_('veranstaltungen.error_delete');
+		} finally {
+			deleting = false;
 		}
 	}
 
@@ -208,7 +214,7 @@
 								<button
 									type="button"
 									class="btn btn-link text-danger text-decoration-none p-0"
-									onclick={() => handleDelete(v)}
+									onclick={() => (deleteTarget = v)}
 								>
 									{$_('veranstaltungen.delete_btn')}
 								</button>
@@ -220,3 +226,17 @@
 		</Row>
 	{/if}
 </Container>
+
+<ConfirmModal
+	isOpen={deleteTarget !== null}
+	title={$_('veranstaltungen.delete_confirm_title')}
+	message={deleteTarget
+		? $_('veranstaltungen.delete_confirm', { values: { name: anzeigename(deleteTarget) } })
+		: ''}
+	confirmLabel={$_('veranstaltungen.delete_btn')}
+	cancelLabel={$_('veranstaltungen.cancel_btn')}
+	confirmColor="danger"
+	loading={deleting}
+	onConfirm={handleDelete}
+	onCancel={() => (deleteTarget = null)}
+/>
