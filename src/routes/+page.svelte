@@ -5,6 +5,10 @@
 	import { Container } from '@sveltestrap/sveltestrap';
 </script>
 
+<svelte:head>
+	<title>ArchScore</title>
+</svelte:head>
+
 <div class="home-page">
 	<Container class="text-center">
 		{#if auth.isAuthenticated}

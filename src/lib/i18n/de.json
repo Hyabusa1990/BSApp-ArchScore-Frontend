@@ -9,7 +9,7 @@
 	"home": {
 		"welcome_user": "Willkommen, {email}!",
 		"logged_in": "Du bist eingeloggt.",
-		"welcome": "Willkommen bei WebApp",
+		"welcome": "Willkommen bei ArchScore",
 		"login_hint_1": "Bitte",
 		"login_hint_2": "um fortzufahren."
 	},

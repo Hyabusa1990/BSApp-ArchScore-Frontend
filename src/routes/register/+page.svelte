@@ -50,6 +50,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{$_('register.title')}</title>
+</svelte:head>
+
 <AuthCard title={$_('register.title')}>
 	{#if success}
 		<Alert color="success">{$_('register.success')}</Alert>

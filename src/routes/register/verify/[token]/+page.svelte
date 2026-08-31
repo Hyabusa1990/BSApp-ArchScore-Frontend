@@ -27,6 +27,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>{$_('register_verify.title')}</title>
+</svelte:head>
+
 <AuthCard title={$_('register_verify.title')}>
 	{#if view === 'LOADING'}
 		<div class="d-flex justify-content-center py-3"><Spinner /></div>

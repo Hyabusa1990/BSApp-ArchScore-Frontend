@@ -59,6 +59,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{$_('profile.title')}</title>
+</svelte:head>
+
 <Container class="py-4">
 	<h4 class="mb-4">{$_('profile.title')}</h4>
 	<Row>

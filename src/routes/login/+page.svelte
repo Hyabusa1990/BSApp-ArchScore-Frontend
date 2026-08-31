@@ -30,6 +30,10 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{$_('login.title')}</title>
+</svelte:head>
+
 <AuthCard title={$_('login.title')}>
 	<Form onsubmit={handleSubmit}>
 		<FormField
