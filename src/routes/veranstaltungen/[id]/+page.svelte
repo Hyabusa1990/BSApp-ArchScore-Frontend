@@ -475,7 +475,7 @@
 							</Button>
 							{#if editingTabelle}
 								<Button color="outline-secondary" disabled={saving} onclick={cancelEditTabelle}>
-									{$_('veranstaltungen.tabelle_cancel_edit_btn')}
+									{$_('veranstaltungen.cancel_btn')}
 								</Button>
 							{/if}
 						</div>
