@@ -7,11 +7,8 @@
 		"veranstaltungen": "Veranstaltungen"
 	},
 	"home": {
-		"welcome_user": "Willkommen, {email}!",
-		"logged_in": "Du bist eingeloggt.",
 		"welcome": "Willkommen bei ArchScore",
-		"login_hint_1": "Bitte",
-		"login_hint_2": "um fortzufahren."
+		"tagline": "Live-Ergebnisanzeige für Bogensport-Liga-Wettkämpfe — gespottete Pfeilwerte, sichtbar für Zuschauer, bevor sie offiziell sind."
 	},
 	"login": {
 		"title": "Anmelden",
