@@ -10,16 +10,19 @@
 		Col,
 		Card,
 		CardBody,
+		Collapse,
 		Form,
 		Alert,
 		Button,
 		Spinner,
-		Badge
+		Badge,
+		Icon
 	} from '@sveltestrap/sveltestrap';
 	import FormField from '$lib/components/FormField.svelte';
 
 	let veranstaltungen = $state<Veranstaltung[]>([]);
 	let loading = $state(true);
+	let showNewForm = $state(false);
 	let loadError = $state<string | null>(null);
 
 	// Fixture-Felder (#14) statt eines einzelnen name-Feldes.
@@ -109,60 +112,69 @@
 		<Col lg={6} class="mb-4">
 			<Card class="shadow-sm">
 				<CardBody class="p-4">
-					<h6 class="text-muted text-uppercase small fw-semibold mb-3">
+					<button
+						type="button"
+						class="btn btn-link p-0 text-muted text-uppercase small fw-semibold text-decoration-none d-flex align-items-center gap-2"
+						class:mb-3={showNewForm}
+						aria-expanded={showNewForm}
+						onclick={() => (showNewForm = !showNewForm)}
+					>
+						<Icon name={showNewForm ? 'chevron-down' : 'chevron-right'} />
 						{$_('veranstaltungen.new_title')}
-					</h6>
-					<Form onsubmit={handleCreate}>
-						<FormField
-							id="new-league-name"
-							label={$_('veranstaltungen.league_name_label')}
-							bind:value={newLeagueName}
-							placeholder={$_('veranstaltungen.league_name_placeholder')}
-							required
-							icon="trophy"
-						/>
-						<FormField
-							id="new-fixture-name"
-							label={$_('veranstaltungen.fixture_name_label')}
-							bind:value={newFixtureName}
-							placeholder={$_('veranstaltungen.fixture_name_placeholder')}
-							required
-							icon="calendar-event"
-						/>
-						<FormField
-							id="new-date"
-							label={$_('veranstaltungen.date_label')}
-							type="date"
-							bind:value={newDate}
-							required
-							icon="calendar3"
-						/>
-						<FormField
-							id="new-location"
-							label={$_('veranstaltungen.location_label')}
-							bind:value={newLocation}
-							placeholder={$_('veranstaltungen.location_placeholder')}
-							required
-							icon="geo-alt"
-						/>
-						{#if createError}
-							<Alert color="danger" class="py-2">{createError}</Alert>
-						{/if}
-						<Button
-							type="submit"
-							color="primary"
-							disabled={creating ||
-								!newLeagueName.trim() ||
-								!newFixtureName.trim() ||
-								!newDate ||
-								!newLocation.trim()}
-						>
-							{#if creating}
-								<Spinner size="sm" class="me-2" />
+					</button>
+					<Collapse isOpen={showNewForm}>
+						<Form onsubmit={handleCreate}>
+							<FormField
+								id="new-league-name"
+								label={$_('veranstaltungen.league_name_label')}
+								bind:value={newLeagueName}
+								placeholder={$_('veranstaltungen.league_name_placeholder')}
+								required
+								icon="trophy"
+							/>
+							<FormField
+								id="new-fixture-name"
+								label={$_('veranstaltungen.fixture_name_label')}
+								bind:value={newFixtureName}
+								placeholder={$_('veranstaltungen.fixture_name_placeholder')}
+								required
+								icon="calendar-event"
+							/>
+							<FormField
+								id="new-date"
+								label={$_('veranstaltungen.date_label')}
+								type="date"
+								bind:value={newDate}
+								required
+								icon="calendar3"
+							/>
+							<FormField
+								id="new-location"
+								label={$_('veranstaltungen.location_label')}
+								bind:value={newLocation}
+								placeholder={$_('veranstaltungen.location_placeholder')}
+								required
+								icon="geo-alt"
+							/>
+							{#if createError}
+								<Alert color="danger" class="py-2">{createError}</Alert>
 							{/if}
-							{$_('veranstaltungen.new_button')}
-						</Button>
-					</Form>
+							<Button
+								type="submit"
+								color="primary"
+								disabled={creating ||
+									!newLeagueName.trim() ||
+									!newFixtureName.trim() ||
+									!newDate ||
+									!newLocation.trim()}
+							>
+								{#if creating}
+									<Spinner size="sm" class="me-2" />
+								{/if}
+								{$_('veranstaltungen.new_button')}
+							</Button>
+						</Form>
+					</Collapse>
 				</CardBody>
 			</Card>
 		</Col>
