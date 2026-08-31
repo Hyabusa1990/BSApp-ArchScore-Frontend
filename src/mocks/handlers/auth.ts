@@ -12,7 +12,7 @@ import {
 import { rotateDeviceTokens } from '../displays';
 
 /**
- * Pfade/Feldnamen folgen dem Fawkes-Auth-Kontrakt (`ArchScore-SpecsAndDocu/Fawkes-OpenApi.json`,
+ * Pfade/Feldnamen folgen dem Fawkes-Auth-Kontrakt (`docs/Fawkes-OpenApi.json`,
  * Controller `AuthController`) — Login/Register/Refresh laufen über E-Mail, nicht Username,
  * Token-Shape ist camelCase `{accessToken, refreshToken, expiresIn}`.
  *

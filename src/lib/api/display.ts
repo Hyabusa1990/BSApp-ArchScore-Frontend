@@ -2,7 +2,7 @@ import { apiClient } from './client';
 
 /**
  * Shapes folgen seit Issue #17 1:1 dem echten Fawkes-`DisplayController`-Kontrakt
- * (`ArchScore-SpecsAndDocu/Fawkes-OpenApi.json`) statt eines eigenen JWT+PIN-Fake-Schemas:
+ * (`docs/Fawkes-OpenApi.json`) statt eines eigenen JWT+PIN-Fake-Schemas:
  * `GET /Display/register` liefert einen `deviceCode` (denselben, den der Admin über
  * `bildschirmeApi.assign` einer Fixture zuordnet, siehe `$lib/api/bildschirme.ts`) plus
  * `accessToken`/`refreshToken`/`expiresIn` — das Gerät ist ab Registrierung ein normaler

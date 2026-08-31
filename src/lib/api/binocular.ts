@@ -6,7 +6,7 @@ import { apiClient } from './client';
  * `ohne_digitale_meldung`-Feld/-Parameter. Dieser Fall wird zentral in der Admin-Oberfläche
  * (Ligaverwaltungs-Verbindung) abgefragt und vom Backend gespeichert, siehe Issue #4.
  *
- * Pfade folgen dem Fawkes-Spotter-Kontrakt (`ArchScore-SpecsAndDocu/Fawkes-OpenApi.json`,
+ * Pfade folgen dem Fawkes-Spotter-Kontrakt (`docs/Fawkes-OpenApi.json`,
  * `SpotterController`, Stand 2026-08-17, siehe #9): `token` im URL-Pfad ist die
  * `fixtureUniqueId`, `scheibennummer` ist `targetNo` — kein Bearer nötig, die schwer zu
  * erratende `fixtureUniqueId` selbst ist laut Spec die Absicherung.

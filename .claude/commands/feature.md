@@ -61,7 +61,7 @@ Nach Abschluss des Interviews:
    - **Frontend:** SvelteKit 2 + Svelte 5 (Runes), TypeScript, Sveltestrap
    - **Backend:** kein lokales Backend in diesem Repo — die echte API (Fawkes, C#) wird in einem separaten
      Repo von einem anderen Entwickler gebaut; dieses Repo spricht sie nur über `src/lib/api/*.ts` an.
-     Solange ein Endpunkt in `ArchScore-SpecsAndDocu/*.json` (openapi/Fawkes-Spec) noch nicht feststeht,
+     Solange ein Endpunkt in `docs/Fawkes-OpenApi.json` (Fawkes-Spec) noch nicht feststeht,
      wird stattdessen der Fake-API-Mock (MSW, `src/mocks/`) gebaut — siehe CLAUDE.md „New endpoint workflow".
 3. Zerlege das Feature in logisch entkoppelte Issues:
    - Trenne Frontend-Umsetzung und Fake-API/Mock-Anpassung sauber
