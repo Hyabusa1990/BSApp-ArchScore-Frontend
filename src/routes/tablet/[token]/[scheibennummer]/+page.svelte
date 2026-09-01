@@ -4,6 +4,8 @@
 	import { _ } from 'svelte-i18n';
 	import { Alert, Spinner } from '@sveltestrap/sveltestrap';
 	import QrScanModal from '$lib/components/QrScanModal.svelte';
+	import ConnectivityBanner from '$lib/components/ConnectivityBanner.svelte';
+	import { connectivity } from '$lib/stores/connectivity.svelte';
 
 	let { data } = $props<{ data: { token: string; scheibennummer: number } }>();
 	const token = $derived(data.token);
@@ -102,6 +104,9 @@
 		const interval = setInterval(async () => {
 			try {
 				const md = await binocularApi.getScheibe(token, scheibennummer);
+				// Server hat geantwortet -> Verbindung steht, unabhängig davon, ob sich der
+				// Match-Stand geändert hat (Issue #20).
+				connectivity.reportSuccess();
 				if (view === 'WARTET' || matchData?.extern_match_id !== md.extern_match_id) {
 					uebernehmeMatchDaten(md);
 					view = 'READY';
@@ -111,6 +116,9 @@
 				}
 			} catch (err) {
 				if (err instanceof APIError && err.status === 404) {
+					// Bekannter, erwartbarer Zwischenstand ("warte auf Freigabe") — der Server ist
+					// erreichbar, das zählt für #20 als Erfolg, nicht als Verbindungsproblem.
+					connectivity.reportSuccess();
 					matchData = null;
 					view = 'WARTET';
 				} else if (err instanceof APIError && err.status === 401) {
@@ -119,8 +127,10 @@
 				} else if (err instanceof APIError && err.status === 440) {
 					matchData = null;
 					view = 'EXPIRED';
+				} else {
+					// Netzwerkfehler — nächste Runde versuchen, aber #20s Banner nach 3x in Folge.
+					connectivity.reportFailure();
 				}
-				/* sonst: Netzwerkfehler — nächste Runde versuchen */
 			}
 		}, 3000);
 		return () => clearInterval(interval);
@@ -305,6 +315,8 @@
 </button>
 
 <QrScanModal isOpen={qrModalOpen} onClose={() => (qrModalOpen = false)} />
+
+<ConnectivityBanner variant="prominent" />
 
 {#if view === 'LOADING'}
 	<div class="d-flex justify-content-center align-items-center min-vh-100">

@@ -6,6 +6,8 @@
 	import { Spinner } from '@sveltestrap/sveltestrap';
 	import MonitorTeamBlock from '$lib/components/MonitorTeamBlock.svelte';
 	import DisplayLeagueTable from '$lib/components/DisplayLeagueTable.svelte';
+	import ConnectivityBanner from '$lib/components/ConnectivityBanner.svelte';
+	import { connectivity } from '$lib/stores/connectivity.svelte';
 	import type { DisplayTheme } from './+page';
 
 	let { data } = $props<{ data: { theme: DisplayTheme } }>();
@@ -104,6 +106,8 @@
 				const data = await displayApi.getData(accessToken);
 				if (!active) return;
 				loadError = null;
+				// Server hat geantwortet -> Verbindung steht (Issue #20).
+				connectivity.reportSuccess();
 				if (data.displayType === 'Unassigned') {
 					pairingCode = localStorage.getItem(DEVICE_CODE_KEY);
 					scheibeA = null;
@@ -124,10 +128,16 @@
 			} catch (err) {
 				if (!active) return;
 				if (err instanceof APIError && err.status === 401) {
+					// Normale Token-Rotation, kein Verbindungsproblem (siehe Kommentar oben) — #20s
+					// Banner reagiert bewusst nicht darauf, sonst würde jede Ablauf-bedingte Refresh-
+					// Runde fälschlich als Netzwerkausfall gewertet.
 					if (!(await tryRefresh())) clearSession();
 					return; // nächster Tick versucht es mit rotiertem Token bzw. registriert neu
 				}
 				loadError = $_('display.load_error');
+				// Netzwerkfehler o. Ä. — nächster Tick versucht es erneut, #20s Banner nach 3x in
+				// Folge.
+				connectivity.reportFailure();
 			}
 		}
 
@@ -186,6 +196,8 @@
 		</div>
 	{/if}
 </div>
+
+<ConnectivityBanner variant="subtle" />
 
 <style>
 	/*

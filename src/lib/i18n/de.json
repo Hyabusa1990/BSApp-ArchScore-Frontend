@@ -142,6 +142,9 @@
 		"confirm_cancel": "Abbrechen",
 		"confirm_switch": "Wechseln"
 	},
+	"connectivity": {
+		"offline_message": "Verbindungsprobleme"
+	},
 	"veranstaltungen": {
 		"title": "Veranstaltungen",
 		"new_title": "Neue Veranstaltung",
