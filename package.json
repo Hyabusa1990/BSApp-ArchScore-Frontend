@@ -41,6 +41,7 @@
 		"@sveltestrap/sveltestrap": "^7.1.0",
 		"bootstrap": "^5.3.8",
 		"bootstrap-icons": "^1.13.1",
+		"qr-scanner": "^1.4.2",
 		"qrcode": "^1.5.4",
 		"svelte-i18n": "^4.0.1"
 	},

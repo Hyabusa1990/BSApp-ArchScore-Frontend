@@ -6,7 +6,10 @@ import { bestaetigeSatz, getScheibe, setShots } from '../binoculars';
  * Pfade folgen dem Fawkes-Spotter-Kontrakt (siehe binocular.ts) — Token im URL-Pfad ist die
  * `fixtureUniqueId`, kein Authorization-Header nötig (Auth läuft über die schwer zu erratende
  * `fixtureUniqueId` selbst). 401 bei unbekanntem Token, 404 mit `detail: 'Event nicht
- * gefunden'` bei bekanntem Token ohne aktives Match auf dieser Scheibe.
+ * gefunden'` bei bekanntem Token ohne aktives Match auf dieser Scheibe, 440 bei abgelaufenem
+ * Token/Veranstaltung (Issue #19 — mit dem Backend-Dev abgestimmt, noch nicht in
+ * docs/Fawkes-OpenApi.json dokumentiert; Body-Shape hier ein Platzhalter, Abgleich folgt sobald
+ * die Spec aktualisiert ist).
  */
 
 function toResponse(outcome: ReturnType<typeof getScheibe>) {
@@ -18,6 +21,12 @@ function toResponse(outcome: ReturnType<typeof getScheibe>) {
 	}
 	if (outcome.kind === 'no-match') {
 		return HttpResponse.json({ detail: 'Event nicht gefunden' }, { status: 404 });
+	}
+	if (outcome.kind === 'expired') {
+		return HttpResponse.json(
+			{ code: 'EVENT_EXPIRED', message: 'Veranstaltung abgelaufen' },
+			{ status: 440 }
+		);
 	}
 	return HttpResponse.json(outcome.match);
 }

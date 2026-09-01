@@ -128,7 +128,19 @@
 		"undo_btn": "↩ Zurücknehmen",
 		"undo_error": "Nichts zum Zurücknehmen.",
 		"pfeil_error": "Erfassung fehlgeschlagen. Bitte erneut versuchen.",
-		"satz_speichern_error": "Speichern fehlgeschlagen. Bitte erneut versuchen."
+		"satz_speichern_error": "Speichern fehlgeschlagen. Bitte erneut versuchen.",
+		"scan_new_code_btn": "Neuen Code scannen",
+		"expired_title": "Veranstaltung abgelaufen",
+		"expired_hint": "Dieser Pairing-Link ist nicht mehr gültig. Scanne den aktuellen QR-Code, um fortzufahren.",
+		"expired_rescan_btn": "QR-Code scannen"
+	},
+	"qr_scan": {
+		"title": "QR-Code scannen",
+		"camera_error": "Kamera konnte nicht gestartet werden.",
+		"invalid_code": "Dieser QR-Code ist kein gültiger Pairing-Link. Bitte erneut versuchen.",
+		"confirm_message": "Zu neuer Veranstaltung wechseln?",
+		"confirm_cancel": "Abbrechen",
+		"confirm_switch": "Wechseln"
 	},
 	"veranstaltungen": {
 		"title": "Veranstaltungen",

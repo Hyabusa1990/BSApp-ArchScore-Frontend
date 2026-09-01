@@ -127,7 +127,19 @@
 		"undo_btn": "↩ Undo",
 		"undo_error": "Nothing to undo.",
 		"pfeil_error": "Recording failed. Please try again.",
-		"satz_speichern_error": "Saving failed. Please try again."
+		"satz_speichern_error": "Saving failed. Please try again.",
+		"scan_new_code_btn": "Scan new code",
+		"expired_title": "Event expired",
+		"expired_hint": "This pairing link is no longer valid. Scan the current QR code to continue.",
+		"expired_rescan_btn": "Scan QR code"
+	},
+	"qr_scan": {
+		"title": "Scan QR code",
+		"camera_error": "Camera could not be started.",
+		"invalid_code": "This QR code isn't a valid pairing link. Please try again.",
+		"confirm_message": "Switch to the new event?",
+		"confirm_cancel": "Cancel",
+		"confirm_switch": "Switch"
 	},
 	"veranstaltungen": {
 		"title": "Events",

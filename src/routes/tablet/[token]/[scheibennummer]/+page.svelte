@@ -3,18 +3,22 @@
 	import { APIError } from '$lib/api/client';
 	import { _ } from 'svelte-i18n';
 	import { Alert, Spinner } from '@sveltestrap/sveltestrap';
+	import QrScanModal from '$lib/components/QrScanModal.svelte';
 
 	let { data } = $props<{ data: { token: string; scheibennummer: number } }>();
 	const token = $derived(data.token);
 	const scheibennummer = $derived(data.scheibennummer);
 
-	type ViewState = 'LOADING' | 'ERROR' | 'WARTET' | 'READY';
+	type ViewState = 'LOADING' | 'ERROR' | 'WARTET' | 'READY' | 'EXPIRED';
 
 	let view = $state<ViewState>('LOADING');
 	let loadError = $state<string | null>(null);
 	let matchData = $state<BinocularMatch | null>(null);
 	let actionError = $state<string | null>(null);
 	let sending = $state(false);
+	// Issue #19: eingebauter QR-Scanner, sowohl über den permanenten Trigger-Button als auch
+	// automatisch bei abgelaufenem Token (HTTP 440) geöffnet.
+	let qrModalOpen = $state(false);
 
 	// ── Satz-Anzeige (alle 6 Pfeile des aktuellen Satzes) ───────────────────────
 	// Welcher Satz gerade läuft, entscheidet allein die Turnierleitung über die
@@ -71,6 +75,8 @@
 				if (!active) return;
 				if (err instanceof APIError && err.status === 404) {
 					view = 'WARTET';
+				} else if (err instanceof APIError && err.status === 440) {
+					view = 'EXPIRED';
 				} else {
 					loadError = $_('binocular.load_error');
 					view = 'ERROR';
@@ -110,6 +116,9 @@
 				} else if (err instanceof APIError && err.status === 401) {
 					loadError = $_('binocular.load_error');
 					view = 'ERROR';
+				} else if (err instanceof APIError && err.status === 440) {
+					matchData = null;
+					view = 'EXPIRED';
 				}
 				/* sonst: Netzwerkfehler — nächste Runde versuchen */
 			}
@@ -283,6 +292,20 @@
 	<title>{$_('binocular.page_title')}</title>
 </svelte:head>
 
+<!-- Permanenter QR-Scan-Trigger (Issue #19) — bewusst klein/dezent (Ausnahme vom
+     ≥48px-Touch-Target-Prinzip aus FACHLICHKEIT.md), damit er nicht aus Versehen angetippt
+     wird. Immer sichtbar, unabhängig vom view-Zustand. -->
+<button
+	type="button"
+	class="qr-trigger-btn"
+	aria-label={$_('qr_scan.title')}
+	onclick={() => (qrModalOpen = true)}
+>
+	<i class="bi bi-qr-code-scan"></i>
+</button>
+
+<QrScanModal isOpen={qrModalOpen} onClose={() => (qrModalOpen = false)} />
+
 {#if view === 'LOADING'}
 	<div class="d-flex justify-content-center align-items-center min-vh-100">
 		<Spinner />
@@ -290,6 +313,17 @@
 {:else if view === 'ERROR'}
 	<div class="p-3">
 		<Alert color="danger">{loadError}</Alert>
+	</div>
+{:else if view === 'EXPIRED'}
+	<div class="d-flex flex-column align-items-center justify-content-center min-vh-100 p-3">
+		<Alert color="warning" class="text-center py-4 w-100 mb-0">
+			<i class="bi bi-qr-code-scan fs-1 d-block mb-3"></i>
+			<h5 class="fw-bold mb-2">{$_('binocular.expired_title')}</h5>
+			<p class="mb-3 small">{$_('binocular.expired_hint')}</p>
+			<button type="button" class="btn btn-warning" onclick={() => (qrModalOpen = true)}>
+				{$_('binocular.expired_rescan_btn')}
+			</button>
+		</Alert>
 	</div>
 {:else if view === 'WARTET'}
 	<div class="d-flex flex-column align-items-center justify-content-center min-vh-100 p-3">
@@ -447,6 +481,27 @@
 {/if}
 
 <style>
+	/* Bewusst klein (28px) und niedrigkontrastig statt des sonst geltenden ≥48px-Touch-Target-
+	   Prinzips (FACHLICHKEIT.md) — hier ist "schwer versehentlich zu treffen" das Ziel, nicht
+	   Treffsicherheit (Issue #19). */
+	.qr-trigger-btn {
+		position: fixed;
+		top: 0.5rem;
+		right: 0.5rem;
+		z-index: 1050;
+		width: 28px;
+		height: 28px;
+		padding: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border: none;
+		border-radius: 50%;
+		background: rgba(0, 0, 0, 0.06);
+		color: rgba(0, 0, 0, 0.35);
+		font-size: 0.9rem;
+	}
+
 	.binocular-page {
 		display: flex;
 		flex-direction: column;

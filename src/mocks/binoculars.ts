@@ -29,13 +29,21 @@ interface Resolved {
 type ResolveOutcome =
 	| { kind: 'invalid-token' }
 	| { kind: 'no-match' }
+	| { kind: 'expired' }
 	| { kind: 'ok'; resolved: Resolved };
+
+// Fester Demo-Token für Issue #19: es gibt (noch) keinen echten Ablaufmechanismus im Mock, aber
+// der 440-Flow (abgelaufenes Token -> eingebauter QR-Scanner) muss manuell testbar sein — daher
+// wird genau dieser Token immer als abgelaufen aufgelöst, unabhängig von Scheibennummer.
+export const EXPIRED_DEMO_TOKEN = 'expired-demo-token';
 
 // Zwei gültige Token-Arten für denselben Spotter-Info-Call: das Tablet-Pairing-Token (echte
 // Spotter-Seite, ein Token pro Scheibe) oder die fixtureUniqueId der Veranstaltung (Matchkontrolle
 // ruft #10 denselben Endpunkt direkt auf, um den Confirm-Status pro Scheibe zu lesen — echter
 // Fawkes-Kontrakt, kein Tablet-Pairing nötig).
 function resolvePairing(token: string, scheibennummer: number): ResolveOutcome {
+	if (token === EXPIRED_DEMO_TOKEN) return { kind: 'expired' };
+
 	const gueltigerToken =
 		findTabletPairing(token)?.scheibennummer === scheibennummer ||
 		findVeranstaltungByUniqueId(token) !== undefined;
@@ -97,6 +105,7 @@ function buildMatch(scheibennummer: number, { found, scoring }: Resolved): Binoc
 type ResolveResult =
 	| { kind: 'invalid-token' }
 	| { kind: 'no-match' }
+	| { kind: 'expired' }
 	| { kind: 'ok'; match: BinocularMatch };
 
 export function getScheibe(token: string, scheibennummer: number): ResolveResult {
