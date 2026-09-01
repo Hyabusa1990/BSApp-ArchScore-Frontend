@@ -3,9 +3,10 @@
 	import 'bootstrap-icons/font/bootstrap-icons.css';
 	import { _, locale } from 'svelte-i18n';
 	import { setLocale, languages } from '$lib/i18n';
-	import favicon from '$lib/assets/favicon.svg';
+	import favicon from '$lib/assets/favicon.png';
+	import logo from '$lib/assets/logo.png';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { appConfig } from '$lib/stores/config.svelte';
+	import { ALLOW_REGISTRATION } from '$lib/config';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -41,12 +42,11 @@
 
 	onMount(() => {
 		auth.init();
-		appConfig.load();
 	});
 
-	function logout() {
+	async function logout() {
 		isNavOpen = false;
-		auth.logout();
+		await auth.logout();
 		goto(resolve('/login'));
 	}
 
@@ -56,12 +56,15 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
+	<link rel="icon" type="image/png" href={favicon} />
 </svelte:head>
 
 {#if !isChromelessRoute}
 	<Navbar color="white" light expand="md" class="border-bottom px-3 px-md-4">
-		<NavbarBrand href="/">WebApp</NavbarBrand>
+		<NavbarBrand href="/" class="d-flex align-items-center gap-2">
+			<img src={logo} alt="" width="28" height="28" />
+			ArchScore
+		</NavbarBrand>
 		<NavbarToggler onclick={() => (isNavOpen = !isNavOpen)} />
 		<div class="collapse navbar-collapse" class:show={isNavOpen}>
 			<Nav class="ms-md-auto align-items-md-center gap-md-2 py-2 py-md-0" navbar>
@@ -69,7 +72,7 @@
 					<NavItem>
 						<Dropdown>
 							<DropdownToggle color="outline-secondary" size="sm" caret>
-								<Icon name="person-circle" class="me-1" />{auth.user?.username ?? '…'}
+								<Icon name="person-circle" class="me-1" />{auth.user?.email ?? '…'}
 							</DropdownToggle>
 							<DropdownMenu end>
 								<DropdownItem href="/profile" onclick={closeNav}>
@@ -91,7 +94,7 @@
 					<NavItem>
 						<NavLink href="/login" onclick={closeNav}>{$_('nav.login')}</NavLink>
 					</NavItem>
-					{#if appConfig.allowRegistration}
+					{#if ALLOW_REGISTRATION}
 						<NavItem class="mb-1 mb-md-0">
 							<NavLink
 								href="/register"

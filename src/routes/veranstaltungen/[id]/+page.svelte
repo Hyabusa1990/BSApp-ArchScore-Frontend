@@ -6,14 +6,28 @@
 	import {
 		veranstaltungApi,
 		type Veranstaltung,
-		type InitialeTabelleEintrag,
-		type LigaVerbindung
+		type LigaVerbindung,
+		type FixtureUser
 	} from '$lib/api/veranstaltung';
-	import { Container, Card, CardBody, Alert, Button, Spinner } from '@sveltestrap/sveltestrap';
+	import { APIError } from '$lib/api/client';
+	import {
+		Container,
+		Card,
+		CardBody,
+		Alert,
+		Badge,
+		Button,
+		Form,
+		Spinner
+	} from '@sveltestrap/sveltestrap';
 	import FormField from '$lib/components/FormField.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	let { data } = $props<{ data: { id: string } }>();
 	const id = $derived(data.id);
+	// `Veranstaltung.id` ist seit #14 die numerische Fawkes-Fixture-ID — der Routen-Parameter
+	// selbst bleibt (wie bei SvelteKit üblich) ein String.
+	const fixtureId = $derived(Number(id));
 
 	let veranstaltung = $state<Veranstaltung | null>(null);
 	let loading = $state(true);
@@ -26,13 +40,50 @@
 	// schon gespeichert wird — erst der jeweilige Submit-Button persistiert.
 	let chosenSource = $state<'tabelle' | 'liga' | null>(null);
 
+	// Sobald eine Tabelle einmal angelegt ist, zeigt die UI standardmäßig nur noch eine
+	// Leseansicht — POST /MatchPlayChart schlägt ohne hardOverride fehl, wenn für diese Fixture
+	// schon Daten existieren (Standardverhalten laut Spec). Mit hardOverride: true überschreibt
+	// derselbe Endpunkt aber trotzdem (mit Backend-Entwickler bestätigt, 2026-08-31) — löscht
+	// dabei alle bisher erfassten Ergebnisse. `editingTabelle` schaltet die Leseansicht erst nach
+	// expliziter Bestätigung der Warnung im ConfirmModal (siehe confirmHardOverride) wieder auf
+	// editierbar um.
+	let chartCreated = $state(false);
+	let editingTabelle = $state(false);
+	// Snapshot der geladenen Tabelle, um bei "Abbrechen" die editierten Felder wieder zu verwerfen.
+	let rowsBeforeEdit = $state<TabelleRow[]>([]);
+	const tabelleEditable = $derived(!chartCreated || editingTabelle);
+
 	type TabelleRow = { mannschaft_name: string; satzpunkte: number; matchpunkte: number };
 	let rows = $state<TabelleRow[]>([]);
+
+	// Ligagröße laut Gero (2026-08-18) immer zwischen 4 und 8 Mannschaften — feste Grenzen statt
+	// frei dynamischer Zeilenzahl, Start-Tabelle deshalb direkt mit 8 leeren Zeilen vorbelegt.
+	const MIN_MANNSCHAFTEN = 4;
+	const MAX_MANNSCHAFTEN = 8;
+	function leereRow(): TabelleRow {
+		return { mannschaft_name: '', satzpunkte: 0, matchpunkte: 0 };
+	}
 
 	let ligaApp = $state('BSApp Liga');
 	let ligaUrl = $state('');
 	let ligaPin = $state('');
 	let digitalerSchusszettel = $state(false);
+
+	// Fixture-Mitgliedschaft (#13) — eigene Achse ggü. Account-role, Owner-Status kommt aus der
+	// geladenen Mitgliederliste selbst (kein separates Feld an Veranstaltung).
+	let fixtureUsers = $state<FixtureUser[]>([]);
+	let usersLoading = $state(true);
+	let usersError = $state<string | null>(null);
+	let newUserName = $state('');
+	let addingUser = $state(false);
+	let removingUserName = $state<string | null>(null);
+	const currentUserIsOwner = $derived(
+		fixtureUsers.some((u) => u.userName === auth.user?.email && u.isOwner)
+	);
+
+	const anzeigename = $derived(
+		veranstaltung ? `${veranstaltung.leagueName} – ${veranstaltung.fixtureName}` : ''
+	);
 
 	$effect(() => {
 		if (auth.initialized && !auth.isAuthenticated) goto(resolve('/login'));
@@ -42,24 +93,80 @@
 		loading = true;
 		loadError = null;
 		try {
-			veranstaltung = await veranstaltungApi.get(auth.accessToken!, id);
-			chosenSource = veranstaltung.datenquelle;
-			rows = (veranstaltung.tabelle ?? []).map((e) => ({
-				mannschaft_name: e.mannschaft_name,
-				satzpunkte: e.satzpunkte,
-				matchpunkte: e.matchpunkte
-			}));
-			if (rows.length === 0) rows = [{ mannschaft_name: '', satzpunkte: 0, matchpunkte: 0 }];
+			veranstaltung = await veranstaltungApi.get(auth.accessToken!, fixtureId);
+			chosenSource = veranstaltung.datenquelle ?? null;
+			if (chosenSource === 'tabelle') {
+				const chart = await veranstaltungApi.getMatchPlayChart(auth.accessToken!, fixtureId);
+				rows = chart.teams.map((t) => ({
+					mannschaft_name: t.name,
+					satzpunkte: t.setPoints,
+					matchpunkte: t.matchPoints
+				}));
+				chartCreated = true;
+			} else {
+				rows = Array.from({ length: MAX_MANNSCHAFTEN }, leereRow);
+				chartCreated = false;
+			}
 			if (veranstaltung.liga) {
 				ligaApp = veranstaltung.liga.liga_app;
 				ligaUrl = veranstaltung.liga.url;
 				ligaPin = veranstaltung.liga.login_pin;
 				digitalerSchusszettel = veranstaltung.liga.digitaler_schusszettel;
 			}
+			await loadUsers();
 		} catch {
 			loadError = $_('veranstaltungen.error_load');
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadUsers() {
+		if (!veranstaltung) return;
+		usersLoading = true;
+		usersError = null;
+		try {
+			fixtureUsers = await veranstaltungApi.listUsers(auth.accessToken!, veranstaltung.id);
+		} catch {
+			usersError = $_('veranstaltungen.mitglieder_error_load');
+		} finally {
+			usersLoading = false;
+		}
+	}
+
+	async function addMember(e: Event) {
+		e.preventDefault();
+		if (!veranstaltung || !newUserName.trim()) return;
+		addingUser = true;
+		usersError = null;
+		try {
+			await veranstaltungApi.addUser(auth.accessToken!, veranstaltung.id, newUserName.trim());
+			newUserName = '';
+			await loadUsers();
+		} catch (err) {
+			usersError =
+				err instanceof APIError && err.status === 403
+					? $_('veranstaltungen.mitglieder_forbidden')
+					: $_('veranstaltungen.mitglieder_error_add');
+		} finally {
+			addingUser = false;
+		}
+	}
+
+	async function removeMember(userName: string) {
+		if (!veranstaltung || removingUserName) return;
+		removingUserName = userName;
+		usersError = null;
+		try {
+			await veranstaltungApi.removeUser(auth.accessToken!, veranstaltung.id, userName);
+			await loadUsers();
+		} catch (err) {
+			usersError =
+				err instanceof APIError && err.status === 403
+					? $_('veranstaltungen.mitglieder_forbidden')
+					: $_('veranstaltungen.mitglieder_error_remove');
+		} finally {
+			removingUserName = null;
 		}
 	}
 
@@ -68,46 +175,67 @@
 	});
 
 	function addRow() {
-		rows = [...rows, { mannschaft_name: '', satzpunkte: 0, matchpunkte: 0 }];
+		if (rows.length >= MAX_MANNSCHAFTEN) return;
+		rows = [...rows, leereRow()];
 	}
 
 	function removeRow(index: number) {
-		if (rows.length <= 1) return;
+		if (rows.length <= MIN_MANNSCHAFTEN) return;
 		rows = rows.filter((_, i) => i !== index);
 	}
 
-	async function saveTabelle() {
-		saving = true;
+	async function saveTabelle(hardOverride: boolean) {
 		saveError = null;
+		const teams = rows
+			.filter((r) => r.mannschaft_name.trim())
+			.map((r) => ({
+				name: r.mannschaft_name.trim(),
+				setPoints: r.satzpunkte,
+				matchPoints: r.matchpunkte
+			}));
+		// Leere Zeilen werden oben rausgefiltert statt gelöscht (Löschen bleibt hart auf
+		// MIN_MANNSCHAFTEN begrenzt) — deshalb hier nochmal prüfen, bevor gespeichert wird.
+		if (teams.length < MIN_MANNSCHAFTEN) {
+			saveError = $_('veranstaltungen.error_tabelle_min_mannschaften');
+			return;
+		}
+		saving = true;
 		try {
-			const eintraege: InitialeTabelleEintrag[] = rows
-				.filter((r) => r.mannschaft_name.trim())
-				.map((r, i) => ({
-					platz: i + 1,
-					mannschaft_name: r.mannschaft_name.trim(),
-					satzpunkte: r.satzpunkte,
-					matchpunkte: r.matchpunkte
-				}));
-			veranstaltung = await veranstaltungApi.setTabelle(auth.accessToken!, id, eintraege);
-		} catch {
-			saveError = $_('veranstaltungen.error_save');
+			await veranstaltungApi.createMatchPlayChart(
+				auth.accessToken!,
+				fixtureId,
+				teams,
+				hardOverride
+			);
+			if (veranstaltung) veranstaltung = { ...veranstaltung, datenquelle: 'tabelle' };
+			chartCreated = true;
+			editingTabelle = false;
+		} catch (err) {
+			saveError =
+				err instanceof APIError && err.status === 409
+					? $_('veranstaltungen.error_tabelle_exists')
+					: $_('veranstaltungen.error_save');
 		} finally {
 			saving = false;
 		}
 	}
 
-	async function deleteTabelle() {
-		saving = true;
+	// Warnt vor dem Datenverlust, bevor die Tabelle überhaupt wieder editierbar wird — das
+	// eigentliche Löschen passiert zwar erst beim Speichern (hardOverride: true), aber der Nutzer
+	// soll die Konsequenz schon beim Öffnen des Formulars kennen, nicht erst am Submit-Button.
+	let showHardOverrideConfirm = $state(false);
+
+	function confirmHardOverride() {
+		rowsBeforeEdit = rows.map((r) => ({ ...r }));
 		saveError = null;
-		try {
-			veranstaltung = await veranstaltungApi.clearTabelle(auth.accessToken!, id);
-			chosenSource = null;
-			rows = [{ mannschaft_name: '', satzpunkte: 0, matchpunkte: 0 }];
-		} catch {
-			saveError = $_('veranstaltungen.error_save');
-		} finally {
-			saving = false;
-		}
+		editingTabelle = true;
+		showHardOverrideConfirm = false;
+	}
+
+	function cancelEditTabelle() {
+		rows = rowsBeforeEdit.map((r) => ({ ...r }));
+		saveError = null;
+		editingTabelle = false;
 	}
 
 	async function connectLiga() {
@@ -120,7 +248,7 @@
 				login_pin: ligaPin,
 				digitaler_schusszettel: digitalerSchusszettel
 			};
-			veranstaltung = await veranstaltungApi.connectLiga(auth.accessToken!, id, data);
+			veranstaltung = await veranstaltungApi.connectLiga(auth.accessToken!, fixtureId, data);
 		} catch {
 			saveError = $_('veranstaltungen.error_save');
 		} finally {
@@ -130,7 +258,7 @@
 </script>
 
 <svelte:head>
-	<title>{veranstaltung?.name ?? $_('veranstaltungen.title')}</title>
+	<title>{anzeigename || $_('veranstaltungen.title')}</title>
 </svelte:head>
 
 <Container class="py-4">
@@ -144,7 +272,7 @@
 		<Alert color="danger">{loadError}</Alert>
 	{:else}
 		<div class="d-flex justify-content-between align-items-center mb-4">
-			<h4 class="mb-0">{veranstaltung.name}</h4>
+			<h4 class="mb-0">{anzeigename}</h4>
 			<div class="d-flex gap-2">
 				<a
 					href={resolve('/veranstaltungen/[id]/bildschirme', { id })}
@@ -163,6 +291,70 @@
 			</div>
 		</div>
 
+		<Card class="shadow-sm mb-4">
+			<CardBody class="p-4">
+				<h6 class="text-muted text-uppercase small fw-semibold mb-3">
+					{$_('veranstaltungen.mitglieder_heading')}
+				</h6>
+				{#if usersLoading}
+					<div class="d-flex justify-content-center py-3"><Spinner size="sm" /></div>
+				{:else}
+					{#if usersError}
+						<Alert color="danger" class="py-2">{usersError}</Alert>
+					{/if}
+					{#if fixtureUsers.length === 0}
+						<p class="text-muted small mb-3">{$_('veranstaltungen.mitglieder_empty')}</p>
+					{:else}
+						<ul class="list-unstyled mb-3">
+							{#each fixtureUsers as u (u.userName)}
+								<li class="d-flex justify-content-between align-items-center py-1">
+									<span>
+										{u.userName}
+										{#if u.isOwner}
+											<Badge color="secondary" class="ms-2">
+												{$_('veranstaltungen.mitglieder_owner_badge')}
+											</Badge>
+										{/if}
+									</span>
+									{#if currentUserIsOwner}
+										<button
+											type="button"
+											class="btn btn-sm btn-outline-danger"
+											disabled={removingUserName === u.userName}
+											onclick={() => removeMember(u.userName)}
+										>
+											{#if removingUserName === u.userName}
+												<Spinner size="sm" />
+											{:else}
+												{$_('veranstaltungen.mitglieder_remove_btn')}
+											{/if}
+										</button>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+					{/if}
+					{#if currentUserIsOwner}
+						<Form onsubmit={addMember} class="d-flex gap-2">
+							<input
+								class="form-control form-control-sm"
+								bind:value={newUserName}
+								placeholder={$_('veranstaltungen.mitglieder_username_placeholder')}
+								required
+							/>
+							<Button color="primary" size="sm" type="submit" disabled={addingUser}>
+								{#if addingUser}
+									<Spinner size="sm" />
+								{:else}
+									{$_('veranstaltungen.mitglieder_add_btn')}
+								{/if}
+							</Button>
+						</Form>
+					{/if}
+				{/if}
+			</CardBody>
+		</Card>
+
 		{#if saveError}
 			<Alert color="danger">{saveError}</Alert>
 		{/if}
@@ -175,10 +367,11 @@
 						<Button color="primary" onclick={() => (chosenSource = 'tabelle')}>
 							{$_('veranstaltungen.choose_tabelle_btn')}
 						</Button>
-						<Button color="outline-primary" onclick={() => (chosenSource = 'liga')}>
+						<Button color="outline-primary" disabled title={$_('veranstaltungen.liga_coming_soon')}>
 							{$_('veranstaltungen.choose_liga_btn')}
 						</Button>
 					</div>
+					<p class="text-muted small mb-0 mt-2">{$_('veranstaltungen.liga_coming_soon')}</p>
 				</CardBody>
 			</Card>
 		{:else if chosenSource === 'tabelle'}
@@ -188,13 +381,16 @@
 						<h6 class="text-muted text-uppercase small fw-semibold mb-0">
 							{$_('veranstaltungen.tabelle_heading')}
 						</h6>
-						<button
-							type="button"
-							class="btn btn-link btn-sm text-decoration-none p-0"
-							onclick={() => (chosenSource = 'liga')}
-						>
-							{$_('veranstaltungen.switch_to_liga')}
-						</button>
+						{#if !chartCreated}
+							<button
+								type="button"
+								class="btn btn-link btn-sm text-decoration-none p-0 text-muted"
+								disabled
+								title={$_('veranstaltungen.liga_coming_soon')}
+							>
+								{$_('veranstaltungen.switch_to_liga')}
+							</button>
+						{/if}
 					</div>
 
 					<div class="table-responsive">
@@ -205,64 +401,94 @@
 									<th>{$_('veranstaltungen.tabelle_mannschaft')}</th>
 									<th style="width: 8rem;">{$_('veranstaltungen.tabelle_satzpunkte')}</th>
 									<th style="width: 8rem;">{$_('veranstaltungen.tabelle_matchpunkte')}</th>
-									<th style="width: 3rem;"></th>
+									{#if tabelleEditable}<th style="width: 3rem;"></th>{/if}
 								</tr>
 							</thead>
 							<tbody>
 								{#each rows as row, i (i)}
 									<tr>
 										<td class="fw-bold text-muted">{i + 1}</td>
-										<td>
-											<input
-												class="form-control form-control-sm"
-												bind:value={row.mannschaft_name}
-											/>
-										</td>
-										<td>
-											<input
-												type="number"
-												class="form-control form-control-sm"
-												bind:value={row.satzpunkte}
-											/>
-										</td>
-										<td>
-											<input
-												type="number"
-												class="form-control form-control-sm"
-												bind:value={row.matchpunkte}
-											/>
-										</td>
-										<td>
-											<button
-												type="button"
-												class="btn btn-sm btn-outline-danger"
-												disabled={rows.length <= 1}
-												onclick={() => removeRow(i)}
-											>
-												&times;
-											</button>
-										</td>
+										{#if !tabelleEditable}
+											<td>{row.mannschaft_name}</td>
+											<td>{row.satzpunkte}</td>
+											<td>{row.matchpunkte}</td>
+										{:else}
+											<td>
+												<input
+													class="form-control form-control-sm"
+													bind:value={row.mannschaft_name}
+												/>
+											</td>
+											<td>
+												<input
+													type="number"
+													class="form-control form-control-sm"
+													bind:value={row.satzpunkte}
+												/>
+											</td>
+											<td>
+												<input
+													type="number"
+													class="form-control form-control-sm"
+													bind:value={row.matchpunkte}
+												/>
+											</td>
+											<td>
+												<button
+													type="button"
+													class="btn btn-sm btn-outline-danger"
+													disabled={rows.length <= MIN_MANNSCHAFTEN}
+													onclick={() => removeRow(i)}
+												>
+													&times;
+												</button>
+											</td>
+										{/if}
 									</tr>
 								{/each}
 							</tbody>
 						</table>
 					</div>
 
-					<button type="button" class="btn btn-outline-secondary btn-sm mb-3" onclick={addRow}>
-						+ {$_('veranstaltungen.tabelle_add_row')}
-					</button>
+					{#if tabelleEditable}
+						<button
+							type="button"
+							class="btn btn-outline-secondary btn-sm mb-3"
+							disabled={rows.length >= MAX_MANNSCHAFTEN}
+							onclick={addRow}
+						>
+							+ {$_('veranstaltungen.tabelle_add_row')}
+						</button>
 
-					<div class="d-flex gap-2">
-						<Button color="success" disabled={saving} onclick={saveTabelle}>
-							{#if saving}<Spinner size="sm" class="me-2" />{/if}
-							{$_('veranstaltungen.tabelle_anlegen_btn')}
-						</Button>
-						{#if veranstaltung.datenquelle === 'tabelle'}
-							<Button color="danger" outline disabled={saving} onclick={deleteTabelle}>
-								{$_('veranstaltungen.tabelle_loeschen_btn')}
-							</Button>
+						{#if editingTabelle}
+							<Alert color="warning" class="py-2">
+								{$_('veranstaltungen.tabelle_override_warning')}
+							</Alert>
 						{/if}
-					</div>
+
+						<div class="d-flex gap-2">
+							<Button color="success" disabled={saving} onclick={() => saveTabelle(chartCreated)}>
+								{#if saving}<Spinner size="sm" class="me-2" />{/if}
+								{editingTabelle
+									? $_('veranstaltungen.tabelle_override_btn')
+									: $_('veranstaltungen.tabelle_anlegen_btn')}
+							</Button>
+							{#if editingTabelle}
+								<Button color="outline-secondary" disabled={saving} onclick={cancelEditTabelle}>
+									{$_('veranstaltungen.cancel_btn')}
+								</Button>
+							{/if}
+						</div>
+					{:else}
+						<p class="text-muted small mb-2">{$_('veranstaltungen.tabelle_readonly_hint')}</p>
+						<Button
+							color="outline-danger"
+							size="sm"
+							onclick={() => (showHardOverrideConfirm = true)}
+						>
+							{$_('veranstaltungen.tabelle_neu_erstellen_btn')}
+						</Button>
+					{/if}
 				</CardBody>
 			</Card>
 		{:else if chosenSource === 'liga'}
@@ -326,3 +552,14 @@
 		{/if}
 	{/if}
 </Container>
+
+<ConfirmModal
+	isOpen={showHardOverrideConfirm}
+	title={$_('veranstaltungen.tabelle_hard_override_title')}
+	message={$_('veranstaltungen.tabelle_hard_override_confirm')}
+	confirmLabel={$_('veranstaltungen.tabelle_neu_erstellen_btn')}
+	cancelLabel={$_('veranstaltungen.cancel_btn')}
+	confirmColor="danger"
+	onConfirm={confirmHardOverride}
+	onCancel={() => (showHardOverrideConfirm = false)}
+/>

@@ -1,6 +1,6 @@
 ---
 description: >
-  Batch-gesteuertes Arbeiten. Holt alle offenen GitLab-Issues für ein spezifisches Label 
+  Batch-gesteuertes Arbeiten. Holt alle offenen GitHub-Issues für ein spezifisches Label 
   (z.B. BUG oder SECURITY), analysiert Kritikalität und Umfang, erstellt einen priorisierten 
   Abarbeitungsplan in Arbeitspaketen und führt die Implementierung nach Freigabe schrittweise durch.
 argument-hint: <label>
@@ -12,10 +12,11 @@ Ich möchte eine Triage und anschließende Batch-Abarbeitung für alle offenen I
 
 ## Phase 1 — Issues laden und filtern
 
-1. `git remote get-url origin` → GitLab-Projektpfad ermitteln (`project_id`, z.B. `bsapp/score-systems/liga`)
-2. Über `mcp__gitlab__list_issues` (oder vergleichbare Such-Tools):
+1. Repo ermitteln: `gh repo view --json nameWithOwner -q .nameWithOwner` (z.B. `Hyabusa1990/BSApp-ArchScore-Frontend`)
+2. Über `gh issue list --repo <owner>/<repo> --label "$1" --state open --json number,title,labels,updatedAt`:
    - Alle offenen Issues laden, die das Label `$1` (z.B. BUG oder SECURITY) haben.
-3. Für jedes gefundene Issue die Beschreibung und bisherige Kommentare grob überfliegen (`mcp__gitlab__get_issue` / `mcp__gitlab__list_issue_discussions`), um den Kontext zu verstehen.
+3. Für jedes gefundene Issue die Beschreibung und bisherige Kommentare grob überfliegen
+   (`gh issue view <nr> --repo <owner>/<repo> --json title,body,comments,labels`), um den Kontext zu verstehen.
 
 ---
 
@@ -78,7 +79,7 @@ Erst nach meiner ausdrücklichen Bestätigung darfst du mit Phase 5 beginnen.
 8. Für jedes bestätigte Arbeitspaket führst du nacheinander folgende Schritte durch. Arbeite Issue für Issue innerhalb des Pakets ab:
 
    **Für jedes Issue im aktuellen Paket:**
-   - **Ticket-Update Start:** Über `mcp__gitlab__create_issue_note` einen Kommentar schreiben:
+   - **Ticket-Update Start:** Über `gh issue comment <nr> --repo <owner>/<repo> --body "..."` einen Kommentar schreiben:
      `🚧 In Bearbeitung: Analyse und Fix für Issue #[Nr] im Rahmen von Arbeitspaket [X] gestartet.`
    - **Code-Analyse:** Relevante Dateien im Backend (Django/Python) oder Frontend (Svelte/TS) ausfindig machen und analysieren.
    - **Implementierung:** Den Code entsprechend anpassen.

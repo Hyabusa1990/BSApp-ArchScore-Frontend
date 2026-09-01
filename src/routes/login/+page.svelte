@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { _ } from 'svelte-i18n';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { appConfig } from '$lib/stores/config.svelte';
+	import { ALLOW_REGISTRATION } from '$lib/config';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { APIError } from '$lib/api/client';
@@ -9,7 +9,7 @@
 	import AuthCard from '$lib/components/AuthCard.svelte';
 	import FormField from '$lib/components/FormField.svelte';
 
-	let username = $state('');
+	let email = $state('');
 	let password = $state('');
 	let errorKey = $state<string | null>(null);
 
@@ -17,7 +17,7 @@
 		e.preventDefault();
 		errorKey = null;
 		try {
-			await auth.login(username, password);
+			await auth.login(email, password);
 			goto(resolve('/'));
 		} catch (err) {
 			errorKey =
@@ -30,16 +30,21 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{$_('login.title')}</title>
+</svelte:head>
+
 <AuthCard title={$_('login.title')}>
 	<Form onsubmit={handleSubmit}>
 		<FormField
-			id="username"
-			label={$_('login.username')}
-			bind:value={username}
-			placeholder={$_('login.username_placeholder')}
+			id="email"
+			label={$_('login.email')}
+			type="email"
+			bind:value={email}
+			placeholder={$_('login.email_placeholder')}
 			required
-			autocomplete="username"
-			icon="person"
+			autocomplete="email"
+			icon="envelope"
 		/>
 		<FormField
 			id="password"
@@ -62,7 +67,7 @@
 			{/if}
 		</Button>
 	</Form>
-	{#if appConfig.allowRegistration}
+	{#if ALLOW_REGISTRATION}
 		<p class="text-center text-muted small mt-3 mb-0">
 			{$_('login.no_account')}
 			<a href={resolve('/register')} class="text-decoration-none">{$_('nav.register')}</a>

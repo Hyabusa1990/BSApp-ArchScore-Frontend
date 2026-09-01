@@ -1,6 +1,6 @@
 ---
 description: >
-  Ticket-gesteuertes Arbeiten. Holt alle Infos zu einem GitLab-Issue, analysiert den
+  Ticket-gesteuertes Arbeiten. Holt alle Infos zu einem GitHub-Issue, analysiert den
   betroffenen Code, erstellt einen Implementierungsplan, schreibt einen "In Arbeit"-
   Kommentar ins Ticket und begleitet die Umsetzung bis zum Abschluss-Kommentar.
 argument-hint: <issue-nummer>
@@ -12,8 +12,8 @@ Ich möchte an Issue #$1 arbeiten. Führe folgenden Ablauf durch:
 
 ## Phase 1 — Issue laden
 
-1. `git remote get-url origin` → GitLab-Projektpfad ermitteln (`project_id`, z.B. `bsapp/score-systems/liga`)
-2. Über `mcp__gitlab__get_issue` und `mcp__gitlab__list_issue_discussions`:
+1. Repo ermitteln: `gh repo view --json nameWithOwner -q .nameWithOwner` (z.B. `Hyabusa1990/BSApp-ArchScore-Frontend`)
+2. Über `gh issue view $1 --repo <owner>/<repo> --json title,body,comments,labels,assignees,state`:
    Issue #$1 vollständig laden
    - Titel, Beschreibung, alle Kommentare, Labels, zugewiesene Person
 3. Alle vorhandenen Kommentare lesen — besonders auf bereits diskutierte
@@ -73,8 +73,8 @@ Ich möchte an Issue #$1 arbeiten. Führe folgenden Ablauf durch:
 
 ## Phase 4 — "In Arbeit"-Kommentar ins Ticket schreiben
 
-9. Über `mcp__gitlab__create_issue_note` folgenden Kommentar zu Issue #$1
-   hinzufügen:
+9. Über `gh issue comment $1 --repo <owner>/<repo> --body-file <tmp-datei>` folgenden
+   Kommentar zu Issue #$1 hinzufügen (Body vorher in temporäre Datei schreiben):
 
 ```
 ## 🚧 In Bearbeitung
@@ -116,7 +116,8 @@ Erst nach ausdrücklicher Bestätigung mit der Implementierung beginnen.
 ## Phase 7 — Abschluss-Kommentar ins Ticket
 
 14. Nach erfolgreicher Implementierung und bestandenen Tests über
-    `mcp__gitlab__create_issue_note` folgenden Kommentar zu Issue #$1 hinzufügen:
+    `gh issue comment $1 --repo <owner>/<repo> --body-file <tmp-datei>` folgenden
+    Kommentar zu Issue #$1 hinzufügen:
 
 ```
 ## ✅ Implementierung abgeschlossen

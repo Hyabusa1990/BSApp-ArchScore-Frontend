@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { _ } from 'svelte-i18n';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { appConfig } from '$lib/stores/config.svelte';
+	import { ALLOW_REGISTRATION } from '$lib/config';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { APIError } from '$lib/api/client';
@@ -17,7 +17,7 @@
 	let success = $state(false);
 
 	$effect(() => {
-		if (appConfig.loaded && !appConfig.allowRegistration) {
+		if (!ALLOW_REGISTRATION) {
 			goto(resolve('/login'));
 		}
 	});
@@ -33,9 +33,8 @@
 		}
 
 		try {
-			await auth.register(email, password, passwordConfirm);
+			await auth.register(email, password);
 			success = true;
-			setTimeout(() => goto(resolve('/login')), 2000);
 		} catch (err) {
 			if (err instanceof APIError) {
 				const msg = (err.data as { detail?: string })?.detail;
@@ -51,9 +50,16 @@
 	}
 </script>
 
+<svelte:head>
+	<title>{$_('register.title')}</title>
+</svelte:head>
+
 <AuthCard title={$_('register.title')}>
 	{#if success}
 		<Alert color="success">{$_('register.success')}</Alert>
+		<p class="text-center text-muted small mt-3 mb-0">
+			<a href={resolve('/login')} class="text-decoration-none">{$_('nav.login')}</a>
+		</p>
 	{:else}
 		<Form onsubmit={handleSubmit}>
 			<FormField

@@ -1,27 +1,41 @@
 <script lang="ts">
 	import { _ } from 'svelte-i18n';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { Container } from '@sveltestrap/sveltestrap';
+	import { ALLOW_REGISTRATION } from '$lib/config';
+	import { Container, Button } from '@sveltestrap/sveltestrap';
+	import logo from '$lib/assets/logo.png';
+
+	// auth.isAuthenticated ist synchron (aus localStorage) bekannt, noch bevor dieser
+	// Effect läuft — angemeldete Nutzer sehen die Landingpage unten also nie aufblitzen,
+	// siehe {#if !auth.isAuthenticated} im Markup.
+	$effect(() => {
+		if (auth.isAuthenticated) goto(resolve('/veranstaltungen'));
+	});
 </script>
 
-<div class="home-page">
-	<Container class="text-center">
-		{#if auth.isAuthenticated}
-			<h1 class="display-5 mb-2">
-				{$_('home.welcome_user', { values: { username: auth.user?.username } })}
-			</h1>
-			<p class="lead text-muted">{$_('home.logged_in')}</p>
-		{:else}
+<svelte:head>
+	<title>ArchScore</title>
+</svelte:head>
+
+{#if !auth.isAuthenticated}
+	<div class="home-page">
+		<Container class="text-center">
+			<img src={logo} alt="" width="72" height="72" class="mb-3" />
 			<h1 class="display-5 mb-2">{$_('home.welcome')}</h1>
-			<p class="lead text-muted">
-				{$_('home.login_hint_1')}
-				<a href={resolve('/login')} class="text-decoration-none fw-semibold">{$_('nav.login')}</a>
-				{$_('home.login_hint_2')}
-			</p>
-		{/if}
-	</Container>
-</div>
+			<p class="lead text-muted mb-4">{$_('home.tagline')}</p>
+			<div class="d-flex justify-content-center gap-2 flex-wrap">
+				<Button color="primary" href={resolve('/login')}>{$_('nav.login')}</Button>
+				{#if ALLOW_REGISTRATION}
+					<Button color="outline-primary" href={resolve('/register')}>
+						{$_('nav.register')}
+					</Button>
+				{/if}
+			</div>
+		</Container>
+	</div>
+{/if}
 
 <style>
 	.home-page {

@@ -38,6 +38,9 @@ export const apiClient = {
 	patch: <T>(endpoint: string, body: unknown, token?: string | null) =>
 		request<T>(endpoint, { method: 'PATCH', body: JSON.stringify(body) }, token),
 
+	put: <T>(endpoint: string, body: unknown, token?: string | null) =>
+		request<T>(endpoint, { method: 'PUT', body: JSON.stringify(body) }, token),
+
 	delete: <T>(endpoint: string, token?: string | null) =>
 		request<T>(endpoint, { method: 'DELETE' }, token)
 };

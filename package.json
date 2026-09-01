@@ -11,7 +11,8 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",
-		"format": "prettier --write ."
+		"format": "prettier --write .",
+		"test-api": "tsx --tsconfig scripts/tsconfig.test-api.json scripts/test-api-server.ts"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^2.0.4",
@@ -21,6 +22,7 @@
 		"@sveltejs/vite-plugin-svelte": "^7.0.0",
 		"@types/node": "^22",
 		"@types/qrcode": "^1.5.6",
+		"@vite-pwa/sveltekit": "^1.1.0",
 		"eslint": "^10.2.0",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.17.0",
@@ -30,6 +32,7 @@
 		"prettier-plugin-svelte": "^3.5.1",
 		"svelte": "^5.55.3",
 		"svelte-check": "^4.4.6",
+		"tsx": "^4.23.12",
 		"typescript": "^6.0.2",
 		"typescript-eslint": "^8.58.1",
 		"vite": "^8.0.7"
@@ -38,6 +41,7 @@
 		"@sveltestrap/sveltestrap": "^7.1.0",
 		"bootstrap": "^5.3.8",
 		"bootstrap-icons": "^1.13.1",
+		"qr-scanner": "^1.4.2",
 		"qrcode": "^1.5.4",
 		"svelte-i18n": "^4.0.1"
 	},

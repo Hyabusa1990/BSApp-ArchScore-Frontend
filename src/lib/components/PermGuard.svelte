@@ -15,7 +15,9 @@
 	const allowedRoles = $derived(role === undefined ? undefined : ([] as Role[]).concat(role));
 
 	const allowed = $derived(
-		auth.initialized && !!auth.user && (!allowedRoles || allowedRoles.includes(auth.user.role))
+		auth.initialized &&
+			!!auth.user &&
+			(!allowedRoles || (!!auth.user.role && allowedRoles.includes(auth.user.role)))
 	);
 </script>
 

@@ -40,10 +40,9 @@ class AuthStore {
 	async tryRefresh(): Promise<boolean> {
 		if (!this.refreshToken) return false;
 		try {
-			const { access } = await authApi.refresh(this.refreshToken);
-			this.accessToken = access;
-			if (browser) localStorage.setItem('access_token', access);
-			this.user = await authApi.me(access);
+			const tokens = await authApi.refresh(this.refreshToken);
+			this.setTokens(tokens.accessToken, tokens.refreshToken);
+			this.user = await authApi.me(tokens.accessToken);
 			return true;
 		} catch {
 			return false;
@@ -54,29 +53,43 @@ class AuthStore {
 		this.loading = true;
 		try {
 			const tokens = await authApi.login(email, password);
-			this.accessToken = tokens.access;
-			this.refreshToken = tokens.refresh;
-			if (browser) {
-				localStorage.setItem('access_token', tokens.access);
-				localStorage.setItem('refresh_token', tokens.refresh);
-			}
-			this.user = await authApi.me(tokens.access);
+			this.setTokens(tokens.accessToken, tokens.refreshToken);
+			this.user = await authApi.me(tokens.accessToken);
 		} finally {
 			this.loading = false;
 		}
 	}
 
-	async register(email: string, password: string, passwordConfirm: string) {
+	async register(email: string, password: string) {
 		this.loading = true;
 		try {
-			return await authApi.register(email, password, passwordConfirm);
+			return await authApi.register(email, password);
 		} finally {
 			this.loading = false;
 		}
 	}
 
-	logout() {
+	async logout() {
+		const token = this.accessToken;
 		this.clear();
+		if (token) {
+			// Best-effort: lokaler Logout läuft immer durch, auch wenn die serverseitige
+			// Refresh-Token-Invalidierung fehlschlägt (z.B. Token schon abgelaufen).
+			try {
+				await authApi.logout(token);
+			} catch {
+				/* ignore */
+			}
+		}
+	}
+
+	private setTokens(accessToken: string, refreshToken: string) {
+		this.accessToken = accessToken;
+		this.refreshToken = refreshToken;
+		if (browser) {
+			localStorage.setItem('access_token', accessToken);
+			localStorage.setItem('refresh_token', refreshToken);
+		}
 	}
 
 	private clear() {
