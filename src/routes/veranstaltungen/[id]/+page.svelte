@@ -12,13 +12,17 @@
 	import { APIError } from '$lib/api/client';
 	import {
 		Container,
+		Row,
+		Col,
 		Card,
 		CardBody,
 		Alert,
 		Badge,
 		Button,
 		Form,
-		Spinner
+		Spinner,
+		Collapse,
+		Icon
 	} from '@sveltestrap/sveltestrap';
 	import FormField from '$lib/components/FormField.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
@@ -71,6 +75,10 @@
 
 	// Fixture-Mitgliedschaft (#13) — eigene Achse ggü. Account-role, Owner-Status kommt aus der
 	// geladenen Mitgliederliste selbst (kein separates Feld an Veranstaltung).
+	// Klappbar, Standard zu (Wunsch Gero, 2026-09-04): die Mitgliederliste braucht man nur beim
+	// Einrichten, nicht bei jedem Aufruf der Veranstaltung — gleiches Auf-/Zuklapp-Muster wie
+	// "Neue Veranstaltung" auf der Übersichtsseite (`routes/veranstaltungen/+page.svelte`).
+	let mitgliederOpen = $state(false);
 	let fixtureUsers = $state<FixtureUser[]>([]);
 	let usersLoading = $state(true);
 	let usersError = $state<string | null>(null);
@@ -271,89 +279,108 @@
 	{:else if loadError || !veranstaltung}
 		<Alert color="danger">{loadError}</Alert>
 	{:else}
-		<div class="d-flex justify-content-between align-items-center mb-4">
-			<h4 class="mb-0">{anzeigename}</h4>
-			<div class="d-flex gap-2">
-				<a
-					href={resolve('/veranstaltungen/[id]/bildschirme', { id })}
-					class="btn btn-outline-secondary btn-sm"
-				>
-					{$_('veranstaltungen.bildschirme_btn')}
-				</a>
-				{#if veranstaltung.datenquelle !== null}
-					<a
-						href={resolve('/veranstaltungen/[id]/matchkontrolle', { id })}
-						class="btn btn-outline-primary btn-sm"
-					>
-						{$_('veranstaltungen.matchkontrolle_btn')}
-					</a>
-				{/if}
-			</div>
-		</div>
+		<h4 class="mb-4">{anzeigename}</h4>
 
 		<Card class="shadow-sm mb-4">
 			<CardBody class="p-4">
-				<h6 class="text-muted text-uppercase small fw-semibold mb-3">
+				<button
+					type="button"
+					class="btn btn-link p-0 text-muted text-uppercase small fw-semibold text-decoration-none d-flex align-items-center gap-2"
+					class:mb-3={mitgliederOpen}
+					aria-expanded={mitgliederOpen}
+					onclick={() => (mitgliederOpen = !mitgliederOpen)}
+				>
+					<Icon name={mitgliederOpen ? 'chevron-down' : 'chevron-right'} />
 					{$_('veranstaltungen.mitglieder_heading')}
-				</h6>
-				{#if usersLoading}
-					<div class="d-flex justify-content-center py-3"><Spinner size="sm" /></div>
-				{:else}
-					{#if usersError}
-						<Alert color="danger" class="py-2">{usersError}</Alert>
-					{/if}
-					{#if fixtureUsers.length === 0}
-						<p class="text-muted small mb-3">{$_('veranstaltungen.mitglieder_empty')}</p>
+				</button>
+				<Collapse isOpen={mitgliederOpen}>
+					{#if usersLoading}
+						<div class="d-flex justify-content-center py-3"><Spinner size="sm" /></div>
 					{:else}
-						<ul class="list-unstyled mb-3">
-							{#each fixtureUsers as u (u.userName)}
-								<li class="d-flex justify-content-between align-items-center py-1">
-									<span>
-										{u.userName}
-										{#if u.isOwner}
-											<Badge color="secondary" class="ms-2">
-												{$_('veranstaltungen.mitglieder_owner_badge')}
-											</Badge>
-										{/if}
-									</span>
-									{#if currentUserIsOwner}
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-danger"
-											disabled={removingUserName === u.userName}
-											onclick={() => removeMember(u.userName)}
-										>
-											{#if removingUserName === u.userName}
-												<Spinner size="sm" />
-											{:else}
-												{$_('veranstaltungen.mitglieder_remove_btn')}
+						{#if usersError}
+							<Alert color="danger" class="py-2">{usersError}</Alert>
+						{/if}
+						{#if fixtureUsers.length === 0}
+							<p class="text-muted small mb-3">{$_('veranstaltungen.mitglieder_empty')}</p>
+						{:else}
+							<ul class="list-unstyled mb-3">
+								{#each fixtureUsers as u (u.userName)}
+									<li class="d-flex justify-content-between align-items-center py-1">
+										<span>
+											{u.userName}
+											{#if u.isOwner}
+												<Badge color="secondary" class="ms-2">
+													{$_('veranstaltungen.mitglieder_owner_badge')}
+												</Badge>
 											{/if}
-										</button>
+										</span>
+										{#if currentUserIsOwner}
+											<button
+												type="button"
+												class="btn btn-sm btn-outline-danger"
+												disabled={removingUserName === u.userName}
+												onclick={() => removeMember(u.userName)}
+											>
+												{#if removingUserName === u.userName}
+													<Spinner size="sm" />
+												{:else}
+													{$_('veranstaltungen.mitglieder_remove_btn')}
+												{/if}
+											</button>
+										{/if}
+									</li>
+								{/each}
+							</ul>
+						{/if}
+						{#if currentUserIsOwner}
+							<Form onsubmit={addMember} class="d-flex gap-2">
+								<input
+									class="form-control form-control-sm"
+									bind:value={newUserName}
+									placeholder={$_('veranstaltungen.mitglieder_username_placeholder')}
+									required
+								/>
+								<Button color="primary" size="sm" type="submit" disabled={addingUser}>
+									{#if addingUser}
+										<Spinner size="sm" />
+									{:else}
+										{$_('veranstaltungen.mitglieder_add_btn')}
 									{/if}
-								</li>
-							{/each}
-						</ul>
+								</Button>
+							</Form>
+						{/if}
 					{/if}
-					{#if currentUserIsOwner}
-						<Form onsubmit={addMember} class="d-flex gap-2">
-							<input
-								class="form-control form-control-sm"
-								bind:value={newUserName}
-								placeholder={$_('veranstaltungen.mitglieder_username_placeholder')}
-								required
-							/>
-							<Button color="primary" size="sm" type="submit" disabled={addingUser}>
-								{#if addingUser}
-									<Spinner size="sm" />
-								{:else}
-									{$_('veranstaltungen.mitglieder_add_btn')}
-								{/if}
-							</Button>
-						</Form>
-					{/if}
-				{/if}
+				</Collapse>
 			</CardBody>
 		</Card>
+
+		<Row class="mb-4 g-3">
+			<Col md={veranstaltung.datenquelle !== null ? 6 : { size: 6, offset: 3 }}>
+				<a href={resolve('/veranstaltungen/[id]/bildschirme', { id })} class="text-decoration-none">
+					<Card class="shadow-sm action-card text-center">
+						<CardBody class="p-4">
+							<i class="bi bi-display fs-1 d-block mb-2 text-secondary"></i>
+							<div class="fw-semibold">{$_('veranstaltungen.bildschirme_btn')}</div>
+						</CardBody>
+					</Card>
+				</a>
+			</Col>
+			{#if veranstaltung.datenquelle !== null}
+				<Col md={6}>
+					<a
+						href={resolve('/veranstaltungen/[id]/matchkontrolle', { id })}
+						class="text-decoration-none"
+					>
+						<Card class="shadow-sm action-card text-center">
+							<CardBody class="p-4">
+								<i class="bi bi-joystick fs-1 d-block mb-2 text-primary"></i>
+								<div class="fw-semibold">{$_('veranstaltungen.matchkontrolle_btn')}</div>
+							</CardBody>
+						</Card>
+					</a>
+				</Col>
+			{/if}
+		</Row>
 
 		{#if saveError}
 			<Alert color="danger">{saveError}</Alert>
@@ -563,3 +590,16 @@
 	onConfirm={confirmHardOverride}
 	onCancel={() => (showHardOverrideConfirm = false)}
 />
+
+<style>
+	:global(.action-card) {
+		transition:
+			transform 0.15s ease,
+			box-shadow 0.15s ease;
+	}
+
+	:global(.action-card:hover) {
+		transform: translateY(-2px);
+		box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1) !important;
+	}
+</style>
