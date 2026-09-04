@@ -17,6 +17,11 @@ import { apiClient } from './client';
  * `displayTheme` (Spec-Sync 2026-09-04) kam nachträglich als required Feld dazu — der Admin
  * legt das Theme jetzt pro Gerät fest, die Anzeigeseite übernimmt es aus `GET /Display/data`
  * statt wie bisher aus dem URL-Segment (siehe `$lib/api/display.ts`, `routes/display/[[theme]]`).
+ *
+ * Ein frei vergebener Anzeigename (Wunsch Gero, 2026-09-04) ist bewusst NICHT Teil dieses
+ * Kontrakts — kein Fawkes-Feld dafür, und für den Anwendungsfall (Admin-UI lesbarer machen)
+ * genügt eine rein clientseitige Lösung ohne Server-Zustand, siehe `localStorage`-Cache in
+ * `routes/veranstaltungen/[id]/bildschirme/+page.svelte`.
  */
 
 export type DisplayType = 'None' | 'Match' | 'LeagueTable';

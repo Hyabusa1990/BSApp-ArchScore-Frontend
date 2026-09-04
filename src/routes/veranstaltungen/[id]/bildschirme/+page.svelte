@@ -100,6 +100,87 @@
 		if (cached !== null) draft.matchNo = cached;
 	}
 
+	/** Aus displayType/matchNo hergeleiteter Funktionsname ("Match - 1/2", "Tabelle", "Aus") —
+	 * Wunsch Gero (2026-09-04): Kartenname soll zeigen, WOFÜR ein Gerät gerade steht, nicht nur
+	 * seine ID. Ignoriert einen evtl. gesetzten eigenen Namen bewusst (dient auch als Vorschau-
+	 * Platzhalter im Namensfeld, siehe Template). */
+	function autoDeviceName(draft: Draft | undefined, deviceId: number): string {
+		if (!draft) return $_('bildschirme.device_label', { values: { id: deviceId } });
+		if (draft.displayType === 'Match') {
+			const scheiben = draft.matchNo !== null ? begegnungScheiben[draft.matchNo] : undefined;
+			return scheiben
+				? $_('bildschirme.name_match', { values: { scheiben } })
+				: $_('bildschirme.mode_match');
+		}
+		if (draft.displayType === 'LeagueTable') return $_('bildschirme.name_league_table');
+		return $_('bildschirme.mode_none');
+	}
+
+	/** Eigener Name hat Vorrang vor dem Funktionsnamen, sonst Fallback auf `autoDeviceName`. */
+	function deviceDisplayName(deviceId: number, draft: Draft | undefined): string {
+		const custom = customNames[deviceId]?.trim();
+		return custom ? custom : autoDeviceName(draft, deviceId);
+	}
+
+	// Eigener Anzeigename (Wunsch Gero, 2026-09-04) ist bewusst rein clientseitig — kein Fawkes-
+	// Feld dafür (siehe api/bildschirme.ts), reine Admin-UI-Usability. Gleicher Cache-Ansatz wie
+	// `lastMatchNo` oben: localStorage pro Fixture+Gerät, überlebt einen Reload.
+	let customNames = $state<Record<number, string>>({});
+	let editingNameId = $state<number | null>(null);
+	let nameDraft = $state('');
+	let nameInputEl = $state<HTMLInputElement | null>(null);
+
+	function customNameKey(deviceId: number): string {
+		return `bildschirme:${fixtureId}:${deviceId}:customName`;
+	}
+
+	function recallCustomName(deviceId: number): string {
+		try {
+			return localStorage.getItem(customNameKey(deviceId)) ?? '';
+		} catch {
+			return '';
+		}
+	}
+
+	function startEditName(deviceId: number) {
+		editingNameId = deviceId;
+		nameDraft = customNames[deviceId] ?? '';
+	}
+
+	function commitName(deviceId: number) {
+		if (editingNameId !== deviceId) return; // per Escape schon abgebrochen, siehe onNameKeydown
+		const trimmed = nameDraft.trim();
+		try {
+			if (trimmed) localStorage.setItem(customNameKey(deviceId), trimmed);
+			else localStorage.removeItem(customNameKey(deviceId));
+		} catch {
+			// z. B. privater Modus ohne Storage-Zugriff — Anzeige übernimmt den Wert trotzdem für
+			// den Rest der Session, geht nur beim Reload verloren.
+		}
+		customNames = { ...customNames, [deviceId]: trimmed };
+		editingNameId = null;
+	}
+
+	function onNameKeydown(e: KeyboardEvent, deviceId: number) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			commitName(deviceId);
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			editingNameId = null; // Abbrechen, nameDraft wird verworfen
+		}
+	}
+
+	function onNameBlur(deviceId: number) {
+		// Nur noch aktiv, wenn nicht schon per Enter/Escape beendet (siehe onNameKeydown) — sonst
+		// würde ein durchs Ausblenden ausgelöster Blur den bereits verworfenen Draft erneut greifen.
+		if (editingNameId === deviceId) commitName(deviceId);
+	}
+
+	$effect(() => {
+		if (editingNameId !== null) nameInputEl?.focus();
+	});
+
 	let qrModalOpen = $state(false);
 	let qrLoading = $state(false);
 	let qrError = $state<string | null>(null);
@@ -126,6 +207,7 @@
 			for (const d of devices) {
 				if (d.matchNo !== null) rememberMatchNo(d.id, d.matchNo);
 			}
+			customNames = Object.fromEntries(devices.map((d) => [d.id, recallCustomName(d.id)]));
 		} catch {
 			loadError = $_('bildschirme.error_load');
 		} finally {
@@ -191,6 +273,7 @@
 				...drafts,
 				[d.id]: { displayType: d.displayType, matchNo: d.matchNo, displayTheme: d.displayTheme }
 			};
+			customNames = { ...customNames, [d.id]: recallCustomName(d.id) };
 			newDeviceCode = '';
 		} catch (err) {
 			assignError =
@@ -261,21 +344,33 @@
 				<Col md={4} sm={6} class="mb-3">
 					<Card class="shadow-sm h-100">
 						<CardHeader class="d-flex justify-content-between align-items-center">
-							<div class="fw-bold">
-								{$_('bildschirme.device_label', { values: { id: d.id } })}
+							<div class="fw-bold flex-grow-1 me-2" style="min-width: 0;">
+								{#if editingNameId === d.id}
+									<input
+										bind:this={nameInputEl}
+										type="text"
+										class="form-control form-control-sm"
+										placeholder={autoDeviceName(draft, d.id)}
+										bind:value={nameDraft}
+										onkeydown={(e) => onNameKeydown(e, d.id)}
+										onblur={() => onNameBlur(d.id)}
+									/>
+								{:else}
+									<span class="d-inline-flex align-items-center gap-1 w-100">
+										<span class="text-truncate">{deviceDisplayName(d.id, draft)}</span>
+										<button
+											type="button"
+											class="btn btn-sm btn-link p-0 text-muted flex-shrink-0"
+											aria-label={$_('bildschirme.rename_btn')}
+											onclick={() => startEditName(d.id)}
+										>
+											<i class="bi bi-pencil-fill"></i>
+										</button>
+									</span>
+								{/if}
 							</div>
-							<Badge
-								color={draft?.displayType === 'Match'
-									? 'success'
-									: draft?.displayType === 'LeagueTable'
-										? 'info'
-										: 'secondary'}
-							>
-								{draft?.displayType === 'Match'
-									? $_('bildschirme.mode_match')
-									: draft?.displayType === 'LeagueTable'
-										? $_('bildschirme.mode_league_table')
-										: $_('bildschirme.mode_none')}
+							<Badge color="secondary" class="flex-shrink-0">
+								{$_('bildschirme.device_label', { values: { id: d.id } })}
 							</Badge>
 						</CardHeader>
 						<CardBody class="p-3">
