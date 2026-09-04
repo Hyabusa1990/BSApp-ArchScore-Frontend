@@ -3,7 +3,12 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { bildschirmeApi, type Device, type DisplayType } from '$lib/api/bildschirme';
+	import {
+		bildschirmeApi,
+		type Device,
+		type DisplayType,
+		type DisplayTheme
+	} from '$lib/api/bildschirme';
 	import { APIError } from '$lib/api/client';
 	import QRCode from 'qrcode';
 	import {
@@ -31,8 +36,9 @@
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
 
-	// Lokaler Bearbeitungsentwurf pro Gerät (displayType/matchNo) — erst "Speichern" persistiert.
-	type Draft = { displayType: DisplayType; matchNo: number | null };
+	// Lokaler Bearbeitungsentwurf pro Gerät (displayType/matchNo/displayTheme) — erst "Speichern"
+	// persistiert.
+	type Draft = { displayType: DisplayType; matchNo: number | null; displayTheme: DisplayTheme };
 	let drafts = $state<Record<number, Draft>>({});
 	let savingId = $state<number | null>(null);
 	let unassigningId = $state<number | null>(null);
@@ -63,7 +69,10 @@
 		try {
 			devices = await bildschirmeApi.list(auth.accessToken!, fixtureId);
 			drafts = Object.fromEntries(
-				devices.map((d) => [d.id, { displayType: d.displayType, matchNo: d.matchNo }])
+				devices.map((d) => [
+					d.id,
+					{ displayType: d.displayType, matchNo: d.matchNo, displayTheme: d.displayTheme }
+				])
 			);
 		} catch {
 			loadError = $_('bildschirme.error_load');
@@ -84,12 +93,17 @@
 		try {
 			const updated = await bildschirmeApi.update(auth.accessToken!, fixtureId, d.id, {
 				displayType: draft.displayType,
-				matchNo: draft.displayType === 'Match' ? draft.matchNo : null
+				matchNo: draft.displayType === 'Match' ? draft.matchNo : null,
+				displayTheme: draft.displayTheme
 			});
 			devices = devices.map((x) => (x.id === d.id ? updated : x));
 			drafts = {
 				...drafts,
-				[d.id]: { displayType: updated.displayType, matchNo: updated.matchNo }
+				[d.id]: {
+					displayType: updated.displayType,
+					matchNo: updated.matchNo,
+					displayTheme: updated.displayTheme
+				}
 			};
 		} catch {
 			saveError = $_('bildschirme.error_save');
@@ -120,7 +134,10 @@
 		try {
 			const d = await bildschirmeApi.assign(auth.accessToken!, fixtureId, newDeviceCode.trim());
 			devices = [...devices, d];
-			drafts = { ...drafts, [d.id]: { displayType: d.displayType, matchNo: d.matchNo } };
+			drafts = {
+				...drafts,
+				[d.id]: { displayType: d.displayType, matchNo: d.matchNo, displayTheme: d.displayTheme }
+			};
 			newDeviceCode = '';
 		} catch (err) {
 			assignError =
@@ -212,36 +229,140 @@
 
 							{#if draft}
 								<div class="mb-2">
-									<label class="form-label small mb-1" for="display-type-{d.id}">
+									<div class="form-label small mb-1">
 										{$_('bildschirme.display_type_label')}
-									</label>
-									<select
-										id="display-type-{d.id}"
-										class="form-select form-select-sm"
-										bind:value={draft.displayType}
+									</div>
+									<div
+										class="btn-group w-100"
+										role="group"
+										aria-label={$_('bildschirme.display_type_label')}
 									>
-										<option value="None">{$_('bildschirme.mode_none')}</option>
-										<option value="Match">{$_('bildschirme.mode_match')}</option>
-										<option value="LeagueTable">{$_('bildschirme.mode_league_table')}</option>
-									</select>
+										<input
+											type="radio"
+											class="btn-check"
+											name="display-type-{d.id}"
+											id="display-type-{d.id}-none"
+											autocomplete="off"
+											bind:group={draft.displayType}
+											value="None"
+										/>
+										<label
+											class="btn btn-sm btn-outline-secondary flex-fill"
+											for="display-type-{d.id}-none"
+										>
+											<i class="bi bi-eye-slash"></i>
+											{$_('bildschirme.mode_none')}
+										</label>
+
+										<input
+											type="radio"
+											class="btn-check"
+											name="display-type-{d.id}"
+											id="display-type-{d.id}-match"
+											autocomplete="off"
+											bind:group={draft.displayType}
+											value="Match"
+										/>
+										<label
+											class="btn btn-sm btn-outline-success flex-fill"
+											for="display-type-{d.id}-match"
+										>
+											<i class="bi bi-people-fill"></i>
+											{$_('bildschirme.mode_match')}
+										</label>
+
+										<input
+											type="radio"
+											class="btn-check"
+											name="display-type-{d.id}"
+											id="display-type-{d.id}-league"
+											autocomplete="off"
+											bind:group={draft.displayType}
+											value="LeagueTable"
+										/>
+										<label
+											class="btn btn-sm btn-outline-info flex-fill"
+											for="display-type-{d.id}-league"
+										>
+											<i class="bi bi-table"></i>
+											{$_('bildschirme.mode_league_table')}
+										</label>
+									</div>
+								</div>
+
+								<div class="mb-2">
+									<div class="form-label small mb-1">
+										{$_('bildschirme.display_theme_label')}
+									</div>
+									<div
+										class="btn-group w-100"
+										role="group"
+										aria-label={$_('bildschirme.display_theme_label')}
+									>
+										<input
+											type="radio"
+											class="btn-check"
+											name="display-theme-{d.id}"
+											id="display-theme-{d.id}-dark"
+											autocomplete="off"
+											bind:group={draft.displayTheme}
+											value="Dark"
+										/>
+										<label
+											class="btn btn-sm btn-outline-dark flex-fill"
+											for="display-theme-{d.id}-dark"
+										>
+											<i class="bi bi-moon-stars-fill"></i>
+											{$_('bildschirme.theme_dark')}
+										</label>
+
+										<input
+											type="radio"
+											class="btn-check"
+											name="display-theme-{d.id}"
+											id="display-theme-{d.id}-light"
+											autocomplete="off"
+											bind:group={draft.displayTheme}
+											value="Light"
+										/>
+										<label
+											class="btn btn-sm btn-outline-warning flex-fill"
+											for="display-theme-{d.id}-light"
+										>
+											<i class="bi bi-sun-fill"></i>
+											{$_('bildschirme.theme_light')}
+										</label>
+									</div>
 								</div>
 
 								{#if draft.displayType === 'Match'}
 									<div class="mb-3">
-										<label class="form-label small mb-1" for="match-no-{d.id}">
+										<div class="form-label small mb-1">
 											{$_('bildschirme.match_no_label')}
-										</label>
-										<input
-											id="match-no-{d.id}"
-											type="number"
-											min="1"
-											class="form-control form-control-sm"
-											value={draft.matchNo ?? ''}
-											oninput={(e) =>
-												(draft.matchNo = e.currentTarget.value
-													? Number(e.currentTarget.value)
-													: null)}
-										/>
+										</div>
+										<div
+											class="btn-group w-100"
+											role="group"
+											aria-label={$_('bildschirme.match_no_label')}
+										>
+											{#each [1, 2, 3, 4] as n (n)}
+												<input
+													type="radio"
+													class="btn-check"
+													name="match-no-{d.id}"
+													id="match-no-{d.id}-{n}"
+													autocomplete="off"
+													bind:group={draft.matchNo}
+													value={n}
+												/>
+												<label
+													class="btn btn-sm btn-outline-primary flex-fill"
+													for="match-no-{d.id}-{n}"
+												>
+													<i class="bi bi-{n}-circle-fill"></i>
+												</label>
+											{/each}
+										</div>
 									</div>
 								{/if}
 
