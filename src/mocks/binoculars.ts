@@ -1,7 +1,6 @@
 import { decodeShot, encodeShot, type BinocularMatch } from '$lib/api/binocular';
 import {
 	findAktivesMatchFuerScheibe,
-	findTabletPairing,
 	findVeranstaltungByUniqueId,
 	mannschaftUndGegner,
 	type AktivesMatchFuerScheibe
@@ -17,10 +16,9 @@ import {
 
 /**
  * Auflösung jetzt über den echten Admin-Verwaltungs-Mock (#6–#9) statt eigener Demo-Tokens —
- * siehe Issue #10. Tablet-Tokens kommen aus der Bildschirm-/Tablet-Verwaltung (#9), das
- * aktive Match aus der Matchkontrolle (#8). Der laufende Pfeil-/Satz-Fortschritt lebt
- * weiterhin separat (im geteilten `shared-state.ts`), weil das Admin-Modell keine laufenden
- * Scoring-Daten kennt — nur "welches Match ist aktiv".
+ * siehe Issue #10. Das aktive Match kommt aus der Matchkontrolle (#8). Der laufende Pfeil-/
+ * Satz-Fortschritt lebt weiterhin separat (im geteilten `shared-state.ts`), weil das
+ * Admin-Modell keine laufenden Scoring-Daten kennt — nur "welches Match ist aktiv".
  */
 
 interface Resolved {
@@ -36,20 +34,16 @@ type ResolveOutcome =
 
 // Fester Demo-Token für Issue #19: es gibt (noch) keinen echten Ablaufmechanismus im Mock, aber
 // der 440-Flow (abgelaufenes Token -> eingebauter QR-Scanner) muss manuell testbar sein — daher
-// wird genau dieser Token immer als abgelaufen aufgelöst, unabhängig von Scheibennummer.
+// wird genau dieser String immer als abgelaufen aufgelöst, unabhängig von Scheibennummer.
 export const EXPIRED_DEMO_TOKEN = 'expired-demo-token';
 
-// Zwei gültige Token-Arten für denselben Spotter-Info-Call: das Tablet-Pairing-Token (echte
-// Spotter-Seite, ein Token pro Scheibe) oder die fixtureUniqueId der Veranstaltung (Matchkontrolle
-// ruft #10 denselben Endpunkt direkt auf, um den Confirm-Status pro Scheibe zu lesen — echter
-// Fawkes-Kontrakt, kein Tablet-Pairing nötig).
+// `token` ist hier IMMER die `fixtureUniqueId` der Veranstaltung — sowohl das Tablet-QR (Issue
+// #22, ersetzt den vormaligen eigenen `generateTabletToken`-Mechanismus) als auch die
+// Matchkontrolle (Confirm-Status pro Scheibe, #10) adressieren denselben Bearer-freien
+// Spotter-Info-Call darüber. Kein eigenes Pairing-Token-Konzept mehr nötig.
 function resolvePairing(token: string, scheibennummer: number): ResolveOutcome {
 	if (token === EXPIRED_DEMO_TOKEN) return { kind: 'expired' };
-
-	const gueltigerToken =
-		findTabletPairing(token)?.scheibennummer === scheibennummer ||
-		findVeranstaltungByUniqueId(token) !== undefined;
-	if (!gueltigerToken) return { kind: 'invalid-token' };
+	if (!findVeranstaltungByUniqueId(token)) return { kind: 'invalid-token' };
 
 	const found = findAktivesMatchFuerScheibe(scheibennummer);
 	if (!found) return { kind: 'no-match' };

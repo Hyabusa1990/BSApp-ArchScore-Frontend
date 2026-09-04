@@ -26,17 +26,11 @@ import { loadState, saveState } from './persist';
  * und schreibt ihn nach jeder Änderung zurück, statt ihn einmalig beim Modul-Load zu laden.
  *
  * `Veranstaltung.id` ist seit Issue #14 die echte numerische Fawkes-Fixture-ID — alle anderen
- * hier gespeicherten Records (Match/Device/TabletPairing/currentRoundNo/fixtureUsers/
- * matchPlayCharts) referenzieren sie weiterhin über einen STRING-Schlüssel (`String(v.id)`),
+ * hier gespeicherten Records (Match/Device/currentRoundNo/fixtureUsers/matchPlayCharts)
+ * referenzieren sie weiterhin über einen STRING-Schlüssel (`String(v.id)`),
  * das sind rein interne Mock-Konzepte ohne echtes Fawkes-Pendant, ihr Schlüsseltyp ist bewusst
  * unverändert geblieben (kleinerer Diff, kein Fawkes-Kontrakt zu verletzen).
  */
-
-interface TabletPairingRecord {
-	token: string;
-	veranstaltungId: string;
-	scheibennummer: number;
-}
 
 /**
  * Intern gehaltene Erweiterung von `Device` um den `deviceCode`, mit dem sich das Gerät
@@ -56,7 +50,6 @@ type StoredMatch = Omit<Match, 'aktiv'>;
 interface State {
 	veranstaltungen: Veranstaltung[];
 	matches: StoredMatch[];
-	tabletPairings: TabletPairingRecord[];
 	/** Veranstaltungs-ID (String) -> aktuell freigegebene Runde (Fawkes-`roundNo`, Issue #10). */
 	currentRoundNo: Record<string, number>;
 	/** Veranstaltungs-ID (String) -> Fixture-Mitglieder (Fawkes `GetUserResponse[]`, Issue #13). */
@@ -331,7 +324,6 @@ function seedState(): State {
 				]
 			}
 		],
-		tabletPairings: [],
 		currentRoundNo: { '1001': 1 },
 		fixtureUsers: {
 			'1001': [{ userName: users.admin.email, isOwner: true }],
@@ -443,10 +435,12 @@ export function findVeranstaltung(user: User, id: number): Veranstaltung | undef
 	return v && canSee(user, v) ? v : undefined;
 }
 
-/** Ungefiltert wie `findTabletPairing`/`findAssignedDeviceByCode` weiter unten — der echte
- * Spotter-Info-Endpunkt ist laut Fawkes-Spec Bearer-frei, die schwer zu erratende `uniqueId`
- * selbst ist die Absicherung (siehe binocular.ts). Von der Matchkontrolle genutzt, um den
- * Confirm-Status pro Scheibe zu lesen (Issue #10). */
+/** Ungefiltert wie `findAssignedDeviceByCode` weiter unten — der echte Spotter-Info-Endpunkt ist
+ * laut Fawkes-Spec Bearer-frei, die schwer zu erratende `uniqueId` selbst ist die Absicherung
+ * (siehe binocular.ts). Doppelt genutzt: von der Matchkontrolle, um den Confirm-Status pro
+ * Scheibe zu lesen (Issue #10), UND vom Tablet-QR direkt als Pairing-„Token" (Issue #22 —
+ * ersetzt den vormaligen eigenen `generateTabletToken`-Mechanismus, kein Fawkes-Endpunkt dafür
+ * nötig, die `uniqueId` ist schon die Absicherung). */
 export function findVeranstaltungByUniqueId(uniqueId: string): Veranstaltung | undefined {
 	return load().veranstaltungen.find((v) => v.uniqueId === uniqueId);
 }
@@ -754,23 +748,6 @@ export function unassignDevice(veranstaltungId: string, deviceId: number): boole
 	list.splice(index, 1);
 	persist(state);
 	return true;
-}
-
-// Anders als vorher (#9, zustandslos erzeugt) merkt sich das jetzt ausgestellte Tokens —
-// erst dadurch kann der Binocular-Mock (#4) sie überhaupt validieren, siehe Issue #10.
-export function generateTabletToken(
-	veranstaltungId: string,
-	scheibennummer: number
-): { scheibennummer: number; token: string } {
-	const state = load();
-	const token = `tablet-${crypto.randomUUID()}`;
-	state.tabletPairings.push({ token, veranstaltungId, scheibennummer });
-	persist(state);
-	return { scheibennummer, token };
-}
-
-export function findTabletPairing(token: string): TabletPairingRecord | undefined {
-	return load().tabletPairings.find((p) => p.token === token);
 }
 
 // ── Lookups für Display (#1–#3) und Binocular (#4–#5) — siehe Issue #10 ─────────────────

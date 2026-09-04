@@ -9,7 +9,6 @@ import {
 	createMatchPlayChart,
 	createVeranstaltung,
 	findVeranstaltung,
-	generateTabletToken,
 	getCurrentRoundNo,
 	getMatchPlayChart,
 	isFixtureOwner,
@@ -189,20 +188,9 @@ export const veranstaltungHandlers = [
 
 	// Alte `/veranstaltungen/:id/bildschirme...`-CRUD-Endpunkte (Mock-only) sind seit #15 durch
 	// die echten `/fixtures/:fixtureId/devices...`-Endpunkte ersetzt (siehe handlers/devices.ts).
-	// Der zugrundeliegende Bildschirm/PIN-Zustand bleibt bestehen (siehe veranstaltungen.ts),
-	// treibt aber nur noch die unangetastete Display-Konsum-Seite, nicht mehr die Admin-UI.
-
-	http.post(`${API_URL}/veranstaltungen/:id/tablet-token`, async ({ request, params }) => {
-		const user = requireUser(request);
-		if (!user) return unauthorized();
-		const v = findVeranstaltung(user, Number(params.id));
-		if (!v) return notFound();
-		const body = (await request.json()) as { scheibennummer?: number };
-		if (typeof body.scheibennummer !== 'number') {
-			return HttpResponse.json({ detail: 'scheibennummer fehlt oder ungültig' }, { status: 422 });
-		}
-		return HttpResponse.json(generateTabletToken(String(v.id), body.scheibennummer));
-	}),
+	// `/veranstaltungen/:id/tablet-token` (Mock-only Tablet-Pairing) ist seit #22 ebenfalls weg —
+	// das Tablet-QR kodiert jetzt direkt die `fixtureUniqueId` der Veranstaltung, kein eigener
+	// Token-Endpunkt mehr nötig (siehe `bildschirme/+page.svelte`, `binoculars.ts`).
 
 	// Fixture-Mitgliedschaft (Fawkes `FixtureController`, siehe Issue #13) — eigene Achse
 	// gegenüber der Account-`role`, gated auf `isOwner` PRO Fixture, nicht global.

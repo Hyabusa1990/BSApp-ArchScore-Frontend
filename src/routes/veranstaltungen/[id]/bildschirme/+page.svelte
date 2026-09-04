@@ -9,6 +9,7 @@
 		type DisplayType,
 		type DisplayTheme
 	} from '$lib/api/bildschirme';
+	import { veranstaltungApi, type Veranstaltung } from '$lib/api/veranstaltung';
 	import { APIError } from '$lib/api/client';
 	import QRCode from 'qrcode';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
@@ -36,6 +37,9 @@
 	const fixtureId = $derived(Number(veranstaltungId));
 
 	let devices = $state<Device[]>([]);
+	// Nur für `veranstaltung.uniqueId` gebraucht — das Tablet-QR kodiert sie direkt (Issue #22),
+	// kein eigener Token-Endpunkt mehr nötig, siehe openTabletModal.
+	let veranstaltung = $state<Veranstaltung | null>(null);
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
 
@@ -54,7 +58,8 @@
 
 	// Feste Scheiben-Paarung (FACHLICHKEIT.md: 1 gg. 2, 3 gg. 4, 5 gg. 6, 7 gg. 8) — kann seit
 	// #15 nicht mehr aus den Geräten abgeleitet werden (kein scheibe_a/scheibe_b im echten
-	// DeviceManagement-Modell mehr), Tablet-Pairing bleibt aber unverändert pro Scheibe.
+	// DeviceManagement-Modell mehr), Tablet-Pairing bleibt aber weiterhin pro einzelner Scheibe
+	// (nicht pro Paar), nur der Pairing-Mechanismus selbst wurde geändert (Issue #22).
 	const scheiben = [1, 2, 3, 4, 5, 6, 7, 8];
 
 	// `matchNo` (Fawkes-Feldname) ist bei `displayType === 'Match'` der 1-basierte Index der
@@ -195,7 +200,10 @@
 		loading = true;
 		loadError = null;
 		try {
-			devices = await bildschirmeApi.list(auth.accessToken!, fixtureId);
+			[veranstaltung, devices] = await Promise.all([
+				veranstaltungApi.get(auth.accessToken!, fixtureId),
+				bildschirmeApi.list(auth.accessToken!, fixtureId)
+			]);
 			drafts = Object.fromEntries(
 				devices.map((d) => [
 					d.id,
@@ -285,8 +293,9 @@
 		}
 	}
 
-	// Token wird erst beim Klick generiert (nicht vorab für alle Scheiben) — vermeidet
-	// unnötige Requests für Scheiben, deren QR-Code nie geöffnet wird.
+	// Kein Token-Request mehr nötig (Issue #22) — das QR kodiert direkt die `fixtureUniqueId` der
+	// Veranstaltung + Scheibennummer, genau das, was der Bearer-freie Spotter-Endpunkt laut
+	// Fawkes-Spec ohnehin schon erwartet (siehe binocular.ts).
 	async function openTabletModal(scheibennummer: number) {
 		qrScheibennummer = scheibennummer;
 		qrModalOpen = true;
@@ -294,15 +303,14 @@
 		qrError = null;
 		qrDataUrl = null;
 		try {
-			const pairing = await bildschirmeApi.generateTabletToken(
-				auth.accessToken!,
-				veranstaltungId,
-				scheibennummer
-			);
-			const url = `${window.location.origin}${resolve('/tablet/[token]/[scheibennummer]', {
-				token: pairing.token,
-				scheibennummer: String(pairing.scheibennummer)
-			})}`;
+			if (!veranstaltung) throw new Error('Veranstaltung noch nicht geladen');
+			const url = `${window.location.origin}${resolve(
+				'/tablet/[fixtureUniqueId]/[scheibennummer]',
+				{
+					fixtureUniqueId: veranstaltung.uniqueId,
+					scheibennummer: String(scheibennummer)
+				}
+			)}`;
 			qrDataUrl = await QRCode.toDataURL(url, { width: 280, margin: 1 });
 		} catch {
 			qrError = $_('bildschirme.qr_error');

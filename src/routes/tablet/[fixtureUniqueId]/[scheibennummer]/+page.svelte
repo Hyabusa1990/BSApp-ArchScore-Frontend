@@ -7,8 +7,12 @@
 	import ConnectivityBanner from '$lib/components/ConnectivityBanner.svelte';
 	import { connectivity } from '$lib/stores/connectivity.svelte';
 
-	let { data } = $props<{ data: { token: string; scheibennummer: number } }>();
-	const token = $derived(data.token);
+	let { data } = $props<{ data: { fixtureUniqueId: string; scheibennummer: number } }>();
+	// Lokal weiterhin `token` genannt (matcht `binocularApi`s Parameternamen, siehe binocular.ts)
+	// — der Routen-Parameter selbst heißt seit Issue #22 `fixtureUniqueId`, weil es das jetzt
+	// auch tatsächlich ist: kein eigenes Pairing-Token mehr, das QR kodiert direkt die
+	// `fixtureUniqueId` der Veranstaltung.
+	const token = $derived(data.fixtureUniqueId);
 	const scheibennummer = $derived(data.scheibennummer);
 
 	type ViewState = 'LOADING' | 'ERROR' | 'WARTET' | 'READY' | 'EXPIRED';

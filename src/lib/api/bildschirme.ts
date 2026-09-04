@@ -2,8 +2,7 @@ import { apiClient } from './client';
 
 /**
  * Geräteverwaltung, siehe FACHLICHKEIT.md "Bildschirm-Pairing". Seit Issue #15 gegen den
- * echten Fawkes-`DeviceManagementController` verdrahtet — Tablets pro einzelner Scheibe
- * (`TabletPairing`) bleiben ein eigener, unveränderter Mechanismus (kein Fawkes-Kontrakt dafür).
+ * echten Fawkes-`DeviceManagementController` verdrahtet.
  *
  * Wichtige Verhaltensänderung ggü. dem alten Mock-only-Modell: kein `pin`/`scheibe_a`/
  * `scheibe_b`/`mode`/`aktiv` mehr. Ein Gerät registriert sich selbst (`GET /Display/register`,
@@ -44,11 +43,6 @@ export interface UpdateDeviceData {
 	displayTheme: DisplayTheme;
 }
 
-export interface TabletPairing {
-	scheibennummer: number;
-	token: string;
-}
-
 export const bildschirmeApi = {
 	list: (token: string, fixtureId: number) =>
 		apiClient.get<Device[]>(`/fixtures/${fixtureId}/devices`, token),
@@ -64,14 +58,5 @@ export const bildschirmeApi = {
 		apiClient.put<Device>(`/fixtures/${fixtureId}/devices/${deviceId}`, data, token),
 
 	unassign: (token: string, fixtureId: number, deviceId: number) =>
-		apiClient.put<void>(`/fixtures/${fixtureId}/devices/${deviceId}/unassign`, undefined, token),
-
-	// Tablet-Pairing bleibt eigener Mock-only-Mechanismus (kein Fawkes-Endpunkt für Scheiben-
-	// Enumeration) — veranstaltungId ist der Routen-String-Parameter, nicht die Fixture-ID.
-	generateTabletToken: (token: string, veranstaltungId: string, scheibennummer: number) =>
-		apiClient.post<TabletPairing>(
-			`/veranstaltungen/${encodeURIComponent(veranstaltungId)}/tablet-token`,
-			{ scheibennummer },
-			token
-		)
+		apiClient.put<void>(`/fixtures/${fixtureId}/devices/${deviceId}/unassign`, undefined, token)
 };
