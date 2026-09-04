@@ -107,6 +107,11 @@ function seedState(): State {
 				}
 			}
 		],
+		// Volle Setzliste für 8 Mannschaften / 7 Matches (Rücksprache Gero, Screenshot
+		// "Setzliste von Match zu Match" 2026-09-04) — Kreisverfahren (jede Mannschaft einmal
+		// gegen jede andere), feste Scheiben-Paarung 1/2, 3/4, 5/6, 7/8 pro Match (FACHLICHKEIT.md).
+		// Mannschafts-Nummern 1–8 der Setzliste entsprechen der Reihenfolge in
+		// `matchPlayCharts['1001'].teams` unten (1=BSC Abendau … 8=BSC Rot-Rot Beerendorf).
 		matches: [
 			{
 				id: 'm-1',
@@ -116,14 +121,26 @@ function seedState(): State {
 					{
 						scheibe_a: 1,
 						scheibe_b: 2,
-						mannschaft_a: 'BSC Abendau',
-						mannschaft_b: 'SV Scharfhaus'
+						mannschaft_a: 'SV Vogelwiese',
+						mannschaft_b: 'BS Hunshausen'
 					},
 					{
 						scheibe_a: 3,
 						scheibe_b: 4,
+						mannschaft_a: 'SV Scharfhaus',
+						mannschaft_b: 'SGi Wuppenhausen'
+					},
+					{
+						scheibe_a: 5,
+						scheibe_b: 6,
+						mannschaft_a: 'BSC Abendau',
+						mannschaft_b: 'BSC Rot-Rot Beerendorf'
+					},
+					{
+						scheibe_a: 7,
+						scheibe_b: 8,
 						mannschaft_a: 'SGes Schützenschaft',
-						mannschaft_b: 'BS Hunshausen'
+						mannschaft_b: 'BS Weiß-Blau München'
 					}
 				]
 			},
@@ -132,7 +149,30 @@ function seedState(): State {
 				veranstaltung_id: '1001',
 				nummer: 2,
 				begegnungen: [
-					{ scheibe_a: 1, scheibe_b: 2, mannschaft_a: 'SV Vogelwiese', mannschaft_b: 'BSC Abendau' }
+					{
+						scheibe_a: 1,
+						scheibe_b: 2,
+						mannschaft_a: 'SGes Schützenschaft',
+						mannschaft_b: 'SV Vogelwiese'
+					},
+					{
+						scheibe_a: 3,
+						scheibe_b: 4,
+						mannschaft_a: 'BSC Rot-Rot Beerendorf',
+						mannschaft_b: 'BS Hunshausen'
+					},
+					{
+						scheibe_a: 5,
+						scheibe_b: 6,
+						mannschaft_a: 'SGi Wuppenhausen',
+						mannschaft_b: 'BSC Abendau'
+					},
+					{
+						scheibe_a: 7,
+						scheibe_b: 8,
+						mannschaft_a: 'BS Weiß-Blau München',
+						mannschaft_b: 'SV Scharfhaus'
+					}
 				]
 			},
 			{
@@ -143,8 +183,150 @@ function seedState(): State {
 					{
 						scheibe_a: 1,
 						scheibe_b: 2,
-						mannschaft_a: 'BS Weiß-Blau München',
+						mannschaft_a: 'BS Hunshausen',
 						mannschaft_b: 'SGi Wuppenhausen'
+					},
+					{
+						scheibe_a: 3,
+						scheibe_b: 4,
+						mannschaft_a: 'BSC Abendau',
+						mannschaft_b: 'BS Weiß-Blau München'
+					},
+					{
+						scheibe_a: 5,
+						scheibe_b: 6,
+						mannschaft_a: 'SV Scharfhaus',
+						mannschaft_b: 'SV Vogelwiese'
+					},
+					{
+						scheibe_a: 7,
+						scheibe_b: 8,
+						mannschaft_a: 'BSC Rot-Rot Beerendorf',
+						mannschaft_b: 'SGes Schützenschaft'
+					}
+				]
+			},
+			{
+				id: 'm-4',
+				veranstaltung_id: '1001',
+				nummer: 4,
+				begegnungen: [
+					{
+						scheibe_a: 1,
+						scheibe_b: 2,
+						mannschaft_a: 'BSC Rot-Rot Beerendorf',
+						mannschaft_b: 'SV Scharfhaus'
+					},
+					{
+						scheibe_a: 3,
+						scheibe_b: 4,
+						mannschaft_a: 'SGi Wuppenhausen',
+						mannschaft_b: 'SGes Schützenschaft'
+					},
+					{
+						scheibe_a: 5,
+						scheibe_b: 6,
+						mannschaft_a: 'BS Weiß-Blau München',
+						mannschaft_b: 'BS Hunshausen'
+					},
+					{
+						scheibe_a: 7,
+						scheibe_b: 8,
+						mannschaft_a: 'BSC Abendau',
+						mannschaft_b: 'SV Vogelwiese'
+					}
+				]
+			},
+			{
+				id: 'm-5',
+				veranstaltung_id: '1001',
+				nummer: 5,
+				begegnungen: [
+					{
+						scheibe_a: 1,
+						scheibe_b: 2,
+						mannschaft_a: 'SGi Wuppenhausen',
+						mannschaft_b: 'BS Weiß-Blau München'
+					},
+					{
+						scheibe_a: 3,
+						scheibe_b: 4,
+						mannschaft_a: 'SV Vogelwiese',
+						mannschaft_b: 'BSC Rot-Rot Beerendorf'
+					},
+					{
+						scheibe_a: 5,
+						scheibe_b: 6,
+						mannschaft_a: 'SGes Schützenschaft',
+						mannschaft_b: 'SV Scharfhaus'
+					},
+					{
+						scheibe_a: 7,
+						scheibe_b: 8,
+						mannschaft_a: 'BS Hunshausen',
+						mannschaft_b: 'BSC Abendau'
+					}
+				]
+			},
+			{
+				id: 'm-6',
+				veranstaltung_id: '1001',
+				nummer: 6,
+				begegnungen: [
+					{
+						scheibe_a: 1,
+						scheibe_b: 2,
+						mannschaft_a: 'BSC Abendau',
+						mannschaft_b: 'SGes Schützenschaft'
+					},
+					{
+						scheibe_a: 3,
+						scheibe_b: 4,
+						mannschaft_a: 'BS Hunshausen',
+						mannschaft_b: 'SV Scharfhaus'
+					},
+					{
+						scheibe_a: 5,
+						scheibe_b: 6,
+						mannschaft_a: 'BSC Rot-Rot Beerendorf',
+						mannschaft_b: 'BS Weiß-Blau München'
+					},
+					{
+						scheibe_a: 7,
+						scheibe_b: 8,
+						mannschaft_a: 'SV Vogelwiese',
+						mannschaft_b: 'SGi Wuppenhausen'
+					}
+				]
+			},
+			{
+				id: 'm-7',
+				veranstaltung_id: '1001',
+				nummer: 7,
+				begegnungen: [
+					{
+						scheibe_a: 1,
+						scheibe_b: 2,
+						mannschaft_a: 'SV Scharfhaus',
+						mannschaft_b: 'BSC Abendau'
+					},
+					{
+						scheibe_a: 3,
+						scheibe_b: 4,
+						mannschaft_a: 'BS Weiß-Blau München',
+						mannschaft_b: 'SV Vogelwiese'
+					},
+					{
+						scheibe_a: 5,
+						scheibe_b: 6,
+						mannschaft_a: 'BS Hunshausen',
+						mannschaft_b: 'SGes Schützenschaft'
+					},
+					{
+						scheibe_a: 7,
+						scheibe_b: 8,
+						mannschaft_a: 'SGi Wuppenhausen',
+						mannschaft_b: 'BSC Rot-Rot Beerendorf'
 					}
 				]
 			}
