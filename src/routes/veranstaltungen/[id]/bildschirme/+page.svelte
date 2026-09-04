@@ -53,6 +53,12 @@
 	// DeviceManagement-Modell mehr), Tablet-Pairing bleibt aber unverändert pro Scheibe.
 	const scheiben = [1, 2, 3, 4, 5, 6, 7, 8];
 
+	// `matchNo` (Fawkes-Feldname) ist bei `displayType === 'Match'` der 1-basierte Index der
+	// Begegnung innerhalb der aktuell freigegebenen Runde, NICHT die Match-/Rundennummer —
+	// klargestellt 2026-09-04 (Gero), siehe ausführlicher Kommentar in `mocks/displays.ts`.
+	// Reihenfolge deckungsgleich mit den `begegnungen`-Arrays in `mocks/veranstaltungen.ts`.
+	const begegnungScheiben: Record<number, string> = { 1: '1/2', 2: '3/4', 3: '5/6', 4: '7/8' };
+
 	let qrModalOpen = $state(false);
 	let qrLoading = $state(false);
 	let qrError = $state<string | null>(null);
@@ -359,7 +365,7 @@
 													class="btn btn-sm btn-outline-primary flex-fill"
 													for="match-no-{d.id}-{n}"
 												>
-													<i class="bi bi-{n}-circle-fill"></i>
+													{begegnungScheiben[n]}
 												</label>
 											{/each}
 										</div>
