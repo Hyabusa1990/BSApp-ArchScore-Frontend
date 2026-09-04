@@ -61,6 +61,43 @@
 	// Reihenfolge deckungsgleich mit den `begegnungen`-Arrays in `mocks/veranstaltungen.ts`.
 	const begegnungScheiben: Record<number, string> = { 1: '1/2', 2: '3/4', 3: '5/6', 4: '7/8' };
 
+	// Backend kennt `matchNo` nur bei `displayType === 'Match'` (Fawkes-Validierung) — beim
+	// Umschalten auf LeagueTable/None wird es serverseitig auf `null` gesetzt und geht damit für
+	// den Draft verloren. Wunsch Gero (2026-09-04): in Spielpausen viele Displays kurz auf
+	// Tabelle stellen, danach zum nächsten Match wieder auf dieselbe Begegnung zurück, ohne sie
+	// sich merken zu müssen — rein client-seitiger Cache (localStorage, pro Fixture+Gerät,
+	// überlebt auch einen Reload) füllt `matchNo` beim Zurückschalten auf Match automatisch
+	// wieder ein. Reine Usability-Krücke, kein Server-Zustand.
+	function lastMatchNoKey(deviceId: number): string {
+		return `bildschirme:${fixtureId}:${deviceId}:lastMatchNo`;
+	}
+
+	function rememberMatchNo(deviceId: number, matchNo: number) {
+		try {
+			localStorage.setItem(lastMatchNoKey(deviceId), String(matchNo));
+		} catch {
+			// z. B. privater Modus ohne Storage-Zugriff — Cache ist dann einfach leer, kein Problem.
+		}
+	}
+
+	function recallMatchNo(deviceId: number): number | null {
+		try {
+			const raw = localStorage.getItem(lastMatchNoKey(deviceId));
+			return raw ? Number(raw) : null;
+		} catch {
+			return null;
+		}
+	}
+
+	/** Beim Zurückschalten auf "Match" die zuletzt gewählte Begegnung vorbelegen, falls noch
+	 * keine gesetzt ist (frischer Draft, `matchNo` kommt gerade erst von `null`). */
+	function restoreLastMatchNo(deviceId: number) {
+		const draft = drafts[deviceId];
+		if (!draft || draft.matchNo !== null) return;
+		const cached = recallMatchNo(deviceId);
+		if (cached !== null) draft.matchNo = cached;
+	}
+
 	let qrModalOpen = $state(false);
 	let qrLoading = $state(false);
 	let qrError = $state<string | null>(null);
@@ -82,6 +119,11 @@
 					{ displayType: d.displayType, matchNo: d.matchNo, displayTheme: d.displayTheme }
 				])
 			);
+			// Cache mit dem serverseitig bekannten Stand warmhalten, auch ohne dass der Admin die
+			// Begegnung in dieser Session schon mal angefasst hat (siehe restoreLastMatchNo oben).
+			for (const d of devices) {
+				if (d.matchNo !== null) rememberMatchNo(d.id, d.matchNo);
+			}
 		} catch {
 			loadError = $_('bildschirme.error_load');
 		} finally {
@@ -269,6 +311,7 @@
 											autocomplete="off"
 											bind:group={draft.displayType}
 											value="Match"
+											onchange={() => restoreLastMatchNo(d.id)}
 										/>
 										<label
 											class="btn btn-sm btn-outline-success flex-fill"
@@ -361,6 +404,7 @@
 													autocomplete="off"
 													bind:group={draft.matchNo}
 													value={n}
+													onchange={() => rememberMatchNo(d.id, n)}
 												/>
 												<label
 													class="btn btn-sm btn-outline-primary flex-fill"
