@@ -1,8 +1,8 @@
 <script lang="ts">
-	import type { LeagueTableEintrag } from '$lib/api/display';
+	import type { LeagueTablePosition } from '$lib/api/display';
 	import { _ } from 'svelte-i18n';
 
-	let { eintraege } = $props<{ eintraege: LeagueTableEintrag[] }>();
+	let { eintraege } = $props<{ eintraege: LeagueTablePosition[] }>();
 
 	// Schriftgröße dynamisch aus der gemessenen Container-Höhe berechnen (ResizeObserver),
 	// NICHT über statisches CSS clamp()/vh — Vorbild: liga-Referenzprojekt (beamer-Route).

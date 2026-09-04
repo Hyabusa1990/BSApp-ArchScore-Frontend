@@ -13,9 +13,16 @@ import { apiClient } from './client';
  * (`None`/`Match`/`LeagueTable`, Issue #18) + optional `matchNo` (nur bei `Match`) konfigurierbar.
  * Welche zwei Scheiben bei `Match` angezeigt werden, leitet das Backend selbst ab
  * (`GET /Display/data`) — keine manuelle Scheiben-Paar-Auswahl mehr.
+ *
+ * `displayTheme` (Spec-Sync 2026-09-04) kam nachträglich als required Feld dazu — der Admin
+ * legt das Theme jetzt pro Gerät fest, die Anzeigeseite übernimmt es aus `GET /Display/data`
+ * statt wie bisher aus dem URL-Segment (siehe `$lib/api/display.ts`, `routes/display/[[theme]]`).
  */
 
 export type DisplayType = 'None' | 'Match' | 'LeagueTable';
+
+/** `Fawkes.Api.Controllers.DeviceManagementController.DisplayTheme`. */
+export type DisplayTheme = 'Light' | 'Dark';
 
 /** `Fawkes.Api.Controllers.DeviceManagementController.GetDeviceResponse`. */
 export interface Device {
@@ -23,11 +30,13 @@ export interface Device {
 	displayType: DisplayType;
 	/** Nur relevant bei `displayType === 'Match'`. */
 	matchNo: number | null;
+	displayTheme: DisplayTheme;
 }
 
 export interface UpdateDeviceData {
 	displayType: DisplayType;
 	matchNo: number | null;
+	displayTheme: DisplayTheme;
 }
 
 export interface TabletPairing {

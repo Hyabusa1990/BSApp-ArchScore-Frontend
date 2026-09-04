@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
-	import { displayApi, type DisplaySeite, type LeagueTableEintrag } from '$lib/api/display';
+	import {
+		displayApi,
+		type DisplaySeite,
+		type DisplayTheme,
+		type LeagueTablePosition
+	} from '$lib/api/display';
 	import { APIError } from '$lib/api/client';
 	import { _ } from 'svelte-i18n';
 	import { Spinner } from '@sveltestrap/sveltestrap';
@@ -8,9 +13,9 @@
 	import DisplayLeagueTable from '$lib/components/DisplayLeagueTable.svelte';
 	import ConnectivityBanner from '$lib/components/ConnectivityBanner.svelte';
 	import { connectivity } from '$lib/stores/connectivity.svelte';
-	import type { DisplayTheme } from './+page';
+	import type { ThemeHint } from './+page';
 
-	let { data } = $props<{ data: { theme: DisplayTheme } }>();
+	let { data } = $props<{ data: { theme: ThemeHint } }>();
 
 	const ACCESS_TOKEN_KEY = 'display_access_token';
 	const REFRESH_TOKEN_KEY = 'display_refresh_token';
@@ -22,8 +27,16 @@
 	let pairingCode = $state<string | null>(null);
 	let scheibeA = $state<DisplaySeite | null>(null);
 	let scheibeB = $state<DisplaySeite | null>(null);
-	let leagueTable = $state<LeagueTableEintrag[]>([]);
+	let leagueTable = $state<LeagueTablePosition[]>([]);
 	let loadError = $state<string | null>(null);
+
+	// Backend-seitiges Theme (Spec-Sync 2026-09-04, `$lib/api/bildschirme.ts`) ersetzt das
+	// URL-Segment als Wahrheitsquelle, sobald die erste `/Display/data`-Antwort da ist — bis
+	// dahin dient `data.theme` (Routen-Hint) nur als Rate-Wert für den Ladebildschirm. Absichtlich
+	// nur EINMAL aus `data` initialisiert (svelte-check warnt hier zurecht, dass `data`-Änderungen
+	// sich nicht automatisch niederschlagen) — `tick()` unten übernimmt danach die Führung.
+	let activeTheme = $state<DisplayTheme>(data.theme === 'light' ? 'Light' : 'Dark');
+	const isLight = $derived(activeTheme === 'Light');
 
 	// Satzpunkte kommen unverändert aus der aufbereiteten Backend-Antwort — Vergleich nur zur
 	// Einfärbung (grün/rot), keine eigene Ergebnisberechnung (siehe FACHLICHKEIT.md).
@@ -42,12 +55,12 @@
 	// Rand dort immer dunkel, auch im Light-Theme.
 	$effect(() => {
 		if (!browser) return;
-		document.body.style.background = data.theme === 'light' ? '#f4f5f7' : '#10151c';
+		document.body.style.background = isLight ? '#f4f5f7' : '#10151c';
 		// Sagt der Rendering-Engine explizit, welches Theme aktiv ist — ohne das greift auf
 		// Android (WebView "Force Dark", betrifft auch Android-TV-Browser wie Fully Kiosk)
 		// automatische Dunkel-Invertierung, selbst wenn die Seite selbst schon Light-Farben
 		// setzt (System denkt sonst "Seite kennt kein Dark/Light, ich muss eingreifen").
-		document.documentElement.style.colorScheme = data.theme;
+		document.documentElement.style.colorScheme = isLight ? 'light' : 'dark';
 	});
 
 	// ── Pairing + Polling in einer Schleife ─────────────────────────────────────
@@ -108,6 +121,9 @@
 				loadError = null;
 				// Server hat geantwortet -> Verbindung steht (Issue #20).
 				connectivity.reportSuccess();
+				// Backend-Theme übernehmen (Spec-Sync 2026-09-04) — gilt für jeden displayType-
+				// Zweig, siehe api/display.ts.
+				activeTheme = data.displayTheme;
 				if (data.displayType === 'Unassigned') {
 					pairingCode = localStorage.getItem(DEVICE_CODE_KEY);
 					scheibeA = null;
@@ -118,7 +134,7 @@
 					scheibeB = data.targets[1];
 					view = 'CONTENT';
 				} else if (data.displayType === 'LeagueTable') {
-					leagueTable = data.leagueTable;
+					leagueTable = data.leagueTablePositions ?? [];
 					view = 'LEAGUE_TABLE';
 				} else {
 					scheibeA = null;
@@ -152,10 +168,10 @@
 
 <svelte:head>
 	<title>{$_('display.page_title')}</title>
-	<meta name="color-scheme" content={data.theme} />
+	<meta name="color-scheme" content={isLight ? 'light' : 'dark'} />
 </svelte:head>
 
-<div class="monitor-page" class:theme-light={data.theme === 'light'}>
+<div class="monitor-page" class:theme-light={isLight}>
 	{#if view === 'LOADING'}
 		<div class="monitor-center">
 			<Spinner style="width: 4rem; height: 4rem;" />

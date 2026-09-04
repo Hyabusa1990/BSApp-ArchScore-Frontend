@@ -6,7 +6,7 @@ import type {
 	MatchPlayChart,
 	MatchPlayChartTeam
 } from '$lib/api/veranstaltung';
-import type { LeagueTableEintrag } from '$lib/api/display';
+import type { LeagueTablePosition } from '$lib/api/display';
 import type { Match, Begegnung } from '$lib/api/matchkontrolle';
 import type { Device, UpdateDeviceData } from '$lib/api/bildschirme';
 import { users } from './fixtures';
@@ -66,7 +66,7 @@ interface State {
 	/** Veranstaltungs-ID (String) -> Ligatabelle, wie sie ein `LeagueTable`-Gerät anzeigt (Issue
 	 * #18) — eigene Datenquelle ggü. `matchPlayCharts` (andere Feldnamen, siehe `display.ts`),
 	 * bewusst nur für Veranstaltungen mit `datenquelle === 'liga'` gepflegt. */
-	leagueTables: Record<string, LeagueTableEintrag[]>;
+	leagueTables: Record<string, LeagueTablePosition[]>;
 	/** Veranstaltungs-ID (String) -> zugewiesene Geräte (Fawkes `GetDeviceResponse[]`, Issue #15). */
 	devices: Record<string, StoredDevice[]>;
 	/** deviceCodes, die sich schon selbst registriert haben (`GET /Display/register`, Issue #17),
@@ -171,8 +171,24 @@ function seedState(): State {
 			}
 		},
 		devices: {
-			'1001': [{ id: 500, displayType: 'Match', matchNo: 1, deviceCode: 'DEV-SEED01' }],
-			'1002': [{ id: 501, displayType: 'LeagueTable', matchNo: null, deviceCode: 'DEV-SEED02' }]
+			'1001': [
+				{
+					id: 500,
+					displayType: 'Match',
+					matchNo: 1,
+					displayTheme: 'Dark',
+					deviceCode: 'DEV-SEED01'
+				}
+			],
+			'1002': [
+				{
+					id: 501,
+					displayType: 'LeagueTable',
+					matchNo: null,
+					displayTheme: 'Light',
+					deviceCode: 'DEV-SEED02'
+				}
+			]
 		},
 		leagueTables: {
 			'1002': [
@@ -340,7 +356,7 @@ export function getMatchPlayChart(fixtureId: number): MatchPlayChart | undefined
  * aus dem Vorzeichen rekonstruiert (negativ -> komplett in Minus, sonst komplett in Plus) — reine
  * Mock-Annäherung, keine echte Sieg/Niederlage-Historie.
  */
-function toLeagueTableEintraege(teams: MatchPlayChartTeam[]): LeagueTableEintrag[] {
+function toLeagueTablePositions(teams: MatchPlayChartTeam[]): LeagueTablePosition[] {
 	return [...teams]
 		.sort((a, b) => b.matchPoints - a.matchPoints || b.setPoints - a.setPoints)
 		.map((team, i) => ({
@@ -360,12 +376,12 @@ function toLeagueTableEintraege(teams: MatchPlayChartTeam[]): LeagueTableEintrag
  * initiale Tabelle zurück (`matchPlayCharts`, "Tabelle eintragen" im Veranstaltungs-Formular) —
  * dieselben Standings, die auch in der Verwaltungsoberfläche angezeigt werden.
  */
-export function getLeagueTable(veranstaltungId: string): LeagueTableEintrag[] {
+export function getLeagueTable(veranstaltungId: string): LeagueTablePosition[] {
 	const state = load();
 	const explizit = state.leagueTables[veranstaltungId];
 	if (explizit) return explizit;
 	const chart = state.matchPlayCharts[veranstaltungId];
-	return chart ? toLeagueTableEintraege(chart.teams) : [];
+	return chart ? toLeagueTablePositions(chart.teams) : [];
 }
 
 /**
@@ -451,8 +467,8 @@ function randomDeviceCode(): string {
 }
 
 /** Nie an Admin-Handler durchreichen — `GetDeviceResponse` kennt kein `deviceCode`-Feld. */
-function toPublicDevice({ id, displayType, matchNo }: StoredDevice): Device {
-	return { id, displayType, matchNo };
+function toPublicDevice({ id, displayType, matchNo, displayTheme }: StoredDevice): Device {
+	return { id, displayType, matchNo, displayTheme };
 }
 
 export function devicesFor(veranstaltungId: string): Device[] {
@@ -493,6 +509,10 @@ export function assignDevice(veranstaltungId: string, deviceCode: string): Devic
 		id: state.nextId++,
 		displayType: 'None',
 		matchNo: null,
+		// Kein echter Referenz-Endpunkt verifizierbar (`GET /Display/register` liefert auf dem
+		// Live-Server aktuell `500 NotImplementedException`, Stand 2026-09-04) — Default
+		// mangels Vorgabe auf `Dark` gesetzt, wie bisher schon App-weiter Default.
+		displayTheme: 'Dark',
 		deviceCode
 	};
 	(state.devices[veranstaltungId] ??= []).push(device);

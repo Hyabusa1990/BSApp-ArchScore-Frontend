@@ -15,9 +15,19 @@ import { apiClient } from './client';
  * abgebildet, bis das vom Backend geklärt ist. `LeagueTable` (Issue #18, Rücksprache
  * Backend-Entwickler 2026-08-18, Wording auf `LeagueTable`/`leagueTable` korrigiert 2026-08-18)
  * ersetzt das alte Mock-only `mode: 'tabelle'`-Konzept — die Ligatabelle kommt jetzt direkt
- * eingebettet in `GET /Display/data` (`leagueTable`-Feld) statt separat aus `MatchPlayChart`
- * abgeleitet zu werden, deshalb auch andere Feldnamen (`setPointsWon`/`setPointsLost`/
- * `matchPointsWon`/`matchPointsLost`/`position` statt `setPoints`/`matchPoints`).
+ * eingebettet in `GET /Display/data` statt separat aus `MatchPlayChart` abgeleitet zu werden,
+ * deshalb auch andere Feldnamen (`setPointsWon`/`setPointsLost`/`matchPointsWon`/
+ * `matchPointsLost`/`position` statt `setPoints`/`matchPoints`). Feldname zunächst `leagueTable`
+ * geraten (vor Spec-Klärung gebaut) — Spec-Sync 2026-09-04 hat den echten Namen
+ * `leagueTablePositions` gebracht (Schema `LeagueTablePosition`, Felder identisch), hier
+ * entsprechend korrigiert. Die Spec markiert das Feld außerdem `nullable` — anders als zuvor
+ * angenommen, Konsumenten müssen `?? []` behandeln.
+ *
+ * `displayTheme` (ebenfalls Spec-Sync 2026-09-04, required) macht das Anzeige-Theme ab jetzt
+ * backend-seitig: der Admin legt es pro Gerät fest (`$lib/api/bildschirme.ts`), diese Antwort
+ * liefert den aktuellen Wert. Ersetzt die bisherige rein URL-routenbasierte Theme-Wahl
+ * (`routes/display/[[theme]]`) als Wahrheitsquelle — das Routen-Segment bleibt nur noch als
+ * Rate-Wert für den allerersten Ladezustand.
  *
  * `TargetDisplayData` folgt weiterhin 1:1 dem Fawkes-Feldnamen-Schema (englisch, camelCase),
  * siehe bisherige Begründung unten bei `deriveMonitorStatus`.
@@ -32,6 +42,11 @@ export interface DeviceTokenResponse {
 }
 
 export type DisplayDataType = 'Unassigned' | 'None' | 'Match' | 'LeagueTable';
+
+/** `Fawkes.Api.Controllers.DisplayController.DisplayTheme` — eigenes Schema ggü.
+ * `bildschirme.ts`s `DisplayTheme`, gleiche zwei Werte, wie schon bei `DisplayType`/
+ * `DisplayDataType` nie im selben File verwendet. */
+export type DisplayTheme = 'Light' | 'Dark';
 
 /** `Fawkes.Api.Controllers.DisplayController.TargetDisplayData`. */
 export interface DisplaySeite {
@@ -69,8 +84,9 @@ export function deriveMonitorStatus(seite: DisplaySeite | null): MonitorStatus {
 	return 'VOR_DEM_MATCH';
 }
 
-/** `Fawkes.Api.Controllers.DisplayController.LeagueTableEntry` (Issue #18). */
-export interface LeagueTableEintrag {
+/** `Fawkes.Api.Controllers.DisplayController.LeagueTablePosition` (Issue #18, Feldname
+ * korrigiert im Spec-Sync 2026-09-04 — hieß vorher `LeagueTableEintrag`). */
+export interface LeagueTablePosition {
 	position: number;
 	teamName: string;
 	setPointsWon: number;
@@ -80,16 +96,17 @@ export interface LeagueTableEintrag {
 }
 
 /**
- * `Fawkes.Api.Controllers.DisplayController.DisplayDataResponse`. Beide Arrays sind laut
- * Rücksprache Backend-Entwickler (2026-08-18) IMMER Arrays, nie `null` — bei `displayType`
- * `'LeagueTable'` ist `targets` leer, bei `'Match'`/`'None'`/`'Unassigned'` ist `leagueTable`
- * leer. Konsumierender Code darf sich also nie auf `null` verlassen, nur auf `.length`.
+ * `Fawkes.Api.Controllers.DisplayController.DisplayDataResponse`. `targets` ist laut
+ * Rücksprache Backend-Entwickler (2026-08-18) IMMER ein Array, nie `null` — bei `displayType`
+ * `'LeagueTable'` einfach leer. `leagueTablePositions` ist laut Spec dagegen `nullable`
+ * (Spec-Sync 2026-09-04) — Konsumenten müssen `?? []` behandeln, nicht nur auf `.length` bauen.
  */
 export interface DisplayDataResponse {
 	displayType: DisplayDataType;
+	displayTheme: DisplayTheme;
 	targets: DisplaySeite[];
-	/** Nur befüllt, wenn `displayType === 'LeagueTable'` — sonst leer. */
-	leagueTable: LeagueTableEintrag[];
+	/** Nur befüllt, wenn `displayType === 'LeagueTable'` — sonst leer/`null`. */
+	leagueTablePositions: LeagueTablePosition[] | null;
 }
 
 /** `Fawkes.Api.Controllers.AuthController.TokenResponse` — generischer Refresh-Endpunkt, gilt

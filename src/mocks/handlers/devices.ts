@@ -87,9 +87,13 @@ export const deviceHandlers = [
 		) {
 			return HttpResponse.json({ detail: 'displayType fehlt oder ungültig' }, { status: 422 });
 		}
+		if (body.displayTheme !== 'Light' && body.displayTheme !== 'Dark') {
+			return HttpResponse.json({ detail: 'displayTheme fehlt oder ungültig' }, { status: 422 });
+		}
 		const device = updateDevice(String(v.id), Number(params.deviceId), {
 			displayType: body.displayType,
-			matchNo: body.matchNo ?? null
+			matchNo: body.matchNo ?? null,
+			displayTheme: body.displayTheme
 		});
 		if (!device) return HttpResponse.json({ detail: 'Gerät nicht gefunden' }, { status: 404 });
 		return HttpResponse.json(device);

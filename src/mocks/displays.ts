@@ -162,28 +162,52 @@ export function getDisplayData(accessToken: string): DisplayDataResponse | undef
 	if (!deviceCode) return undefined;
 
 	const assigned = findAssignedDeviceByCode(deviceCode);
-	if (!assigned) return { displayType: 'Unassigned', targets: [], leagueTable: [] };
+	if (!assigned) {
+		// Noch keiner Fixture zugeordnet — kein Device-Record mit eigenem `displayTheme`
+		// existiert an dieser Stelle. Kein echter Referenz-Endpunkt verifizierbar (siehe
+		// veranstaltungen.ts, `assignDevice`), Default mangels Vorgabe auf `Dark`.
+		return {
+			displayType: 'Unassigned',
+			displayTheme: 'Dark',
+			targets: [],
+			leagueTablePositions: []
+		};
+	}
 
 	const { veranstaltungId, device } = assigned;
 
 	if (device.displayType === 'LeagueTable') {
 		return {
 			displayType: 'LeagueTable',
+			displayTheme: device.displayTheme,
 			targets: [],
-			leagueTable: getLeagueTable(veranstaltungId)
+			leagueTablePositions: getLeagueTable(veranstaltungId)
 		};
 	}
 
 	if (device.displayType !== 'Match' || device.matchNo === null) {
-		return { displayType: 'None', targets: [], leagueTable: [] };
+		return {
+			displayType: 'None',
+			displayTheme: device.displayTheme,
+			targets: [],
+			leagueTablePositions: []
+		};
 	}
 
 	const [begegnung] = begegnungenForMatch(veranstaltungId, device.matchNo);
-	if (!begegnung) return { displayType: 'None', targets: [], leagueTable: [] };
+	if (!begegnung) {
+		return {
+			displayType: 'None',
+			displayTheme: device.displayTheme,
+			targets: [],
+			leagueTablePositions: []
+		};
+	}
 
 	return {
 		displayType: 'Match',
+		displayTheme: device.displayTheme,
 		targets: [buildSeiteForScheibe(begegnung.scheibe_a), buildSeiteForScheibe(begegnung.scheibe_b)],
-		leagueTable: []
+		leagueTablePositions: []
 	};
 }
