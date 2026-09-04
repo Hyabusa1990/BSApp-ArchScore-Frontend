@@ -11,6 +11,7 @@
 	} from '$lib/api/bildschirme';
 	import { APIError } from '$lib/api/client';
 	import QRCode from 'qrcode';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import {
 		Container,
 		Row,
@@ -43,7 +44,8 @@
 	type Draft = { displayType: DisplayType; matchNo: number | null; displayTheme: DisplayTheme };
 	let drafts = $state<Record<number, Draft>>({});
 	let savingId = $state<number | null>(null);
-	let unassigningId = $state<number | null>(null);
+	let unassignTarget = $state<Device | null>(null);
+	let unassigning = $state(false);
 	let saveError = $state<string | null>(null);
 
 	let newDeviceCode = $state('');
@@ -162,17 +164,18 @@
 		}
 	}
 
-	async function unassign(d: Device) {
-		if (unassigningId) return;
-		unassigningId = d.id;
+	async function confirmUnassign() {
+		if (!unassignTarget) return;
+		unassigning = true;
 		saveError = null;
 		try {
-			await bildschirmeApi.unassign(auth.accessToken!, fixtureId, d.id);
-			devices = devices.filter((x) => x.id !== d.id);
+			await bildschirmeApi.unassign(auth.accessToken!, fixtureId, unassignTarget.id);
+			devices = devices.filter((x) => x.id !== unassignTarget!.id);
+			unassignTarget = null;
 		} catch {
 			saveError = $_('bildschirme.error_unassign');
 		} finally {
-			unassigningId = null;
+			unassigning = false;
 		}
 	}
 
@@ -438,10 +441,8 @@
 											size="sm"
 											color="outline-danger"
 											class="w-100"
-											disabled={unassigningId === d.id}
-											onclick={() => unassign(d)}
+											onclick={() => (unassignTarget = d)}
 										>
-											{#if unassigningId === d.id}<Spinner size="sm" class="me-2" />{/if}
 											{$_('bildschirme.unassign_btn')}
 										</Button>
 									</Col>
@@ -511,6 +512,20 @@
 		{/if}
 	</ModalBody>
 </Modal>
+
+<ConfirmModal
+	isOpen={unassignTarget !== null}
+	title={$_('bildschirme.unassign_confirm_title')}
+	message={unassignTarget
+		? $_('bildschirme.unassign_confirm', { values: { id: unassignTarget.id } })
+		: ''}
+	confirmLabel={$_('bildschirme.unassign_btn')}
+	cancelLabel={$_('bildschirme.cancel_btn')}
+	confirmColor="danger"
+	loading={unassigning}
+	onConfirm={confirmUnassign}
+	onCancel={() => (unassignTarget = null)}
+/>
 
 <style>
 	:global(.border-dashed) {
