@@ -1,46 +1,36 @@
 import { apiClient } from './client';
 
 /**
- * Shapes 1:1 an das `scoring`-Referenzprojekt (`frontend/src/lib/api/binocular.ts`) angelehnt,
- * siehe FACHLICHKEIT.md "Migrations-Prinzip" — MIT einer bewussten Auslassung: kein
- * `ohne_digitale_meldung`-Feld/-Parameter. Dieser Fall wird zentral in der Admin-Oberfläche
- * (Ligaverwaltungs-Verbindung) abgefragt und vom Backend gespeichert, siehe Issue #4.
- *
  * Pfade folgen dem Fawkes-Spotter-Kontrakt (`docs/Fawkes-OpenApi.json`,
  * `SpotterController`, Stand 2026-08-17, siehe #9): `token` im URL-Pfad ist die
  * `fixtureUniqueId`, `scheibennummer` ist `targetNo` — kein Bearer nötig, die schwer zu
  * erratende `fixtureUniqueId` selbst ist laut Spec die Absicherung.
  *
- * `shots`/`isConfirmed` sind die beiden echten Fawkes-Felder aus `GetTargetResponse`,
- * zusätzlich zu den Legacy-Feldern (status/extern_match_id/vorlaeufige_passen/...), die die
- * Spotter-Seite noch braucht — die Seite selbst wird erst in #7 auf den schlanken
- * Fawkes-Kontrakt umgebaut, bis dahin liefert der Mock beides parallel.
+ * `BinocularMatch` entspricht seit 2026-09-04 1:1 `GetTargetResponse` — vorher liefen hier
+ * zusätzlich diverse Legacy-Felder aus dem alten `scoring`-Referenzprojekt mit
+ * (`status`/`extern_match_id`/`mannschaft_name`/`gegner_name`/`selected_members`/
+ * `aktueller_satz`/`vorlaeufige_passen`/`schuetze_bestaetigte_saetze`), obwohl die echte API sie
+ * nie liefert (`additionalProperties: false` in der Spec). Geprüft: von all dem las die
+ * Spotter-Seite (`routes/tablet/.../+page.svelte`) nur `mannschaft_name` (-> `teamName`),
+ * `extern_match_id` (Neues-Match-Erkennung beim Polling, jetzt über `teamName`-Wechsel gelöst)
+ * und `status` (ACTIVE/COMPLETED-Umschaltung, jetzt über `isConfirmed` abgedeckt — siehe
+ * `mocks/binoculars.ts`) — der Rest war reiner, nie gelesener Wire-Ballast.
  */
 
-export interface VorlaeufigePasse {
-	position: number;
-	lfd_nr: number;
-	ringzahl_pfeil1: number | null;
-	ringzahl_pfeil2: number | null;
-}
-
 export interface BinocularMatch {
-	// Erlaubt der UI zu erkennen, dass auf derselben Scheibe ein neues Match aktiv wurde.
-	extern_match_id: number;
-	status: string;
-	mannschaft_name: string;
-	gegner_name: string;
-	selected_members: number[];
-	aktueller_satz: number;
-	vorlaeufige_passen: VorlaeufigePasse[];
-	schuetze_bestaetigte_saetze: number[];
+	targetNo: number;
+	teamName: string | null;
+	/** Ringsumme des aktuell laufenden Satzes, `null` solange noch kein Pfeil erfasst ist. */
+	currentSetScore: number | null;
 	/**
 	 * Fawkes-`shots`-String des aktuellen Satzes: 10 als "+", Fehlschuss (M) als "0", sonst
 	 * Ziffer, konkateniert (z.B. 10,M,8 -> "+08"). Nicht geschossene Pfeile fehlen am
 	 * Stringende, kein Platzhalter.
 	 */
-	shots: string;
-	/** Ob der aktuelle Satz vom Spotter final bestätigt wurde (danach keine Änderung mehr). */
+	shots: string | null;
+	/** Ob der aktuelle Satz vom Spotter final bestätigt wurde (danach keine Änderung mehr) —
+	 * bleibt auch `true`, wenn das Match auf dieser Scheibe komplett entschieden ist (kein
+	 * weiterer Satz kommt mehr), siehe `mocks/binoculars.ts`. */
 	isConfirmed: boolean;
 }
 

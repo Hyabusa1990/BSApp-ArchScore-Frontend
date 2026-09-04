@@ -38,8 +38,8 @@
 		return [null, null, null, null, null, null];
 	}
 
-	function arrowsFromShots(shots: string): (number | null)[] {
-		const chars = shots.split('');
+	function arrowsFromShots(shots: string | null): (number | null)[] {
+		const chars = (shots ?? '').split('');
 		return Array.from({ length: 6 }, (_, i) => (i < chars.length ? decodeShot(chars[i]) : null));
 	}
 
@@ -97,8 +97,10 @@
 	// durch die Turnierleitung: shots wird leer, isConfirmed fällt zurück auf false.
 	// Während einer laufenden Aktion (sending) wird nicht synchronisiert, um ein
 	// optimistisches Tap-Update nicht mit einer zwischenzeitlich veralteten Poll-Antwort zu
-	// überschreiben. In WARTET oder bei geändertem extern_match_id (neues Match auf
-	// derselben Scheibe): vollständig neu übernehmen.
+	// überschreiben. In WARTET oder bei geändertem teamName (andere Begegnung jetzt auf
+	// derselben Scheibe — einzig verfügbares echtes Signal dafür, seit `GetTargetResponse` kein
+	// eigenes Match-Kennzeichen mehr hat, siehe `$lib/api/binocular.ts`): vollständig neu
+	// übernehmen.
 	$effect(() => {
 		if (view !== 'READY' && view !== 'WARTET') return;
 		const interval = setInterval(async () => {
@@ -107,7 +109,7 @@
 				// Server hat geantwortet -> Verbindung steht, unabhängig davon, ob sich der
 				// Match-Stand geändert hat (Issue #20).
 				connectivity.reportSuccess();
-				if (view === 'WARTET' || matchData?.extern_match_id !== md.extern_match_id) {
+				if (view === 'WARTET' || matchData?.teamName !== md.teamName) {
 					uebernehmeMatchDaten(md);
 					view = 'READY';
 				} else if (!sending) {
@@ -354,80 +356,72 @@
 			<span class="small text-muted"
 				>{$_('binocular.lane_label', { values: { lane: scheibennummer } })}</span
 			>
-			<div class="fw-bold text-truncate">{matchData.mannschaft_name}</div>
+			<div class="fw-bold text-truncate">{matchData.teamName}</div>
 		</div>
 
 		<div class="binocular-content d-flex flex-column align-items-center justify-content-center">
-			{#if matchData.status !== 'ACTIVE'}
-				<Alert color="warning" class="text-center py-4 mb-0">
-					<i class="bi bi-hourglass-split fs-1 d-block mb-3"></i>
-					<h5 class="fw-bold mb-0">
-						{matchData.status === 'COMPLETED'
-							? $_('binocular.completed_title')
-							: $_('binocular.waiting_title')}
-					</h5>
-				</Alert>
-			{:else}
-				<!-- Satzweise Anzeige: alle 6 Pfeile des aktuellen Satzes. Bereits erfasste
-				     Pfeile sind antippbar, um sie nachträglich zu korrigieren (solange nicht
-				     bestätigt/gesperrt). -->
-				<div class="satz-grid">
-					{#each [0, 1, 2] as posIdx (posIdx)}
-						<div
-							class="passe-row {posIdx === aktivePosition &&
-							!confirming &&
-							!locked &&
-							korrekturIndex === null
-								? 'passe-aktiv'
-								: ''}"
-						>
-							{#each [posIdx * 2, posIdx * 2 + 1] as idx (idx)}
-								<button
-									type="button"
-									class="pfeil-feld {pfeilColorClass(arrows[idx])} {korrekturIndex === idx
-										? 'pfeil-korrektur'
-										: ''}"
-									disabled={arrows[idx] === null || sending || locked}
-									onclick={() => toggleKorrektur(idx)}
-								>
-									{pfeilLabel(arrows[idx])}
-								</button>
-							{/each}
-						</div>
-					{/each}
-				</div>
+			<!-- Satzweise Anzeige: alle 6 Pfeile des aktuellen Satzes. Bereits erfasste Pfeile
+			     sind antippbar, um sie nachträglich zu korrigieren (solange nicht
+			     bestätigt/gesperrt). `locked` deckt sowohl "nächster Satz noch nicht freigegeben"
+			     als auch "Match auf dieser Scheibe komplett entschieden" ab — die echte Fawkes-API
+			     unterscheidet das nicht (kein eigenes Match-Ende-Feld, nur `isConfirmed`), aus
+			     Spotter-Sicht ist beides ohnehin "nichts zu tun, auf die Turnierleitung warten". -->
+			<div class="satz-grid">
+				{#each [0, 1, 2] as posIdx (posIdx)}
+					<div
+						class="passe-row {posIdx === aktivePosition &&
+						!confirming &&
+						!locked &&
+						korrekturIndex === null
+							? 'passe-aktiv'
+							: ''}"
+					>
+						{#each [posIdx * 2, posIdx * 2 + 1] as idx (idx)}
+							<button
+								type="button"
+								class="pfeil-feld {pfeilColorClass(arrows[idx])} {korrekturIndex === idx
+									? 'pfeil-korrektur'
+									: ''}"
+								disabled={arrows[idx] === null || sending || locked}
+								onclick={() => toggleKorrektur(idx)}
+							>
+								{pfeilLabel(arrows[idx])}
+							</button>
+						{/each}
+					</div>
+				{/each}
+			</div>
 
-				{#if korrekturIndex !== null}
-					<Alert color="info" class="text-center mt-3 mb-0 w-100 py-2">
-						{$_('binocular.korrektur_hint', { values: { n: korrekturIndex + 1 } })}
-						<button
-							type="button"
-							class="btn btn-sm btn-link p-0 ms-2"
-							onclick={() => (korrekturIndex = null)}
-						>
-							{$_('binocular.korrektur_cancel')}
-						</button>
-					</Alert>
-				{:else if confirming}
-					<Alert color="success" class="text-center mt-3 mb-0 w-100">
-						<div class="fw-bold mb-2">{$_('binocular.confirm_title')}</div>
-						<button
-							class="btn btn-success w-100 py-2 fw-bold"
-							disabled={satzSaving}
-							onclick={bestaetigen}
-						>
-							{#if satzSaving}
-								<Spinner size="sm" class="me-2" />
-							{/if}
-							{$_('binocular.confirm_btn')}
-						</button>
-					</Alert>
-				{:else if locked}
-					<Alert color="info" class="text-center mt-3 mb-0 w-100 py-3">
-						<i class="bi bi-check2-circle fs-2 d-block mb-2"></i>
-						{$_('binocular.confirmed_waiting')}
-					</Alert>
-				{/if}
+			{#if korrekturIndex !== null}
+				<Alert color="info" class="text-center mt-3 mb-0 w-100 py-2">
+					{$_('binocular.korrektur_hint', { values: { n: korrekturIndex + 1 } })}
+					<button
+						type="button"
+						class="btn btn-sm btn-link p-0 ms-2"
+						onclick={() => (korrekturIndex = null)}
+					>
+						{$_('binocular.korrektur_cancel')}
+					</button>
+				</Alert>
+			{:else if confirming}
+				<Alert color="success" class="text-center mt-3 mb-0 w-100">
+					<div class="fw-bold mb-2">{$_('binocular.confirm_title')}</div>
+					<button
+						class="btn btn-success w-100 py-2 fw-bold"
+						disabled={satzSaving}
+						onclick={bestaetigen}
+					>
+						{#if satzSaving}
+							<Spinner size="sm" class="me-2" />
+						{/if}
+						{$_('binocular.confirm_btn')}
+					</button>
+				</Alert>
+			{:else if locked}
+				<Alert color="info" class="text-center mt-3 mb-0 w-100 py-3">
+					<i class="bi bi-check2-circle fs-2 d-block mb-2"></i>
+					{$_('binocular.confirmed_waiting')}
+				</Alert>
 			{/if}
 		</div>
 
@@ -437,7 +431,7 @@
 			</div>
 		{/if}
 
-		{#if matchData.status === 'ACTIVE' && !locked}
+		{#if !locked}
 			<div class="binocular-keypad border-top bg-white p-2">
 				{#if korrekturIndex !== null || !confirming}
 					<div class="row g-2 mb-2">

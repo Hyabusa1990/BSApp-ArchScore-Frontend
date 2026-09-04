@@ -1,4 +1,3 @@
-import type { VorlaeufigePasse } from '$lib/api/binocular';
 import { loadState, saveState } from './persist';
 
 /**
@@ -12,13 +11,20 @@ import { loadState, saveState } from './persist';
  * Browser-Tabs — ohne Persistenz sähe jeder Tab nur seinen eigenen, leeren Zustand.
  */
 
+/** Rein Mock-interne Roh-Pfeilerfassung — hat kein Wire-Pendant (die echte Fawkes-Spec kennt
+ * nur den fertig kodierten `shots`-String, siehe `$lib/api/binocular.ts`). Lag früher dort als
+ * Legacy-Feld von `BinocularMatch`, gehört aber nicht in die Kontrakt-Datei (Spec-Sync
+ * 2026-09-04, Aufräumen der erfundenen Felder). */
+export interface VorlaeufigePasse {
+	position: number;
+	lfd_nr: number;
+	ringzahl_pfeil1: number | null;
+	ringzahl_pfeil2: number | null;
+}
+
 export interface ScheibenScoringState {
 	/** Admin-Match-ID (aus veranstaltungen.ts) — zur Rundenwechsel-Erkennung. */
 	matchKey: string;
-	/** Eindeutige Kennung pro Scheibe/Match — ersetzt das extern_match_id aus dem
-	 * Referenzprojekt (das Admin-Modell hier hat keine externe Match-ID), dient nur der
-	 * frontendseitigen Rundenwechsel-Erkennung (siehe binocular/+page.svelte). */
-	externMatchId: number;
 	aktueller_satz: number;
 	vorlaeufige_passen: VorlaeufigePasse[];
 	schuetze_bestaetigte_saetze: number[];
@@ -43,7 +49,6 @@ export function getScoringState(scheibennummer: number, matchKey: string): Schei
 
 	const fresh: ScheibenScoringState = {
 		matchKey,
-		externMatchId: Date.now(),
 		aktueller_satz: 1,
 		vorlaeufige_passen: [],
 		schuetze_bestaetigte_saetze: []
