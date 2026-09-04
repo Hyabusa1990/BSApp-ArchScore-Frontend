@@ -4,7 +4,12 @@
 	import { resolve } from '$app/paths';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { veranstaltungApi, type Veranstaltung } from '$lib/api/veranstaltung';
-	import { matchkontrolleApi, type Match, type ConfirmStatus } from '$lib/api/matchkontrolle';
+	import {
+		matchkontrolleApi,
+		roundCountForTeams,
+		type Match,
+		type ConfirmStatus
+	} from '$lib/api/matchkontrolle';
 	import {
 		Container,
 		Card,
@@ -53,12 +58,16 @@
 		loading = true;
 		loadError = null;
 		try {
-			const [v, ms] = await Promise.all([
-				veranstaltungApi.get(auth.accessToken!, Number(veranstaltungId)),
-				matchkontrolleApi.list(auth.accessToken!, veranstaltungId)
-			]);
+			const v = await veranstaltungApi.get(auth.accessToken!, Number(veranstaltungId));
 			veranstaltung = v;
-			const phase = await matchkontrolleApi.getPhase(auth.accessToken!, v.id);
+			// Kein Endpunkt nennt die Rundenzahl direkt (Issue #22) — ergibt sich aus der
+			// Mannschaftszahl der ohnehin vorhandenen Tabelle (Kreisverfahren).
+			const chart = await veranstaltungApi.getMatchPlayChart(auth.accessToken!, v.id);
+			const roundCount = roundCountForTeams(chart.teams.length);
+			const [ms, phase] = await Promise.all([
+				matchkontrolleApi.list(auth.accessToken!, v.id, roundCount),
+				matchkontrolleApi.getPhase(auth.accessToken!, v.id)
+			]);
 			matches = ms.map((m) => ({ ...m, aktiv: m.nummer === phase.roundNo }));
 			await ladeConfirmStatus();
 		} catch {

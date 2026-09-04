@@ -11,8 +11,8 @@ import {
 	findVeranstaltung,
 	getCurrentRoundNo,
 	getMatchPlayChart,
+	getRoundInfo,
 	isFixtureOwner,
-	matchesFor,
 	removeFixtureUser,
 	removeVeranstaltung,
 	setCurrentRoundNo,
@@ -152,12 +152,18 @@ export const veranstaltungHandlers = [
 		return HttpResponse.json(connectLiga(v, body));
 	}),
 
-	http.get(`${API_URL}/veranstaltungen/:id/matches`, ({ request, params }) => {
+	// Fawkes-`DosController`-Kontrakt (siehe Issue #22): ersetzt den vormals erfundenen
+	// `/veranstaltungen/:id/matches`-Pfad — eine Runde pro Aufruf, flache Scheiben-Liste statt
+	// gepaarter Begegnungen (siehe `getRoundInfo`/`matchkontrolle.ts`).
+	http.get(`${API_URL}/fixtures/:fixtureId/rounds/:roundNo`, ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
-		const v = findVeranstaltung(user, Number(params.id));
+		const v = findVeranstaltung(user, Number(params.fixtureId));
 		if (!v) return notFound();
-		return HttpResponse.json(matchesFor(String(v.id)));
+		const roundNo = Number(params.roundNo);
+		const targets = getRoundInfo(String(v.id), roundNo);
+		if (!targets) return HttpResponse.json({ detail: 'Runde nicht gefunden' }, { status: 404 });
+		return HttpResponse.json({ fixtureId: v.id, roundNo, targets });
 	}),
 
 	// Fawkes-`DosController`-Kontrakt (siehe Issue #10, korrigiert #5/#7/#8): fixtureId statt

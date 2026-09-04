@@ -7,10 +7,11 @@ import type {
 	MatchPlayChartTeam
 } from '$lib/api/veranstaltung';
 import type { LeagueTablePosition } from '$lib/api/display';
-import type { Match, Begegnung } from '$lib/api/matchkontrolle';
+import type { Match, Begegnung, RoundTarget } from '$lib/api/matchkontrolle';
 import type { Device, UpdateDeviceData } from '$lib/api/bildschirme';
 import { users } from './fixtures';
 import { loadState, saveState } from './persist';
+import { berechneMatchStand } from './shared-state';
 
 /**
  * Fake-Backend-Zustand für die Verwaltungsoberfläche — ein gemeinsamer Store für
@@ -736,6 +737,41 @@ export function begegnungenForMatch(veranstaltungId: string, matchNo: number): B
 		(m) => m.veranstaltung_id === veranstaltungId && m.nummer === matchNo
 	);
 	return match?.begegnungen ?? [];
+}
+
+/**
+ * Entspricht `GET /fixtures/{fixtureId}/rounds/{roundNo}` (Fawkes-`DosController`, Issue #22) —
+ * `undefined` = Runde existiert nicht. Liefert die flache Scheiben-Liste, wie es die echte API
+ * auch tut (keine Begegnungs-Paarung, die macht der Client, siehe `matchkontrolle.ts`).
+ *
+ * Satzpunkte kommen über `berechneMatchStand` (`shared-state.ts`) — bislang nur von
+ * Binocular/Display genutzt, weil das Admin-Modell hier bewusst von laufenden Scoring-Daten
+ * getrennt war. Diese Trennung war zu streng für ein Feature, das laut echtem Kontrakt keins
+ * ist: der reale Fawkes-Server berechnet Satzpunkte für `GetRoundResponse` ebenso serverseitig,
+ * der Client bekommt nur das fertige Ergebnis. Kein zirkulärer Import: `shared-state.ts`
+ * importiert selbst nichts aus dieser Datei.
+ */
+export function getRoundInfo(veranstaltungId: string, roundNo: number): RoundTarget[] | undefined {
+	const begegnungen = begegnungenForMatch(veranstaltungId, roundNo);
+	if (begegnungen.length === 0) return undefined;
+
+	const targets: RoundTarget[] = [];
+	for (const b of begegnungen) {
+		const stand = berechneMatchStand(b.scheibe_a, b.scheibe_b);
+		targets.push({
+			targetNo: b.scheibe_a,
+			teamName: b.mannschaft_a,
+			totalSetPoints: stand.satzpunkteA,
+			setScores: stand.ergebnisse.map((e) => e.ringeA)
+		});
+		targets.push({
+			targetNo: b.scheibe_b,
+			teamName: b.mannschaft_b,
+			totalSetPoints: stand.satzpunkteB,
+			setScores: stand.ergebnisse.map((e) => e.ringeB)
+		});
+	}
+	return targets;
 }
 
 /** Entspricht `PUT /fixtures/{fixtureId}/devices/{deviceId}/unassign`. */
