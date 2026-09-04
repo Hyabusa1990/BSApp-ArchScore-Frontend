@@ -16,7 +16,9 @@
 		Row,
 		Col,
 		Card,
+		CardHeader,
 		CardBody,
+		CardFooter,
 		Alert,
 		Button,
 		Spinner,
@@ -213,26 +215,25 @@
 				{@const draft = drafts[d.id]}
 				<Col md={4} sm={6} class="mb-3">
 					<Card class="shadow-sm h-100">
-						<CardBody class="p-3">
-							<div class="d-flex justify-content-between align-items-start mb-2">
-								<div class="fw-bold">
-									{$_('bildschirme.device_label', { values: { id: d.id } })}
-								</div>
-								<Badge
-									color={draft?.displayType === 'Match'
-										? 'success'
-										: draft?.displayType === 'LeagueTable'
-											? 'info'
-											: 'secondary'}
-								>
-									{draft?.displayType === 'Match'
-										? $_('bildschirme.mode_match')
-										: draft?.displayType === 'LeagueTable'
-											? $_('bildschirme.mode_league_table')
-											: $_('bildschirme.mode_none')}
-								</Badge>
+						<CardHeader class="d-flex justify-content-between align-items-center">
+							<div class="fw-bold">
+								{$_('bildschirme.device_label', { values: { id: d.id } })}
 							</div>
-
+							<Badge
+								color={draft?.displayType === 'Match'
+									? 'success'
+									: draft?.displayType === 'LeagueTable'
+										? 'info'
+										: 'secondary'}
+							>
+								{draft?.displayType === 'Match'
+									? $_('bildschirme.mode_match')
+									: draft?.displayType === 'LeagueTable'
+										? $_('bildschirme.mode_league_table')
+										: $_('bildschirme.mode_none')}
+							</Badge>
+						</CardHeader>
+						<CardBody class="p-3">
 							{#if draft}
 								<div class="mb-2">
 									<div class="form-label small mb-1">
@@ -371,29 +372,38 @@
 										</div>
 									</div>
 								{/if}
-
-								<div class="d-flex gap-2">
-									<Button
-										size="sm"
-										color="success"
-										disabled={savingId === d.id}
-										onclick={() => saveDevice(d)}
-									>
-										{#if savingId === d.id}<Spinner size="sm" class="me-2" />{/if}
-										{$_('bildschirme.save_btn')}
-									</Button>
-									<Button
-										size="sm"
-										color="outline-danger"
-										disabled={unassigningId === d.id}
-										onclick={() => unassign(d)}
-									>
-										{#if unassigningId === d.id}<Spinner size="sm" class="me-2" />{/if}
-										{$_('bildschirme.unassign_btn')}
-									</Button>
-								</div>
 							{/if}
 						</CardBody>
+						{#if draft}
+							<CardFooter>
+								<Row class="g-2">
+									<Col xs={8}>
+										<Button
+											size="sm"
+											color="success"
+											class="w-100"
+											disabled={savingId === d.id}
+											onclick={() => saveDevice(d)}
+										>
+											{#if savingId === d.id}<Spinner size="sm" class="me-2" />{/if}
+											{$_('bildschirme.save_btn')}
+										</Button>
+									</Col>
+									<Col xs={4}>
+										<Button
+											size="sm"
+											color="outline-danger"
+											class="w-100"
+											disabled={unassigningId === d.id}
+											onclick={() => unassign(d)}
+										>
+											{#if unassigningId === d.id}<Spinner size="sm" class="me-2" />{/if}
+											{$_('bildschirme.unassign_btn')}
+										</Button>
+									</Col>
+								</Row>
+							</CardFooter>
+						{/if}
 					</Card>
 				</Col>
 			{/each}
