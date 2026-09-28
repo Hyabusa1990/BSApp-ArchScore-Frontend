@@ -11,6 +11,7 @@ import {
 import { berechneMatchStand, peekScoringState, ringSumme } from './shared-state';
 import { encodeShots } from './binoculars';
 import { loadState, saveState } from './persist';
+import { randomUUID } from './uuid';
 
 /**
  * Fake-Backend-Zustand für Displays (Issue #17) — folgt seit hier dem echten
@@ -52,8 +53,8 @@ function persistSessions(state: SessionState): void {
 
 function issueDeviceTokens(deviceCode: string): DeviceTokenResponse {
 	const state = loadSessions();
-	const accessToken = `mock-display.${crypto.randomUUID()}`;
-	const refreshToken = `mock-display-refresh.${crypto.randomUUID()}`;
+	const accessToken = `mock-display.${randomUUID()}`;
+	const refreshToken = `mock-display-refresh.${randomUUID()}`;
 	state.accessTokens[accessToken] = deviceCode;
 	state.refreshTokens[refreshToken] = deviceCode;
 	persistSessions(state);

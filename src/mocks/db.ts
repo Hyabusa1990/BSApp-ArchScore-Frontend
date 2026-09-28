@@ -1,5 +1,6 @@
 import type { User } from '$lib/api/auth';
 import { users } from './fixtures';
+import { randomUUID } from './uuid';
 
 /**
  * In-memory Fake-Backend-Zustand für einen Dev-Session-Lauf.
@@ -34,8 +35,8 @@ export function passwordFor(userId: string): string {
 const ACCESS_TOKEN_TTL_SECONDS = 3600;
 
 export function issueTokens(user: User) {
-	const accessToken = `mock-access.${user.id}.${crypto.randomUUID()}`;
-	const refreshToken = `mock-refresh.${user.id}.${crypto.randomUUID()}`;
+	const accessToken = `mock-access.${user.id}.${randomUUID()}`;
+	const refreshToken = `mock-refresh.${user.id}.${randomUUID()}`;
 	db.accessTokens.set(accessToken, user.id);
 	db.refreshTokens.set(refreshToken, user.id);
 	return { accessToken, refreshToken, expiresIn: ACCESS_TOKEN_TTL_SECONDS };

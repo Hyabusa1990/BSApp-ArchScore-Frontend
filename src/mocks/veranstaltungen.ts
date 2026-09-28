@@ -12,6 +12,7 @@ import type { Device, DeviceDetail, UpdateDeviceData } from '$lib/api/bildschirm
 import { users } from './fixtures';
 import { loadState, saveState } from './persist';
 import { berechneMatchStand } from './shared-state';
+import { randomUUID } from './uuid';
 
 /**
  * Fake-Backend-Zustand für die Verwaltungsoberfläche — ein gemeinsamer Store für
@@ -484,7 +485,7 @@ export function createVeranstaltung(user: User, data: CreateFixtureData): Verans
 	const state = load();
 	const v: Veranstaltung = {
 		id: state.nextId++,
-		uniqueId: crypto.randomUUID(),
+		uniqueId: randomUUID(),
 		...data,
 		datenquelle: null
 	};

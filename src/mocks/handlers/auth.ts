@@ -10,6 +10,7 @@ import {
 	userFromAccessToken
 } from '../db';
 import { rotateDeviceTokens } from '../displays';
+import { randomUUID } from '../uuid';
 
 /**
  * Pfade/Feldnamen folgen dem Fawkes-Auth-Kontrakt (`docs/Fawkes-OpenApi.json`,
@@ -75,14 +76,14 @@ export const authHandlers = [
 
 		if (errors.length) return HttpResponse.json({ errors }, { status: 422 });
 
-		const id = crypto.randomUUID();
+		const id = randomUUID();
 		const newUser: User = { id, email: body.email!, role: 'user' };
 		db.usersByEmail.set(newUser.email, newUser);
 		db.usersById.set(id, newUser);
 
 		// E-Mail-Verifizierung (#12): kein echter Mail-Versand im Mock, daher der Token direkt
 		// in der Nachricht sichtbar — so lässt sich der Verify-Link lokal ohne Mailserver testen.
-		const verifyToken = crypto.randomUUID();
+		const verifyToken = randomUUID();
 		db.pendingVerifications.set(verifyToken, id);
 		return HttpResponse.json(
 			{
