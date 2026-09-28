@@ -554,16 +554,21 @@
 		font-weight: 700;
 	}
 
-	/* ── Satzweise Pfeilanzeige ── */
+	/* ── Satzweise Pfeilanzeige ──
+	   Alle 6 Pfeile in einer Zeile, nach Schütze gruppiert (2|2|2): innerhalb einer Gruppe
+	   kleiner, zwischen den Gruppen großer Abstand. Bewusste Abweichung vom Referenzprojekt
+	   (dort 3 Zeilen à 2 Pfeile) — auf Wunsch des Auftraggebers nach Issue #25 auch fürs
+	   Tablet übernommen, nicht nur fürs Smartphone. */
 	.satz-grid {
 		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
+		flex-direction: row;
+		justify-content: center;
+		gap: 1.5rem;
 	}
 
 	.passe-row {
 		display: flex;
-		gap: 0.6rem;
+		gap: 0.5rem;
 		justify-content: center;
 		border-radius: 0.75rem;
 		padding: 0.25rem;
@@ -634,10 +639,9 @@
 
 	/* ── Smartphone im Hochformat (Issue #25) ──
 	   Nur unterhalb des Bootstrap-`sm`-Breakpoints — ab 576 px (jedes Tablet, hoch und quer)
-	   greift ausschließlich das abgestimmte Tablet-Layout oben (FACHLICHKEIT.md
-	   „Migrations-Prinzip"), dieser Block ändert dort nichts. Engpass auf dem Handy ist die
-	   Höhe: alle 6 Pfeile in einer Zeile, nach Schütze gruppiert (2|2|2), flachere Tasten.
-	   Touch-Targets bleiben ≥ 44 px (außer dem bewusst kleinen QR-Trigger, Issue #19). */
+	   greift ausschließlich das Tablet-Layout oben, dieser Block ändert dort nichts. Engpass
+	   auf dem Handy ist Höhe und Breite: kleinere Pfeilfelder, flachere Tasten. Touch-Targets
+	   bleiben ≥ 44 px (außer dem bewusst kleinen QR-Trigger, Issue #19). */
 	@media (max-width: 575.98px) {
 		.binocular-header {
 			/* Platz für den fixen QR-Trigger (28 px + Abstand) rechts oben */
@@ -654,8 +658,6 @@
 		}
 
 		.satz-grid {
-			flex-direction: row;
-			justify-content: center;
 			gap: 0.7rem;
 		}
 

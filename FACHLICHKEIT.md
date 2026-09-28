@@ -35,6 +35,7 @@ Wichtig: Schütze/Spotter/Zuschauer authentifizieren sich **nie** über ein Benu
 
 - Tablet pro Scheibe, aufgerufen über eine token-basierte URL (`event_token` + `scheibennummer`), kein Login nötig.
 - Zeigt satzweise alle 6 Pfeilfelder des aktuellen Satzes; Keypad mit 10–6+M groß/permanent, 5–1 hinter Einblenden-Button (selten gebraucht).
+- **Bewusste Abweichung vom Referenzprojekt** (Entscheidung Auftraggeber, 2026-09-28, Issue #25): Die 6 Pfeilfelder stehen in **einer Zeile**, nach Schütze gruppiert (2|2|2), statt wie im Referenzprojekt in 3 Zeilen à 2 Pfeile — auf Tablet und Smartphone. Unter 576 px Breite (Smartphone hoch) zusätzlich kleinere Felder und flachere Tasten, damit alles ohne Scrollen passt.
 - Werte werden **optimistisch** sofort angezeigt, dann an den Server geschickt — Spotter tippt im Takt, ohne auf Netzwerk zu warten.
 - Bereits erfasste Pfeile sind antippbar zur nachträglichen **Korrektur**; es gibt zusätzlich **Undo** (nimmt den letzten Pfeil zurück, autoritativ vom Server).
 - Nach 6 Pfeilen: Satz muss aktiv vom Spotter **bestätigt** werden ("Satzende bestätigen"), bevor der nächste Satz beginnt — kein automatischer Übergang.
