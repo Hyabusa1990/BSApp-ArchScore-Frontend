@@ -56,6 +56,22 @@
 	let assigning = $state(false);
 	let assignError = $state<string | null>(null);
 
+	// Issue #23 "Displays aus anderer Veranstaltung übernehmen" — Zugriff auf die Quelle ist
+	// dieselbe Sichtbarkeit wie überall (Owner ODER FixtureUser-Mitgliedschaft, kein Rollen-Gate),
+	// `veranstaltungApi.list()` liefert also von sich aus nur zugängliche Veranstaltungen.
+	let otherVeranstaltungen = $state<Veranstaltung[]>([]);
+	let otherVeranstaltungenLoading = $state(true);
+	let transferSourceId = $state<number | null>(null);
+	let transferDevices = $state<Device[]>([]);
+	let transferDevicesLoading = $state(false);
+	let transferDevicesError = $state<string | null>(null);
+	let transferSelected = $state<Record<number, boolean>>({});
+	const transferSelectedCount = $derived(Object.values(transferSelected).filter(Boolean).length);
+	let transferConfirmOpen = $state(false);
+	let transferring = $state(false);
+	type TransferResult = { deviceId: number; success: boolean; message: string };
+	let transferResults = $state<TransferResult[] | null>(null);
+
 	// Feste Scheiben-Paarung (FACHLICHKEIT.md: 1 gg. 2, 3 gg. 4, 5 gg. 6, 7 gg. 8) — kann seit
 	// #15 nicht mehr aus den Geräten abgeleitet werden (kein scheibe_a/scheibe_b im echten
 	// DeviceManagement-Modell mehr), Tablet-Pairing bleibt aber weiterhin pro einzelner Scheibe
@@ -223,8 +239,120 @@
 		}
 	}
 
+	// Issue #23: separat von `load()`, damit ein Fehler hier nicht die Haupt-Geräteliste blockiert
+	// — Übernehmen ist ein Zusatz-Feature, kein Blocker für die reguläre Seite.
+	async function loadOtherVeranstaltungen() {
+		otherVeranstaltungenLoading = true;
+		try {
+			const all = await veranstaltungApi.list(auth.accessToken!);
+			otherVeranstaltungen = all.filter((v) => v.id !== fixtureId);
+		} catch {
+			otherVeranstaltungen = [];
+		} finally {
+			otherVeranstaltungenLoading = false;
+		}
+	}
+
+	async function onTransferSourceChange() {
+		transferSelected = {};
+		transferResults = null;
+		transferDevicesError = null;
+		if (transferSourceId === null) {
+			transferDevices = [];
+			return;
+		}
+		transferDevicesLoading = true;
+		try {
+			transferDevices = await bildschirmeApi.list(auth.accessToken!, transferSourceId);
+		} catch {
+			transferDevicesError = $_('bildschirme.transfer_devices_error_load');
+			transferDevices = [];
+		} finally {
+			transferDevicesLoading = false;
+		}
+	}
+
+	function toggleTransferDevice(deviceId: number) {
+		transferSelected = { ...transferSelected, [deviceId]: !transferSelected[deviceId] };
+	}
+
+	// Orchestriert unassign -> assign -> update pro Gerät, sequenziell und bewusst NICHT
+	// alles-oder-nichts (siehe Issue #23) — ein Fehler bei einem Gerät bricht die restliche Charge
+	// nicht ab. `assignDevice` im Fake-Backend setzt bei jeder Zuweisung hart auf
+	// displayType=None/matchNo=null/displayTheme=Dark zurück (kein Übernehmen von sich aus), daher
+	// der Folge-`update()`-Call mit den ursprünglichen Werten. Schlägt ausgerechnet der `assign`-
+	// Schritt fehl, NACHDEM `unassign` schon erfolgreich war, ist der deviceCode "verwaist" (Gerät
+	// nirgends mehr zugeordnet) — dafür eigene Fehlermeldung mit dem Code, siehe
+	// transfer_result_error_orphaned.
+	async function confirmTransfer() {
+		if (transferSourceId === null) return;
+		const sourceId = transferSourceId;
+		const deviceIds = Object.entries(transferSelected)
+			.filter(([, checked]) => checked)
+			.map(([id]) => Number(id));
+		if (deviceIds.length === 0) return;
+
+		transferring = true;
+		const results: TransferResult[] = [];
+
+		for (const deviceId of deviceIds) {
+			const original = transferDevices.find((d) => d.id === deviceId);
+			if (!original) continue;
+			try {
+				const { deviceCode } = await bildschirmeApi.unassign(auth.accessToken!, sourceId, deviceId);
+				try {
+					const created = await bildschirmeApi.assign(auth.accessToken!, fixtureId, deviceCode);
+					const updated = await bildschirmeApi.update(auth.accessToken!, fixtureId, created.id, {
+						displayType: original.displayType,
+						matchNo: original.matchNo,
+						displayTheme: original.displayTheme
+					});
+					devices = [...devices, updated];
+					drafts = {
+						...drafts,
+						[updated.id]: {
+							displayType: updated.displayType,
+							matchNo: updated.matchNo,
+							displayTheme: updated.displayTheme
+						}
+					};
+					if (updated.matchNo !== null) rememberMatchNo(updated.id, updated.matchNo);
+					customNames = { ...customNames, [updated.id]: recallCustomName(updated.id) };
+					transferDevices = transferDevices.filter((d) => d.id !== deviceId);
+					results.push({
+						deviceId,
+						success: true,
+						message: $_('bildschirme.transfer_result_success', { values: { id: deviceId } })
+					});
+				} catch {
+					results.push({
+						deviceId,
+						success: false,
+						message: $_('bildschirme.transfer_result_error_orphaned', {
+							values: { id: deviceId, code: deviceCode }
+						})
+					});
+				}
+			} catch {
+				results.push({
+					deviceId,
+					success: false,
+					message: $_('bildschirme.transfer_result_error', { values: { id: deviceId } })
+				});
+			}
+		}
+
+		transferSelected = {};
+		transferResults = results;
+		transferConfirmOpen = false;
+		transferring = false;
+	}
+
 	$effect(() => {
-		if (auth.isAuthenticated) load();
+		if (auth.isAuthenticated) {
+			load();
+			loadOtherVeranstaltungen();
+		}
 	});
 
 	async function saveDevice(d: Device) {
@@ -588,6 +716,94 @@
 		</Row>
 
 		<h6 class="text-muted text-uppercase small fw-semibold mb-3 mt-4">
+			{$_('bildschirme.transfer_heading')}
+		</h6>
+
+		{#if transferResults}
+			<Alert color="info" class="d-flex justify-content-between align-items-start gap-3">
+				<ul class="mb-0 ps-3">
+					{#each transferResults as r (r.deviceId)}
+						<li class={r.success ? 'text-success' : 'text-danger'}>{r.message}</li>
+					{/each}
+				</ul>
+				<button
+					type="button"
+					class="btn btn-sm btn-link p-0 flex-shrink-0"
+					onclick={() => (transferResults = null)}
+				>
+					{$_('bildschirme.transfer_result_close_btn')}
+				</button>
+			</Alert>
+		{/if}
+
+		<Card class="shadow-sm mb-4">
+			<CardBody class="p-3">
+				{#if otherVeranstaltungenLoading}
+					<Spinner size="sm" />
+				{:else if otherVeranstaltungen.length === 0}
+					<p class="text-muted small mb-0">{$_('bildschirme.transfer_no_other_events')}</p>
+				{:else}
+					<div class="mb-3">
+						<label class="form-label small" for="transfer-source">
+							{$_('bildschirme.transfer_select_label')}
+						</label>
+						<select
+							id="transfer-source"
+							class="form-select form-select-sm"
+							value={transferSourceId ?? ''}
+							onchange={(e) => {
+								const v = e.currentTarget.value;
+								transferSourceId = v ? Number(v) : null;
+								onTransferSourceChange();
+							}}
+						>
+							<option value="">{$_('bildschirme.transfer_select_placeholder')}</option>
+							{#each otherVeranstaltungen as v (v.id)}
+								<option value={v.id}>{v.leagueName} – {v.fixtureName}</option>
+							{/each}
+						</select>
+					</div>
+
+					{#if transferDevicesLoading}
+						<div class="d-flex justify-content-center py-3"><Spinner size="sm" /></div>
+					{:else if transferDevicesError}
+						<Alert color="danger" class="py-1 px-2 small">{transferDevicesError}</Alert>
+					{:else if transferSourceId !== null}
+						{#if transferDevices.length === 0}
+							<p class="text-muted small mb-0">{$_('bildschirme.transfer_no_devices')}</p>
+						{:else}
+							<div class="mb-3">
+								{#each transferDevices as d (d.id)}
+									<div class="form-check">
+										<input
+											type="checkbox"
+											class="form-check-input"
+											id="transfer-device-{d.id}"
+											checked={!!transferSelected[d.id]}
+											onchange={() => toggleTransferDevice(d.id)}
+										/>
+										<label class="form-check-label small" for="transfer-device-{d.id}">
+											{$_('bildschirme.device_label', { values: { id: d.id } })} —
+											{autoDeviceName(d, d.id)}
+										</label>
+									</div>
+								{/each}
+							</div>
+							<Button
+								size="sm"
+								color="primary"
+								disabled={transferSelectedCount === 0}
+								onclick={() => (transferConfirmOpen = true)}
+							>
+								{$_('bildschirme.transfer_btn', { values: { n: transferSelectedCount } })}
+							</Button>
+						{/if}
+					{/if}
+				{/if}
+			</CardBody>
+		</Card>
+
+		<h6 class="text-muted text-uppercase small fw-semibold mb-3 mt-4">
 			{$_('bildschirme.tablets_heading')}
 		</h6>
 		<div class="d-flex flex-wrap gap-2">
@@ -628,6 +844,23 @@
 	loading={unassigning}
 	onConfirm={confirmUnassign}
 	onCancel={() => (unassignTarget = null)}
+/>
+
+<ConfirmModal
+	isOpen={transferConfirmOpen}
+	title={$_('bildschirme.transfer_confirm_title')}
+	message={$_('bildschirme.transfer_confirm', {
+		values: {
+			n: transferSelectedCount,
+			quelle: otherVeranstaltungen.find((v) => v.id === transferSourceId)?.fixtureName ?? ''
+		}
+	})}
+	confirmLabel={$_('bildschirme.transfer_btn', { values: { n: transferSelectedCount } })}
+	cancelLabel={$_('bildschirme.cancel_btn')}
+	confirmColor="primary"
+	loading={transferring}
+	onConfirm={confirmTransfer}
+	onCancel={() => (transferConfirmOpen = false)}
 />
 
 <style>
