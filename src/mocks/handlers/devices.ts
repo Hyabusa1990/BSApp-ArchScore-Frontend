@@ -104,9 +104,10 @@ export const deviceHandlers = [
 		if (!user) return unauthorized();
 		const v = findVeranstaltung(user, Number(params.fixtureId));
 		if (!v) return notFound();
-		if (!unassignDevice(String(v.id), Number(params.deviceId))) {
+		const deviceCode = unassignDevice(String(v.id), Number(params.deviceId));
+		if (!deviceCode) {
 			return HttpResponse.json({ detail: 'Gerät nicht gefunden' }, { status: 404 });
 		}
-		return HttpResponse.json({});
+		return HttpResponse.json({ deviceCode });
 	})
 ];

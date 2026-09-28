@@ -43,6 +43,17 @@ export interface UpdateDeviceData {
 	displayTheme: DisplayTheme;
 }
 
+/**
+ * Issue #24, unbestätigte Arbeitsannahme (Vorbereitung für #23 "Displays aus anderer
+ * Veranstaltung übernehmen"): `docs/Fawkes-OpenApi.json` deklariert für `unassign` aktuell KEINEN
+ * Response-Body — geprüft im Live-Spec-Sync 2026-09-28, keine Änderung ggü. dem Stand davor. Bis
+ * der Backend-Dev bestätigt (oder den Endpunkt entsprechend erweitert), läuft das nur gegen die
+ * Fake-API; vor dem ersten echten Test gegen Fawkes hier reconcilen.
+ */
+export interface UnassignDeviceResponse {
+	deviceCode: string;
+}
+
 export const bildschirmeApi = {
 	list: (token: string, fixtureId: number) =>
 		apiClient.get<Device[]>(`/fixtures/${fixtureId}/devices`, token),
@@ -58,5 +69,9 @@ export const bildschirmeApi = {
 		apiClient.put<Device>(`/fixtures/${fixtureId}/devices/${deviceId}`, data, token),
 
 	unassign: (token: string, fixtureId: number, deviceId: number) =>
-		apiClient.put<void>(`/fixtures/${fixtureId}/devices/${deviceId}/unassign`, undefined, token)
+		apiClient.put<UnassignDeviceResponse>(
+			`/fixtures/${fixtureId}/devices/${deviceId}/unassign`,
+			undefined,
+			token
+		)
 };

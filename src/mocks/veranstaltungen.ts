@@ -781,16 +781,26 @@ export function getRoundInfo(veranstaltungId: string, roundNo: number): RoundTar
 	return targets;
 }
 
-/** Entspricht `PUT /fixtures/{fixtureId}/devices/{deviceId}/unassign`. */
-export function unassignDevice(veranstaltungId: string, deviceId: number): boolean {
+/**
+ * Entspricht `PUT /fixtures/{fixtureId}/devices/{deviceId}/unassign`. Gibt den freigewordenen
+ * `deviceCode` zurück (Issue #24, unbestätigte Arbeitsannahme — die Fawkes-Spec deklariert für
+ * diesen Endpunkt aktuell KEINEN Response-Body, siehe Kommentar bei `bildschirmeApi.unassign()`)
+ * — Voraussetzung für Issue #23 ("Displays aus anderer Veranstaltung übernehmen"), damit ein
+ * Admin ein gelöstes Gerät sofort woanders neu zuordnen kann, ohne dass es sich selbst
+ * neu registrieren muss. Der Code kommt dafür zurück in `pendingDeviceCodes` — entspricht genau
+ * dem Zustand "registriert, aber (noch) keiner Fixture zugeordnet", derselbe Pool wie bei einer
+ * frischen Selbst-Registrierung (siehe `registerDeviceCode`). `undefined` = Gerät nicht gefunden.
+ */
+export function unassignDevice(veranstaltungId: string, deviceId: number): string | undefined {
 	const state = load();
 	const list = state.devices[veranstaltungId];
-	if (!list) return false;
+	if (!list) return undefined;
 	const index = list.findIndex((d) => d.id === deviceId);
-	if (index === -1) return false;
-	list.splice(index, 1);
+	if (index === -1) return undefined;
+	const [removed] = list.splice(index, 1);
+	state.pendingDeviceCodes.push(removed.deviceCode);
 	persist(state);
-	return true;
+	return removed.deviceCode;
 }
 
 // ── Lookups für Display (#1–#3) und Binocular (#4–#5) — siehe Issue #10 ─────────────────
