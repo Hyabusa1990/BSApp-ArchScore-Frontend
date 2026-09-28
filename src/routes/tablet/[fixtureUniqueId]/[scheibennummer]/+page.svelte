@@ -631,4 +631,92 @@
 		color: #000;
 		border-color: #212529;
 	}
+
+	/* ── Smartphone im Hochformat (Issue #25) ──
+	   Nur unterhalb des Bootstrap-`sm`-Breakpoints — ab 576 px (jedes Tablet, hoch und quer)
+	   greift ausschließlich das abgestimmte Tablet-Layout oben (FACHLICHKEIT.md
+	   „Migrations-Prinzip"), dieser Block ändert dort nichts. Engpass auf dem Handy ist die
+	   Höhe: alle 6 Pfeile in einer Zeile, nach Schütze gruppiert (2|2|2), flachere Tasten.
+	   Touch-Targets bleiben ≥ 44 px (außer dem bewusst kleinen QR-Trigger, Issue #19). */
+	@media (max-width: 575.98px) {
+		.binocular-header {
+			/* Platz für den fixen QR-Trigger (28 px + Abstand) rechts oben */
+			padding-right: 2.75rem !important;
+			padding-top: 0.35rem !important;
+			padding-bottom: 0.35rem !important;
+			line-height: 1.25;
+		}
+
+		.binocular-content {
+			/* Genug Rand, damit die Outlines (aktiver Schütze/Korrektur, je 3 px + 2 px Offset)
+			   nicht vom overflow abgeschnitten werden. */
+			padding: 0.6rem 0.5rem;
+		}
+
+		.satz-grid {
+			flex-direction: row;
+			justify-content: center;
+			gap: 0.7rem;
+		}
+
+		.passe-row {
+			gap: 0.25rem;
+			padding: 0.15rem;
+			border-radius: 0.6rem;
+		}
+
+		.pfeil-feld {
+			width: clamp(44px, 13vw, 3.25rem);
+			height: clamp(44px, 13vw, 3.25rem);
+			font-size: clamp(1.2rem, 6vw, 1.6rem);
+			border-radius: 0.5rem;
+		}
+
+		.binocular-content :global(.alert) {
+			margin-top: 0.6rem !important;
+			padding: 0.5rem 0.75rem !important;
+		}
+
+		.binocular-content :global(.alert .fs-2) {
+			font-size: 1.5rem !important;
+			margin-bottom: 0.25rem !important;
+		}
+
+		.binocular-content :global(.alert .btn) {
+			min-height: 44px;
+		}
+
+		.binocular-content :global(.alert .btn-link) {
+			display: inline-flex;
+			align-items: center;
+		}
+
+		.binocular-keypad {
+			padding: 0.4rem !important;
+		}
+
+		.binocular-keypad :global(.row) {
+			--bs-gutter-x: 0.4rem;
+			--bs-gutter-y: 0.4rem;
+			margin-bottom: 0.4rem !important;
+		}
+
+		.keypad-btn-primary {
+			min-height: 64px;
+			font-size: 1.6rem;
+		}
+
+		.keypad-btn-secondary {
+			min-height: 48px;
+		}
+
+		.toggle-btn {
+			margin-bottom: 0.4rem !important;
+		}
+
+		.undo-btn {
+			min-height: 48px;
+			font-size: 1rem;
+		}
+	}
 </style>
