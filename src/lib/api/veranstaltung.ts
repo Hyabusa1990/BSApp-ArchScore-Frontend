@@ -19,6 +19,11 @@ import { apiClient } from './client';
  * `matchPoints`), und `GET /fixtures/{fixtureId}/rounds/{roundNo}` wirft serverseitig
  * durchgängig `NotImplementedException` — offene Fragen beim Backend-Dev (Joplin), bevor hier was
  * umgebaut wird.
+ *
+ * Geklärt (Backend-Dev, 2026-09-28): Ein Lese-Endpunkt für den Spielplan kommt NICHT. Stattdessen
+ * setzt der Client ihn aus `GET /fixtures/{fixtureId}/rounds/{roundNo}` zusammen: `roundNo` ab 1
+ * hochzählen, bis keine Runde mehr kommt. Diese Endpunkte sind live aber noch nicht implementiert
+ * (siehe oben) — `getMatchPlayChart` erst umbauen, wenn das Backend sie ausliefert.
  */
 
 export interface LigaVerbindung {
@@ -104,6 +109,9 @@ export const veranstaltungApi = {
 	// NICHT mehr korrekt (`GET /MatchPlayChart/{fixtureId}` existiert live nicht mehr, siehe
 	// Kommentar oben am Modul) — bewusst unangetastet gelassen, bis die offenen Fragen beim
 	// Backend-Dev geklärt sind, statt auf Verdacht umzubauen. Läuft weiter nur gegen die Mocks.
+	// Ziel-Umbau, sobald `GET /fixtures/{fixtureId}/rounds/{roundNo}` live funktioniert: statt
+	// eines eigenen GETs Runden ab `roundNo` 1 laden, bis keine mehr kommt, und daraus den
+	// Spielplan zusammensetzen (siehe Kommentar oben am Modul).
 	getMatchPlayChart: (token: string, fixtureId: number) =>
 		apiClient.get<MatchPlayChart>(`/MatchPlayChart/${fixtureId}`, token),
 
