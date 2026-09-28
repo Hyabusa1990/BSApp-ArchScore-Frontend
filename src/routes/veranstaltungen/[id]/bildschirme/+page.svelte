@@ -207,6 +207,12 @@
 	let qrError = $state<string | null>(null);
 	let qrDataUrl = $state<string | null>(null);
 	let qrScheibennummer = $state<number | null>(null);
+	// Issue #26: Link im Klartext zum Kopieren, z. B. für ein Smartphone, das den QR-Code nicht
+	// scannen kann.
+	let qrUrl = $state<string | null>(null);
+	let qrUrlInputEl = $state<HTMLInputElement | null>(null);
+	let qrCopyState = $state<'idle' | 'copied' | 'manual'>('idle');
+	let qrCopyResetTimer: ReturnType<typeof setTimeout> | undefined;
 
 	$effect(() => {
 		if (auth.initialized && !auth.isAuthenticated) goto(resolve('/login'));
@@ -434,6 +440,8 @@
 		qrLoading = true;
 		qrError = null;
 		qrDataUrl = null;
+		qrUrl = null;
+		resetQrCopyState();
 		try {
 			if (!veranstaltung) throw new Error('Veranstaltung noch nicht geladen');
 			const url = `${window.location.origin}${resolve(
@@ -444,10 +452,55 @@
 				}
 			)}`;
 			qrDataUrl = await QRCode.toDataURL(url, { width: 280, margin: 1 });
+			qrUrl = url;
 		} catch {
 			qrError = $_('bildschirme.qr_error');
 		} finally {
 			qrLoading = false;
+		}
+	}
+
+	function closeQrModal() {
+		qrModalOpen = false;
+		resetQrCopyState();
+	}
+
+	function resetQrCopyState() {
+		clearTimeout(qrCopyResetTimer);
+		qrCopyState = 'idle';
+	}
+
+	// `navigator.clipboard` gibt es nur in Secure Contexts (HTTPS/`localhost`) — über die LAN-IP
+	// (`http://<ip>:5173`) fehlt es, siehe CLAUDE.md Fake-API-Abschnitt. Deshalb Fallback über das
+	// markierte Eingabefeld + `execCommand('copy')` (veraltet, aber genau für diesen Fall überall
+	// noch unterstützt); klappt auch das nicht, bleibt der Text zum manuellen Kopieren markiert.
+	async function copyQrUrl() {
+		if (!qrUrl) return;
+		clearTimeout(qrCopyResetTimer);
+		let copied = false;
+		if (navigator.clipboard?.writeText) {
+			try {
+				await navigator.clipboard.writeText(qrUrl);
+				copied = true;
+			} catch {
+				/* weiter mit Fallback */
+			}
+		}
+		if (!copied && qrUrlInputEl) {
+			qrUrlInputEl.focus();
+			qrUrlInputEl.select();
+			try {
+				copied = document.execCommand('copy');
+			} catch {
+				copied = false;
+			}
+		}
+		if (copied) {
+			qrCopyState = 'copied';
+			qrCopyResetTimer = setTimeout(() => (qrCopyState = 'idle'), 2000);
+		} else {
+			qrUrlInputEl?.select();
+			qrCopyState = 'manual';
 		}
 	}
 </script>
@@ -820,8 +873,8 @@
 	{/if}
 </Container>
 
-<Modal isOpen={qrModalOpen} toggle={() => (qrModalOpen = false)}>
-	<ModalHeader toggle={() => (qrModalOpen = false)}>
+<Modal isOpen={qrModalOpen} toggle={closeQrModal}>
+	<ModalHeader toggle={closeQrModal}>
 		{$_('bildschirme.qr_title', { values: { n: qrScheibennummer } })}
 	</ModalHeader>
 	<ModalBody class="text-center">
@@ -832,6 +885,38 @@
 		{:else if qrDataUrl}
 			<img src={qrDataUrl} alt={$_('bildschirme.qr_title', { values: { n: qrScheibennummer } })} />
 			<p class="text-muted small mt-2 mb-0">{$_('bildschirme.qr_hint')}</p>
+			{#if qrUrl}
+				<div class="text-start mt-3">
+					<label class="form-label small mb-1" for="qr-url">
+						{$_('bildschirme.qr_link_label')}
+					</label>
+					<div class="input-group input-group-sm">
+						<input
+							id="qr-url"
+							type="text"
+							class="form-control font-monospace"
+							readonly
+							value={qrUrl}
+							bind:this={qrUrlInputEl}
+							onfocus={(e) => e.currentTarget.select()}
+							onclick={(e) => e.currentTarget.select()}
+						/>
+						<button
+							type="button"
+							class="btn {qrCopyState === 'copied' ? 'btn-success' : 'btn-outline-secondary'}"
+							onclick={copyQrUrl}
+						>
+							<i class="bi {qrCopyState === 'copied' ? 'bi-check2' : 'bi-clipboard'} me-1"></i>
+							{$_('bildschirme.qr_copy_btn')}
+						</button>
+					</div>
+					{#if qrCopyState === 'copied'}
+						<div class="small text-success mt-1">{$_('bildschirme.qr_copied')}</div>
+					{:else if qrCopyState === 'manual'}
+						<div class="small text-warning-emphasis mt-1">{$_('bildschirme.qr_copy_manual')}</div>
+					{/if}
+				</div>
+			{/if}
 		{/if}
 	</ModalBody>
 </Modal>

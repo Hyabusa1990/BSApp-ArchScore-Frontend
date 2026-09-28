@@ -270,6 +270,10 @@
 		"tablet_scheibe_btn": "Tablet lane {n}",
 		"qr_title": "Lane {n} — QR code",
 		"qr_hint": "Scan with the tablet to pair it to this lane.",
-		"qr_error": "Could not generate QR code."
+		"qr_error": "Could not generate QR code.",
+		"qr_link_label": "Link to copy",
+		"qr_copy_btn": "Copy",
+		"qr_copied": "Link copied.",
+		"qr_copy_manual": "Automatic copy not available — the link is selected, please copy it manually."
 	}
 }

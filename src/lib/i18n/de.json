@@ -271,6 +271,10 @@
 		"tablet_scheibe_btn": "Tablet Scheibe {n}",
 		"qr_title": "Scheibe {n} — QR-Code",
 		"qr_hint": "Mit dem Tablet scannen, um es dieser Scheibe zuzuordnen.",
-		"qr_error": "QR-Code konnte nicht erzeugt werden."
+		"qr_error": "QR-Code konnte nicht erzeugt werden.",
+		"qr_link_label": "Link zum Kopieren",
+		"qr_copy_btn": "Kopieren",
+		"qr_copied": "Link kopiert.",
+		"qr_copy_manual": "Automatisches Kopieren nicht möglich — Link ist markiert, bitte manuell kopieren."
 	}
 }
