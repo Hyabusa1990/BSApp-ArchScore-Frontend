@@ -1626,6 +1626,11 @@
 						"type": "integer",
 						"description": "The internal id assigned to the device. Used in all crud operations.",
 						"format": "int32"
+					},
+					"deviceCode": {
+						"type": "string",
+						"description": "The code assigned to the device. This is used to uniquely identify the device.",
+						"nullable": true
 					}
 				},
 				"additionalProperties": false

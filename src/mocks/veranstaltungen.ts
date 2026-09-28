@@ -8,7 +8,7 @@ import type {
 } from '$lib/api/veranstaltung';
 import type { LeagueTablePosition } from '$lib/api/display';
 import type { Match, Begegnung, RoundTarget } from '$lib/api/matchkontrolle';
-import type { Device, UpdateDeviceData } from '$lib/api/bildschirme';
+import type { Device, DeviceDetail, UpdateDeviceData } from '$lib/api/bildschirme';
 import { users } from './fixtures';
 import { loadState, saveState } from './persist';
 import { berechneMatchStand } from './shared-state';
@@ -35,10 +35,11 @@ import { berechneMatchStand } from './shared-state';
 
 /**
  * Intern gehaltene Erweiterung von `Device` um den `deviceCode`, mit dem sich das Gerät
- * ursprünglich registriert hat (Issue #17) — nicht Teil von `GetDeviceResponse` (die echte
- * Fawkes-Antwort an die Admin-UI kennt nur `id`/`displayType`/`matchNo`), deshalb beim
- * Rausreichen an Admin-Handler immer über `toPublicDevice` strippen. Bleibt nach dem Zuordnen
- * erhalten, damit `/Display/data` das Gerät anhand seines `deviceCode` wiederfinden kann.
+ * ursprünglich registriert hat (Issue #17) — nur Teil des Einzel-`GetDeviceResponse`
+ * (`GET /fixtures/{fixtureId}/devices/{deviceId}`, siehe `DeviceDetail`), nicht der Liste und
+ * nicht der assign/update-Antworten, deshalb dort immer über `toPublicDevice` strippen. Bleibt
+ * nach dem Zuordnen erhalten, damit `/Display/data` das Gerät anhand seines `deviceCode`
+ * wiederfinden kann.
  */
 interface StoredDevice extends Device {
 	deviceCode: string;
@@ -650,7 +651,7 @@ function randomDeviceCode(): string {
 	return `DEV-${suffix}`;
 }
 
-/** Nie an Admin-Handler durchreichen — `GetDeviceResponse` kennt kein `deviceCode`-Feld. */
+/** Für Liste/assign/update — nur der Einzel-GET (`findDevice`) reicht den `deviceCode` durch. */
 function toPublicDevice({ id, displayType, matchNo, displayTheme }: StoredDevice): Device {
 	return { id, displayType, matchNo, displayTheme };
 }
@@ -659,9 +660,9 @@ export function devicesFor(veranstaltungId: string): Device[] {
 	return (load().devices[veranstaltungId] ?? []).map(toPublicDevice);
 }
 
-export function findDevice(veranstaltungId: string, deviceId: number): Device | undefined {
+export function findDevice(veranstaltungId: string, deviceId: number): DeviceDetail | undefined {
 	const d = (load().devices[veranstaltungId] ?? []).find((d) => d.id === deviceId);
-	return d && toPublicDevice(d);
+	return d && { ...toPublicDevice(d), deviceCode: d.deviceCode };
 }
 
 /**
@@ -782,25 +783,22 @@ export function getRoundInfo(veranstaltungId: string, roundNo: number): RoundTar
 }
 
 /**
- * Entspricht `PUT /fixtures/{fixtureId}/devices/{deviceId}/unassign`. Gibt den freigewordenen
- * `deviceCode` zurück (Issue #24, unbestätigte Arbeitsannahme — die Fawkes-Spec deklariert für
- * diesen Endpunkt aktuell KEINEN Response-Body, siehe Kommentar bei `bildschirmeApi.unassign()`)
- * — Voraussetzung für Issue #23 ("Displays aus anderer Veranstaltung übernehmen"), damit ein
- * Admin ein gelöstes Gerät sofort woanders neu zuordnen kann, ohne dass es sich selbst
- * neu registrieren muss. Der Code kommt dafür zurück in `pendingDeviceCodes` — entspricht genau
- * dem Zustand "registriert, aber (noch) keiner Fixture zugeordnet", derselbe Pool wie bei einer
- * frischen Selbst-Registrierung (siehe `registerDeviceCode`). `undefined` = Gerät nicht gefunden.
+ * Entspricht `PUT /fixtures/{fixtureId}/devices/{deviceId}/unassign` (kein Response-Body). Der
+ * `deviceCode` kommt zurück in `pendingDeviceCodes` — entspricht genau dem Zustand "registriert,
+ * aber (noch) keiner Fixture zugeordnet", derselbe Pool wie bei einer frischen
+ * Selbst-Registrierung (siehe `registerDeviceCode`). Damit lässt sich ein gelöstes Gerät sofort
+ * woanders neu zuordnen (Issue #23), den Code holt sich die Admin-UI vorher per `findDevice`.
  */
-export function unassignDevice(veranstaltungId: string, deviceId: number): string | undefined {
+export function unassignDevice(veranstaltungId: string, deviceId: number): boolean {
 	const state = load();
 	const list = state.devices[veranstaltungId];
-	if (!list) return undefined;
+	if (!list) return false;
 	const index = list.findIndex((d) => d.id === deviceId);
-	if (index === -1) return undefined;
+	if (index === -1) return false;
 	const [removed] = list.splice(index, 1);
 	state.pendingDeviceCodes.push(removed.deviceCode);
 	persist(state);
-	return removed.deviceCode;
+	return true;
 }
 
 // ── Lookups für Display (#1–#3) und Binocular (#4–#5) — siehe Issue #10 ─────────────────

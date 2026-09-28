@@ -44,14 +44,16 @@ export interface UpdateDeviceData {
 }
 
 /**
- * Issue #24, unbestätigte Arbeitsannahme (Vorbereitung für #23 "Displays aus anderer
- * Veranstaltung übernehmen"): `docs/Fawkes-OpenApi.json` deklariert für `unassign` aktuell KEINEN
- * Response-Body — geprüft im Live-Spec-Sync 2026-09-28, keine Änderung ggü. dem Stand davor. Bis
- * der Backend-Dev bestätigt (oder den Endpunkt entsprechend erweitert), läuft das nur gegen die
- * Fake-API; vor dem ersten echten Test gegen Fawkes hier reconcilen.
+ * `GetDeviceResponse` des Einzel-Endpunkts `GET /fixtures/{fixtureId}/devices/{deviceId}` — liefert
+ * seit Image-Revision `8b9677e` (2026-09-28) zusätzlich den `deviceCode`, mit dem sich das Gerät
+ * registriert hat. Die Liste (`GET /fixtures/{fixtureId}/devices`, `DeviceBase`) enthält ihn NICHT,
+ * deshalb eigener Typ statt Erweiterung von `Device`. Grundlage für Issue #23 ("Displays aus
+ * anderer Veranstaltung übernehmen"): Code vor dem `unassign` an der Quelle holen, dann an der
+ * Ziel-Veranstaltung per `assign` neu zuordnen. Ersetzt die frühere Arbeitsannahme aus #24
+ * (`unassign` liefert den Code zurück) — `unassign` hat laut Spec weiterhin keinen Response-Body.
  */
-export interface UnassignDeviceResponse {
-	deviceCode: string;
+export interface DeviceDetail extends Device {
+	deviceCode: string | null;
 }
 
 export const bildschirmeApi = {
@@ -59,7 +61,7 @@ export const bildschirmeApi = {
 		apiClient.get<Device[]>(`/fixtures/${fixtureId}/devices`, token),
 
 	get: (token: string, fixtureId: number, deviceId: number) =>
-		apiClient.get<Device>(`/fixtures/${fixtureId}/devices/${deviceId}`, token),
+		apiClient.get<DeviceDetail>(`/fixtures/${fixtureId}/devices/${deviceId}`, token),
 
 	// Setzt voraus, dass sich das Gerät bereits selbst registriert hat (deviceCode existiert).
 	assign: (token: string, fixtureId: number, deviceCode: string) =>
@@ -69,9 +71,5 @@ export const bildschirmeApi = {
 		apiClient.put<Device>(`/fixtures/${fixtureId}/devices/${deviceId}`, data, token),
 
 	unassign: (token: string, fixtureId: number, deviceId: number) =>
-		apiClient.put<UnassignDeviceResponse>(
-			`/fixtures/${fixtureId}/devices/${deviceId}/unassign`,
-			undefined,
-			token
-		)
+		apiClient.put<void>(`/fixtures/${fixtureId}/devices/${deviceId}/unassign`, undefined, token)
 };

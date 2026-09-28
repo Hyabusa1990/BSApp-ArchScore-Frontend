@@ -276,9 +276,11 @@
 		transferSelected = { ...transferSelected, [deviceId]: !transferSelected[deviceId] };
 	}
 
-	// Orchestriert unassign -> assign -> update pro Gerät, sequenziell und bewusst NICHT
+	// Orchestriert get -> unassign -> assign -> update pro Gerät, sequenziell und bewusst NICHT
 	// alles-oder-nichts (siehe Issue #23) — ein Fehler bei einem Gerät bricht die restliche Charge
-	// nicht ab. `assignDevice` im Fake-Backend setzt bei jeder Zuweisung hart auf
+	// nicht ab. Der `deviceCode` kommt aus dem Einzel-GET an der Quelle (`DeviceDetail`, nicht in
+	// der Liste enthalten) und wird VOR dem `unassign` geholt — fehlt er, wird das Gerät gar nicht
+	// erst gelöst. Die Konfiguration wird ebenfalls aus dieser frischen Antwort übernommen. `assignDevice` im Fake-Backend setzt bei jeder Zuweisung hart auf
 	// displayType=None/matchNo=null/displayTheme=Dark zurück (kein Übernehmen von sich aus), daher
 	// der Folge-`update()`-Call mit den ursprünglichen Werten. Schlägt ausgerechnet der `assign`-
 	// Schritt fehl, NACHDEM `unassign` schon erfolgreich war, ist der deviceCode "verwaist" (Gerät
@@ -296,10 +298,12 @@
 		const results: TransferResult[] = [];
 
 		for (const deviceId of deviceIds) {
-			const original = transferDevices.find((d) => d.id === deviceId);
-			if (!original) continue;
+			if (!transferDevices.some((d) => d.id === deviceId)) continue;
 			try {
-				const { deviceCode } = await bildschirmeApi.unassign(auth.accessToken!, sourceId, deviceId);
+				const original = await bildschirmeApi.get(auth.accessToken!, sourceId, deviceId);
+				const { deviceCode } = original;
+				if (!deviceCode) throw new Error('deviceCode missing');
+				await bildschirmeApi.unassign(auth.accessToken!, sourceId, deviceId);
 				try {
 					const created = await bildschirmeApi.assign(auth.accessToken!, fixtureId, deviceCode);
 					const updated = await bildschirmeApi.update(auth.accessToken!, fixtureId, created.id, {
