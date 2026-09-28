@@ -57,7 +57,15 @@ export default defineConfig({
 	],
 	server: {
 		proxy: {
-			'/api': 'http://localhost:8000'
+			// String-Kurzform hätte den Pfad UNVERÄNDERT weitergeleitet (`/api/fixtures` bliebe
+			// `/api/fixtures` beim Backend) — Fawkes kennt aber kein `/api`-Präfix, alle Routen
+			// liegen direkt unter `/`. Bis 2026-09-28 unbemerkt, weil MSW `fetch()` im Browser
+			// abfängt, bevor er je bei diesem Proxy ankommt — beim ersten echten Test gegen den
+			// Docker-Release aufgefallen (404 auf allem, `docker-compose.yml`).
+			'/api': {
+				target: 'http://localhost:8000',
+				rewrite: (path) => path.replace(/^\/api/, '')
+			}
 		}
 	}
 });
