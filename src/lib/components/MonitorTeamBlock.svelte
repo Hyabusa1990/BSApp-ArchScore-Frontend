@@ -2,6 +2,7 @@
 	import { deriveMonitorStatus, type DisplaySeite } from '$lib/api/display';
 	import { decodeShot } from '$lib/api/binocular';
 	import { _ } from 'svelte-i18n';
+	import { onMount } from 'svelte';
 
 	let {
 		seite,
@@ -97,6 +98,68 @@
 		const breitePerPfeil = (arrowsWidth - ARROW_GAP_PX * (n - 1)) / n;
 		return Math.max(0, Math.min(arrowsHeight, breitePerPfeil));
 	});
+
+	// ── Animationen (Issue #27) ─────────────────────────────────────────────────
+	// Bewusste Erweiterung ggü. dem Referenzprojekt (dort keine Animationen, siehe
+	// FACHLICHKEIT.md „Display-Workflow"): neue Pfeile rasten ein, Ringsumme/Satzpunkte
+	// pulsieren bei Änderung — damit der Zuschauer aus 20–30 m die Änderung mitbekommt.
+	//
+	// Erkennung neuer Pfeile ohne Vergleichslogik pro Wert: Die Pfeil-Schleife ist nach
+	// `satzKey` + Index geschlüsselt. Innerhalb eines Satzes bleibt ein Element für seinen Index
+	// bestehen (Korrektur = nur neuer Wert, keine Animation, Undo = Element fällt weg), neu
+	// erzeugt wird ein Element nur für einen wirklich neu dazugekommenen Pfeil — oder für alle,
+	// sobald ein neuer Satz beginnt. Die Animationsklasse wird genau beim Erzeugen gesetzt
+	// (`einrasten`-Action), nie nachträglich — Größenänderungen (`arrowSizePx`) spielen also
+	// nichts erneut ab. Beim ersten Anzeigen der Komponente (Seite geladen/neu geladen) wird
+	// bewusst nichts animiert (`bereit`).
+	const satzKey = $derived(`${status}-${seite.setScores?.length ?? 0}`);
+
+	let bereit = false;
+	let vorigerSatzKey: string | null = null;
+	let vorigeAnzahl = 0;
+	// Index des ersten Pfeils, der mit der aktuellen Abfrage neu dazugekommen ist — Basis für
+	// den Versatz, wenn in einer 3-s-Abfrage mehrere Pfeile auf einmal kommen.
+	let batchStart = 0;
+
+	$effect.pre(() => {
+		const key = satzKey;
+		const anzahl = boxWerte.length;
+		if (key !== vorigerSatzKey) batchStart = 0;
+		else if (anzahl > vorigeAnzahl) batchStart = vorigeAnzahl;
+		vorigerSatzKey = key;
+		vorigeAnzahl = anzahl;
+	});
+
+	onMount(() => {
+		bereit = true;
+	});
+
+	const PFEIL_VERSATZ_MS = 150;
+
+	function einrasten(node: HTMLElement, index: number) {
+		if (!bereit || status !== 'SATZ_LAEUFT') return;
+		node.style.animationDelay = `${Math.max(0, index - batchStart) * PFEIL_VERSATZ_MS}ms`;
+		spieleAnimation(node, 'monitor-arrow-neu');
+	}
+
+	function pulsieren(node: HTMLElement) {
+		if (bereit) spieleAnimation(node, 'monitor-puls');
+	}
+
+	function spieleAnimation(node: HTMLElement, klasse: string) {
+		// Ohne Animation käme nie ein `animationend` — Klasse dann gar nicht erst setzen (das CSS
+		// schaltet sie für diesen Fall zusätzlich ab).
+		if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+		node.classList.add(klasse);
+		node.addEventListener(
+			'animationend',
+			() => {
+				node.classList.remove(klasse);
+				node.style.animationDelay = '';
+			},
+			{ once: true }
+		);
+	}
 </script>
 
 <div class="monitor-block">
@@ -121,11 +184,16 @@
 	{:else}
 		<div class="monitor-satz-row">
 			<div class="monitor-arrows" bind:clientWidth={arrowsWidth} bind:clientHeight={arrowsHeight}>
-				{#each boxWerte as wert, i (i)}
+				<!-- Einzelne style:-Direktiven statt eines style-Attributs: ein Attribut würde bei
+				     jeder Größenänderung komplett neu gesetzt und das von `einrasten` gesetzte
+				     animation-delay überschreiben. -->
+				{#each boxWerte as wert, i (`${satzKey}-${i}`)}
 					<div
 						class="monitor-arrow {wert.colorClass}"
-						style="width: {arrowSizePx}px; height: {arrowSizePx}px; font-size: {arrowSizePx *
-							0.5}px;"
+						style:width="{arrowSizePx}px"
+						style:height="{arrowSizePx}px"
+						style:font-size="{arrowSizePx * 0.5}px"
+						use:einrasten={i}
 					>
 						{wert.label}
 					</div>
@@ -133,12 +201,18 @@
 			</div>
 			<div class="monitor-boxes">
 				{#if status === 'SATZ_LAEUFT'}
-					<div class="monitor-box monitor-box-neutral">{seite.currentSetScore ?? 0}</div>
+					{#key seite.currentSetScore}
+						<div class="monitor-box monitor-box-neutral" use:pulsieren>
+							{seite.currentSetScore ?? 0}
+						</div>
+					{/key}
 				{/if}
 				{#if seite.setPoints !== null}
-					<div class="monitor-box monitor-box-punkte {satzpunkteBoxClass}">
-						{seite.setPoints}
-					</div>
+					{#key seite.setPoints}
+						<div class="monitor-box monitor-box-punkte {satzpunkteBoxClass}" use:pulsieren>
+							{seite.setPoints}
+						</div>
+					{/key}
 				{/if}
 			</div>
 		</div>
@@ -358,5 +432,51 @@
 		background: #fff;
 		color: #000;
 		border: 1px solid var(--monitor-border);
+	}
+
+	/* ── Animationen (Issue #27) ──
+	   Klassen werden per Action gesetzt (nicht im Template), deshalb :global() — sonst würde
+	   Svelte die Selektoren als ungenutzt entfernen. Nur transform/opacity, damit das Layout
+	   (JS-Größenberechnung der Pfeile) unberührt bleibt. */
+	.monitor-arrow:global(.monitor-arrow-neu) {
+		animation: monitor-pfeil-einrasten 400ms cubic-bezier(0.2, 0.8, 0.3, 1) backwards;
+	}
+
+	@keyframes -global-monitor-pfeil-einrasten {
+		0% {
+			opacity: 0;
+			transform: scale(1.35);
+		}
+		70% {
+			opacity: 1;
+			transform: scale(0.95);
+		}
+		100% {
+			opacity: 1;
+			transform: scale(1);
+		}
+	}
+
+	.monitor-box:global(.monitor-puls) {
+		animation: monitor-puls 300ms ease-out;
+	}
+
+	@keyframes -global-monitor-puls {
+		0% {
+			transform: scale(1);
+		}
+		40% {
+			transform: scale(1.08);
+		}
+		100% {
+			transform: scale(1);
+		}
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.monitor-arrow:global(.monitor-arrow-neu),
+		.monitor-box:global(.monitor-puls) {
+			animation: none;
+		}
 	}
 </style>

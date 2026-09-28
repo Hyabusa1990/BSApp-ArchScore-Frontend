@@ -49,6 +49,7 @@ Wichtig: Schütze/Spotter/Zuschauer authentifizieren sich **nie** über ein Benu
 - Einmal gepaired, zeigt der Bildschirm **automatisch über alle Runden hinweg**, was gerade auf seinen zwei fest zugeordneten Scheibennummern läuft — kein erneutes Pairing pro Runde nötig.
 - Zeigt beide Mannschaften nebeneinander (jede zu "ihrer" Scheibe hin orientiert), pro Seite ein Status: `WARTET` → `SCHUETZEN_GEMELDET` → `SATZ_LAEUFT` ⇄ `SATZ_FERTIG` (pro Satz wiederholt) → `MATCH_FERTIG`.
 - Zeigt die Pfeile des **aktuell offenen Satzes** (wächst von links nach rechts, keine Platzhalter für noch nicht geschossene Pfeile — bewusst reduziert für Lesbarkeit aus der Distanz), plus Ringsumme des Satzes und, sobald ein Satz fertig ist, die Satzpunkte farblich (führt/liegt zurück).
+- **Bewusste Erweiterung ggü. dem Referenzprojekt** (Entscheidung Auftraggeber, 2026-09-28, Issue #27): Neue Pfeile rasten animiert ein (~400 ms; mehrere Pfeile aus einer Abfrage nacheinander, ~150 ms versetzt), Ringsumme und Satzpunkte pulsieren kurz bei Änderung — damit Zuschauer die Änderung aus der Distanz wahrnehmen. Keine Animation beim ersten Laden, bei Undo/Korrektur, zwischen den Sätzen und bei aktivierter Einstellung „Bewegung reduzieren".
 
 ## Veranstaltungs-Setup und Admin-Workflow
 
