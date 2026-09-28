@@ -174,7 +174,8 @@ export function getDisplayData(accessToken: string): DisplayDataResponse | undef
 			displayType: 'Unassigned',
 			displayTheme: 'Dark',
 			targets: [],
-			leagueTablePositions: []
+			leagueTablePositions: [],
+			deviceCode
 		};
 	}
 
@@ -185,7 +186,8 @@ export function getDisplayData(accessToken: string): DisplayDataResponse | undef
 			displayType: 'LeagueTable',
 			displayTheme: device.displayTheme,
 			targets: [],
-			leagueTablePositions: getLeagueTable(veranstaltungId)
+			leagueTablePositions: getLeagueTable(veranstaltungId),
+			deviceCode
 		};
 	}
 
@@ -194,7 +196,8 @@ export function getDisplayData(accessToken: string): DisplayDataResponse | undef
 			displayType: 'None',
 			displayTheme: device.displayTheme,
 			targets: [],
-			leagueTablePositions: []
+			leagueTablePositions: [],
+			deviceCode
 		};
 	}
 
@@ -208,7 +211,8 @@ export function getDisplayData(accessToken: string): DisplayDataResponse | undef
 			displayType: 'None',
 			displayTheme: device.displayTheme,
 			targets: [],
-			leagueTablePositions: []
+			leagueTablePositions: [],
+			deviceCode
 		};
 	}
 
@@ -216,6 +220,7 @@ export function getDisplayData(accessToken: string): DisplayDataResponse | undef
 		displayType: 'Match',
 		displayTheme: device.displayTheme,
 		targets: [buildSeiteForScheibe(begegnung.scheibe_a), buildSeiteForScheibe(begegnung.scheibe_b)],
-		leagueTablePositions: []
+		leagueTablePositions: [],
+		deviceCode
 	};
 }

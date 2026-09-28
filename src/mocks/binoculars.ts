@@ -87,6 +87,7 @@ function buildMatch(scheibennummer: number, { found, scoring }: Resolved): Binoc
 	return {
 		targetNo: scheibennummer,
 		teamName: mannschaft,
+		currentSetNo: scoring.aktueller_satz,
 		currentSetScore: shots ? ringSumme(scoring.vorlaeufige_passen, scoring.aktueller_satz) : null,
 		shots,
 		// Bewusst nicht nur "aktueller Satz schon bestätigt": ist das Match auf dieser Scheibe

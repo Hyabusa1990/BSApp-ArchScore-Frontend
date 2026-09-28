@@ -9,6 +9,16 @@ import { apiClient } from './client';
  * `id`/`uniqueId`/`date`/`location`/`leagueName`/`fixtureName` entsprechen 1:1
  * `GetFixtureResponse`. Name der Veranstaltung ist Liganame + Wettkampftag, kein einzelnes
  * `name`-Feld wie in einer früheren, unbestätigten Annahme dieses Moduls.
+ *
+ * Pfad-Sync 2026-09-28 (erster Docker-Release, `docs/Fawkes-OpenApi.json` neu gezogen): Fawkes
+ * schreibt Controller-Routen jetzt klein/Plural (`/fixtures` statt `/Fixture`) — reiner
+ * Pfad-Umbau, Feld-Shapes unverändert. `getMatchPlayChart`/`createMatchPlayChart` bewusst NICHT
+ * mitgezogen: `GET /MatchPlayChart/{fixtureId}` existiert live gar nicht mehr (nur noch
+ * `POST /fixtures/{fixtureId}/matchplaychart`, mit geänderten Team-Feldern —
+ * `setPointsWon`/`setPointsLost`/`matchPointsWon`/`matchPointsLost` statt `setPoints`/
+ * `matchPoints`), und `GET /fixtures/{fixtureId}/rounds/{roundNo}` wirft serverseitig
+ * durchgängig `NotImplementedException` — offene Fragen beim Backend-Dev (Joplin), bevor hier was
+ * umgebaut wird.
  */
 
 export interface LigaVerbindung {
@@ -20,7 +30,7 @@ export interface LigaVerbindung {
 
 export interface Veranstaltung {
 	/** Fawkes-Fixture-ID (numerisch) — steuert u. a. `PUT/GET /fixtures/{fixtureId}/phase`
-	 * (Matchkontrolle, #10) und `/Fixture/{id}/users...` (Mitgliederverwaltung, #13). */
+	 * (Matchkontrolle, #10) und `/fixtures/{id}/users...` (Mitgliederverwaltung, #13). */
 	id: number;
 	/** Schwer zu erraten, Bearer-frei nutzbar — steuert die Spotter-Info-Abfragen. */
 	uniqueId: string;
@@ -76,20 +86,24 @@ export interface MatchPlayChart {
 }
 
 export const veranstaltungApi = {
-	list: (token: string) => apiClient.get<Veranstaltung[]>('/Fixture', token),
+	list: (token: string) => apiClient.get<Veranstaltung[]>('/fixtures', token),
 
-	get: (token: string, id: number) => apiClient.get<Veranstaltung>(`/Fixture/${id}`, token),
+	get: (token: string, id: number) => apiClient.get<Veranstaltung>(`/fixtures/${id}`, token),
 
 	create: (token: string, data: CreateFixtureData) =>
-		apiClient.post<Veranstaltung>('/Fixture', data, token),
+		apiClient.post<Veranstaltung>('/fixtures', data, token),
 
 	// Von keiner UI aktuell aufgerufen (kein Bearbeiten-Formular existiert) — trotzdem verdrahtet,
 	// damit der Kontrakt vollständig zu CreateFixtureRequest/UpdateFixtureRequest passt (#14).
 	update: (token: string, id: number, data: CreateFixtureData) =>
-		apiClient.put<Veranstaltung>(`/Fixture/${id}`, data, token),
+		apiClient.put<Veranstaltung>(`/fixtures/${id}`, data, token),
 
-	remove: (token: string, id: number) => apiClient.delete<void>(`/Fixture/${id}`, token),
+	remove: (token: string, id: number) => apiClient.delete<void>(`/fixtures/${id}`, token),
 
+	// ACHTUNG (Stand 2026-09-28): Pfad+Feld-Shape hier sind gegen die aktuelle Docker-Instanz
+	// NICHT mehr korrekt (`GET /MatchPlayChart/{fixtureId}` existiert live nicht mehr, siehe
+	// Kommentar oben am Modul) — bewusst unangetastet gelassen, bis die offenen Fragen beim
+	// Backend-Dev geklärt sind, statt auf Verdacht umzubauen. Läuft weiter nur gegen die Mocks.
 	getMatchPlayChart: (token: string, fixtureId: number) =>
 		apiClient.get<MatchPlayChart>(`/MatchPlayChart/${fixtureId}`, token),
 
@@ -99,6 +113,8 @@ export const veranstaltungApi = {
 	// Daten existieren. hardOverride: true überschreibt trotzdem — löscht dabei alle bereits
 	// erfassten Ergebnisse und erstellt den Spielplan neu (mit Backend-Entwickler bestätigt,
 	// UI muss also vor dem Aufruf warnen, siehe veranstaltungen/[id]/+page.svelte).
+	// ACHTUNG (Stand 2026-09-28): ebenfalls unangetastet trotz bekanntem Pfad-/Feld-Drift, siehe
+	// oben — hängt an derselben offenen Klärung wie getMatchPlayChart.
 	createMatchPlayChart: (
 		token: string,
 		fixtureId: number,
@@ -113,12 +129,12 @@ export const veranstaltungApi = {
 		apiClient.post<Veranstaltung>(`/veranstaltungen/${id}/liga`, data, token),
 
 	listUsers: (token: string, fixtureId: number) =>
-		apiClient.get<FixtureUser[]>(`/Fixture/${fixtureId}/users`, token),
+		apiClient.get<FixtureUser[]>(`/fixtures/${fixtureId}/users`, token),
 
 	// Antwort laut Spec nur bare 200 ohne Body-Schema — Aufrufer lädt die Liste danach neu.
 	addUser: (token: string, fixtureId: number, userName: string) =>
-		apiClient.post<void>(`/Fixture/${fixtureId}/users/add`, { userName }, token),
+		apiClient.post<void>(`/fixtures/${fixtureId}/users/add`, { userName }, token),
 
 	removeUser: (token: string, fixtureId: number, userName: string) =>
-		apiClient.delete<void>(`/Fixture/${fixtureId}/users/${encodeURIComponent(userName)}`, token)
+		apiClient.delete<void>(`/fixtures/${fixtureId}/users/${encodeURIComponent(userName)}`, token)
 };

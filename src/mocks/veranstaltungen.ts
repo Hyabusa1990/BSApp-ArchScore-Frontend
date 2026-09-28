@@ -373,7 +373,8 @@ function seedState(): State {
 					setPointsLost: 6,
 					matchPointsWon: 12,
 					matchPointsLost: 2,
-					position: 1
+					rank: 1,
+					rankDifference: 0
 				},
 				{
 					teamName: 'SV Kreisstadt',
@@ -381,7 +382,8 @@ function seedState(): State {
 					setPointsLost: 10,
 					matchPointsWon: 9,
 					matchPointsLost: 5,
-					position: 2
+					rank: 2,
+					rankDifference: 0
 				},
 				{
 					teamName: 'BS Ostwind',
@@ -389,7 +391,8 @@ function seedState(): State {
 					setPointsLost: 13,
 					matchPointsWon: 8,
 					matchPointsLost: 6,
-					position: 3
+					rank: 3,
+					rankDifference: 0
 				},
 				{
 					teamName: 'SGi Talblick',
@@ -397,7 +400,8 @@ function seedState(): State {
 					setPointsLost: 16,
 					matchPointsWon: 6,
 					matchPointsLost: 8,
-					position: 4
+					rank: 4,
+					rankDifference: 0
 				}
 			]
 		},
@@ -531,7 +535,9 @@ export function getMatchPlayChart(fixtureId: number): MatchPlayChart | undefined
  * Satzpunkte absteigend als Tiebreak. `MatchPlayChartTeam` kennt nur je eine Netto-Zahl (Admin
  * gibt keine Plus/Minus-Aufteilung ein, siehe `saveTabelle`), deshalb Plus/Minus hier synthetisch
  * aus dem Vorzeichen rekonstruiert (negativ -> komplett in Minus, sonst komplett in Plus) — reine
- * Mock-Annäherung, keine echte Sieg/Niederlage-Historie.
+ * Mock-Annäherung, keine echte Sieg/Niederlage-Historie. `rankDifference` bleibt immer 0 — der
+ * Mock kennt keine Platzierungshistorie eines vorigen Spieltags, aus der sich eine echte
+ * Bewegung ableiten ließe.
  */
 function toLeagueTablePositions(teams: MatchPlayChartTeam[]): LeagueTablePosition[] {
 	return [...teams]
@@ -542,7 +548,8 @@ function toLeagueTablePositions(teams: MatchPlayChartTeam[]): LeagueTablePositio
 			setPointsLost: Math.max(-team.setPoints, 0),
 			matchPointsWon: Math.max(team.matchPoints, 0),
 			matchPointsLost: Math.max(-team.matchPoints, 0),
-			position: i + 1
+			rank: i + 1,
+			rankDifference: 0
 		}));
 }
 

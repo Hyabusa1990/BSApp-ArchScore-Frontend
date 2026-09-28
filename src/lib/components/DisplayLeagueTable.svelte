@@ -10,9 +10,10 @@
 	let mainEl = $state<HTMLElement | null>(null);
 	let fontSize = $state('1.5rem');
 
-	// Server liefert `position` explizit (nicht mehr aus der Array-Reihenfolge abgeleitet, siehe
-	// Issue #18) — defensiv sortieren statt Server-Reihenfolge blind zu vertrauen.
-	const sortiert = $derived([...eintraege].sort((a, b) => a.position - b.position));
+	// Server liefert `rank` explizit (nicht mehr aus der Array-Reihenfolge abgeleitet, siehe
+	// Issue #18, Feldname seit Pfad-Sync 2026-09-28 `rank` statt `position`) — defensiv sortieren
+	// statt Server-Reihenfolge blind zu vertrauen.
+	const sortiert = $derived([...eintraege].sort((a, b) => a.rank - b.rank));
 
 	$effect(() => {
 		if (!mainEl || sortiert.length === 0) return;
@@ -42,10 +43,10 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each sortiert as eintrag, i (eintrag.position)}
+				{#each sortiert as eintrag, i (eintrag.rank)}
 					{@const spNetto = eintrag.setPointsWon - eintrag.setPointsLost}
 					<tr class:even={i % 2 === 1}>
-						<td class="col-pos">{eintrag.position}</td>
+						<td class="col-pos">{eintrag.rank}</td>
 						<td class="col-mannschaft">{eintrag.teamName}</td>
 						<td class="col-mp">
 							<span class="mp-value">{eintrag.matchPointsWon}</span>

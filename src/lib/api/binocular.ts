@@ -15,11 +15,16 @@ import { apiClient } from './client';
  * `extern_match_id` (Neues-Match-Erkennung beim Polling, jetzt über `teamName`-Wechsel gelöst)
  * und `status` (ACTIVE/COMPLETED-Umschaltung, jetzt über `isConfirmed` abgedeckt — siehe
  * `mocks/binoculars.ts`) — der Rest war reiner, nie gelesener Wire-Ballast.
+ *
+ * Pfad-Sync 2026-09-28 (erster Docker-Release): `GetTargetResponse` hat ein neues Feld
+ * `currentSetNo` dazubekommen — mitgezogen, auch wenn die Spotter-UI es aktuell nicht liest.
  */
 
 export interface BinocularMatch {
 	targetNo: number;
 	teamName: string | null;
+	/** 1-indizierte Nummer des aktuell laufenden Satzes. */
+	currentSetNo: number;
 	/** Ringsumme des aktuell laufenden Satzes, `null` solange noch kein Pfeil erfasst ist. */
 	currentSetScore: number | null;
 	/**

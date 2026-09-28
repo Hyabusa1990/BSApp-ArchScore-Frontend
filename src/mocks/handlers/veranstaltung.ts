@@ -27,10 +27,13 @@ import {
  * (siehe Issue #6 — kein role==="admin"-Gate, jeder eingeloggte Account darf rein,
  * sieht aber nur, was für ihn sichtbar ist — seit #14 über echte Fixture-Mitgliedschaft).
  *
- * `/Fixture`, `/Fixture/{id}`, `/Fixture/{id}/users...`, `/MatchPlayChart/{fixtureId}` folgen
- * dem echten Fawkes-Kontrakt (Issue #14). `/veranstaltungen/{id}/...` bleiben eigene, nicht in
- * der Spec vorhandene Sub-Ressourcen (Matches/Bildschirme/Tablet-Pairing/Liga-Verbindung) —
- * ihr `:id` ist seit #14 einfach die stringifizierte Fixture-ID.
+ * `/fixtures`, `/fixtures/{id}`, `/fixtures/{id}/users...` folgen dem echten Fawkes-Kontrakt
+ * (Issue #14, Pfad-Sync 2026-09-28: Fawkes schreibt Controller-Routen jetzt klein/Plural).
+ * `/veranstaltungen/{id}/...` bleiben eigene, nicht in der Spec vorhandene Sub-Ressourcen
+ * (Matches/Bildschirme/Tablet-Pairing/Liga-Verbindung) — ihr `:id` ist seit #14 einfach die
+ * stringifizierte Fixture-ID. `/MatchPlayChart/{fixtureId}` bewusst NICHT mitgezogen — siehe
+ * ACHTUNG-Kommentare bei `veranstaltungApi.getMatchPlayChart`/`createMatchPlayChart`
+ * (`$lib/api/veranstaltung.ts`), offene Backend-Klärung.
  */
 
 function requireUser(request: Request): User | undefined {
@@ -56,13 +59,13 @@ function forbidden() {
 }
 
 export const veranstaltungHandlers = [
-	http.get(`${API_URL}/Fixture`, ({ request }) => {
+	http.get(`${API_URL}/fixtures`, ({ request }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		return HttpResponse.json(visibleVeranstaltungen(user));
 	}),
 
-	http.post(`${API_URL}/Fixture`, async ({ request }) => {
+	http.post(`${API_URL}/fixtures`, async ({ request }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		const body = (await request.json()) as {
@@ -92,7 +95,7 @@ export const veranstaltungHandlers = [
 		);
 	}),
 
-	http.get(`${API_URL}/Fixture/:id`, ({ request, params }) => {
+	http.get(`${API_URL}/fixtures/:id`, ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		const v = findVeranstaltung(user, Number(params.id));
@@ -100,7 +103,7 @@ export const veranstaltungHandlers = [
 		return HttpResponse.json(v);
 	}),
 
-	http.delete(`${API_URL}/Fixture/:id`, ({ request, params }) => {
+	http.delete(`${API_URL}/fixtures/:id`, ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		if (!removeVeranstaltung(user, Number(params.id))) return notFound();
@@ -200,7 +203,7 @@ export const veranstaltungHandlers = [
 
 	// Fixture-Mitgliedschaft (Fawkes `FixtureController`, siehe Issue #13) — eigene Achse
 	// gegenüber der Account-`role`, gated auf `isOwner` PRO Fixture, nicht global.
-	http.get(`${API_URL}/Fixture/:fixtureId/users`, ({ request, params }) => {
+	http.get(`${API_URL}/fixtures/:fixtureId/users`, ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		const v = findVeranstaltung(user, Number(params.fixtureId));
@@ -208,7 +211,7 @@ export const veranstaltungHandlers = [
 		return HttpResponse.json(usersFor(String(v.id)));
 	}),
 
-	http.post(`${API_URL}/Fixture/:fixtureId/users/add`, async ({ request, params }) => {
+	http.post(`${API_URL}/fixtures/:fixtureId/users/add`, async ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		const v = findVeranstaltung(user, Number(params.fixtureId));
@@ -221,7 +224,7 @@ export const veranstaltungHandlers = [
 		return HttpResponse.json(addFixtureUser(String(v.id), body.userName));
 	}),
 
-	http.delete(`${API_URL}/Fixture/:fixtureId/users/:userName`, ({ request, params }) => {
+	http.delete(`${API_URL}/fixtures/:fixtureId/users/:userName`, ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		const v = findVeranstaltung(user, Number(params.fixtureId));

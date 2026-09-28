@@ -5,12 +5,16 @@ Backend-Repo — die Single Source of Truth für den API-Kontrakt zwischen diese
 C#-Backend „Fawkes".
 
 - **Quelle:** https://github.com/Hyabusa1990/BSApp-ArchScore-Backend/blob/main/Fawkes-OpenApi.json
-- **Übernommen von Commit:** `d7b5696fc79004cbd9b3a2981a9c03859cb47750` (2026-08-31)
-- **Abweichung (2026-09-04):** aktueller Stand stattdessen von einer laufenden Backend-Instanz
-  (`GET /swagger/v1/swagger.json`) übernommen, da `main` auf GitHub zu diesem Zeitpunkt noch den
-  Commit von 2026-08-31 zeigt (kein neuerer Commit auf `Fawkes-OpenApi.json` vorhanden) — der
-  Vertrag ist also bereits weiter, als es der öffentliche Commit-Stand zeigt. Sobald ein
-  passender Commit auf `main` existiert, hier wieder auf den GitHub-Commit-Hash umstellen.
+- **Übernommen von Commit:** `d7b5696fc79004cbd9b3a2981a9c03859cb47750` (2026-08-31) — unverändert
+  aktuellster Commit auf `main`, der `Fawkes-OpenApi.json` berührt (Stand 2026-09-28 geprüft).
+- **Abweichung (2026-09-28):** aktueller Stand stattdessen vom ersten offiziellen Docker-Release
+  des Backends übernommen (`ghcr.io/hyabusa1990/bsapp-archscore-backend:latest`, Image-Revision
+  `bc39f96163ac92aed714d673876a8758c25ee025`, `GET /swagger/v1/swagger.json` gegen eine lokal per
+  `docker-compose.yml` hochgezogene Instanz) — `main` auf GitHub zeigt weiterhin nur den
+  Commit-Stand von 2026-08-31, der Vertrag ist also bereits weiter, als es der öffentliche
+  Commit-Stand zeigt. Sobald ein passender Commit auf `main` existiert, hier wieder auf den
+  GitHub-Commit-Hash umstellen. Vorherige Abweichung (2026-09-04, ebenfalls von einer laufenden
+  Instanz übernommen) ist in diesem Stand aufgegangen.
 
 Das frühere `ArchScore-SpecsAndDocu`-Submodule (separates Repo mit `openapi.yaml`) ist entfernt —
 diese Datei existiert im Backend-Repo nicht mehr, `Fawkes-OpenApi.json` ist die einzige verbleibende
