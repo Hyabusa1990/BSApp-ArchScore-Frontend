@@ -10,7 +10,6 @@
 		Col,
 		Card,
 		CardBody,
-		Collapse,
 		Form,
 		Alert,
 		Button,
@@ -128,7 +127,7 @@
 						<Icon name={showNewForm ? 'chevron-down' : 'chevron-right'} />
 						{$_('veranstaltungen.new_title')}
 					</button>
-					<Collapse isOpen={showNewForm}>
+					{#if showNewForm}
 						<Form onsubmit={handleCreate}>
 							<FormField
 								id="new-league-name"
@@ -180,7 +179,7 @@
 								{$_('veranstaltungen.new_button')}
 							</Button>
 						</Form>
-					</Collapse>
+					{/if}
 				</CardBody>
 			</Card>
 		</Col>
