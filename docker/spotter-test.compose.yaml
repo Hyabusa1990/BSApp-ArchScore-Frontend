@@ -1,16 +1,16 @@
 # Test-Stack spotter-test.bsapp.de (Komodo-Stack): Postgres + Fawkes-Backend + Frontend.
 # Alle persistenten Daten liegen unter /srv/spotter-test/ (Bind-Mounts, siehe unten).
-# Reverse Proxy ist der NGINX Proxy Manager (NPM), er terminiert TLS und routet:
-#   spotter-test.bsapp.de/      -> spotter-test-web:8080   (Frontend, static-web-server)
-#   spotter-test.bsapp.de/api/  -> spotter-test-api:80     (Backend, "/api" wird im NPM abgeschnitten)
-# Feste container_names, weil `api`/`web` im geteilten proxy-Netz mit anderen Stacks kollidieren
-# könnten. Die Container veröffentlichen KEINE Host-Ports; NPM erreicht sie über das externe Docker-
-# Netzwerk `proxy` (muss NPM ebenfalls angehängt sein, Name ggf. anpassen).
+# Reverse Proxy ist der NGINX Proxy Manager (NPM) auf einem ANDEREN Host: er terminiert TLS und
+# routet auf die hier veröffentlichten Host-Ports (Defaults, per Komodo-Environment änderbar):
+#   spotter-test.bsapp.de/      -> <Docker-Host-IP>:${WEB_PORT:-18080}   (Frontend, static-web-server)
+#   spotter-test.bsapp.de/api/  -> <Docker-Host-IP>:${API_PORT:-18081}   (Backend, "/api" wird im NPM abgeschnitten)
+# Die Ports sind im LAN erreichbar: per Host-Firewall auf die NPM-IP beschränken, nicht ins
+# Internet freigeben. Postgres veröffentlicht keinen Port (nur internes Netz).
 #
 # Einmalig auf dem Host vorbereiten:
 #   mkdir -p /srv/spotter-test/postgres
 #   (Postgres chownt das Datenverzeichnis beim ersten Start selbst.)
-# Secrets in Komodo unter "Environment" setzen (nicht ins Repo): POSTGRES_PASSWORD.
+# Secrets in Komodo unter "Environment" setzen (nicht ins Repo): POSTGRES_PASSWORD, JWT_KEY, JWT_DEVICE_KEY.
 
 services:
   postgres:
@@ -27,11 +27,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
-    networks:
-      - internal
 
   api:
-    container_name: spotter-test-api
     # Tag für reproduzierbare Tests auf einen sha-<commit>-Tag pinnen:
     # https://github.com/Hyabusa1990/BSApp-ArchScore-Backend/pkgs/container/bsapp-archscore-backend
     image: ghcr.io/hyabusa1990/bsapp-archscore-backend:${API_TAG:-latest}
@@ -42,29 +39,24 @@ services:
       # Production: kein Swagger, keine Developer-Exception-Page (die gibt sonst Header inkl.
       # Bearer-Tokens in 500-Antworten aus). Für Swagger auf Development stellen — nur intern!
       ASPNETCORE_ENVIRONMENT: Production
+      # appsettings.json liefert einen öffentlichen Default-Key ("ChangeThisInProduction") — wer ihn
+      # kennt, kann gültige Tokens (auch Admin) fälschen. Beide Keys (User- und Device-/Tablet-
+      # Token) in Komodo setzen, mind. 32 Zeichen, unterschiedlich: `openssl rand -base64 48`.
+      Jwt__Key: ${JWT_KEY:?JWT_KEY in Komodo setzen}
+      JwtDevice__Key: ${JWT_DEVICE_KEY:?JWT_DEVICE_KEY in Komodo setzen}
       ConnectionStrings__FawkesConnection: Host=postgres;Username=fawkes;Password=${POSTGRES_PASSWORD};Database=fawkes;TrustServerCertificate=True;
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - internal
-      - proxy
+    ports:
+      - '${API_PORT:-18081}:80'
 
   web:
-    container_name: spotter-test-web
-    # Kein veröffentlichtes Frontend-Image vorhanden -> Komodo/Compose baut es aus dem Repo.
-    # Alternativ ein Image bauen/pushen und hier `image:` statt `build:` verwenden.
-    build:
-      context: https://github.com/Hyabusa1990/BSApp-ArchScore-Frontend.git#${WEB_REF:-dev}
-      args:
-        PUBLIC_USE_MOCKS: 'false'
-        # Wird beim Build eingebrannt; Änderung braucht einen Neubau (`--build`/Redeploy).
-        PUBLIC_ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+    # Image wird bei jedem Push auf main gebaut (.github/workflows/build-and-push.yml); Tags:
+    # latest und sha-<commit> (zum Pinnen). PUBLIC_ALLOW_REGISTRATION ist im Image eingebrannt
+    # (GitHub-Repo-Variable `PUBLIC_ALLOW_REGISTRATION`, Standard false) — Änderung = neues Image.
+    image: ghcr.io/hyabusa1990/bsapp-archscore-frontend:${WEB_TAG:-latest}
     restart: unless-stopped
-    networks:
-      - proxy
-
-networks:
-  internal:
-  proxy:
-    external: true
+    pull_policy: always
+    ports:
+      - '${WEB_PORT:-18080}:8080'

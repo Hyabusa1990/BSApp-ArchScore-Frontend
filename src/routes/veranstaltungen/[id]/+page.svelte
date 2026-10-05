@@ -21,7 +21,6 @@
 		Button,
 		Form,
 		Spinner,
-		Collapse,
 		Icon
 	} from '@sveltestrap/sveltestrap';
 	import FormField from '$lib/components/FormField.svelte';
@@ -310,7 +309,7 @@
 					<Icon name={mitgliederOpen ? 'chevron-down' : 'chevron-right'} />
 					{$_('veranstaltungen.mitglieder_heading')}
 				</button>
-				<Collapse isOpen={mitgliederOpen}>
+				{#if mitgliederOpen}
 					{#if usersLoading}
 						<div class="d-flex justify-content-center py-3"><Spinner size="sm" /></div>
 					{:else}
@@ -367,7 +366,7 @@
 							</Form>
 						{/if}
 					{/if}
-				</Collapse>
+				{/if}
 			</CardBody>
 		</Card>
 

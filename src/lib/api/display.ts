@@ -48,7 +48,7 @@ export interface DeviceTokenResponse {
 	expiresIn: number;
 }
 
-export type DisplayDataType = 'Unassigned' | 'None' | 'Match' | 'LeagueTable';
+export type DisplayDataType = 'Unassigned' | 'None' | 'Match' | 'Table';
 
 /** `Fawkes.Api.Controllers.DisplayController.DisplayTheme` — eigenes Schema ggü.
  * `bildschirme.ts`s `DisplayTheme`, gleiche zwei Werte, wie schon bei `DisplayType`/
@@ -108,7 +108,7 @@ export interface LeagueTablePosition {
 /**
  * `Fawkes.Api.Controllers.DisplayController.DisplayDataResponse`. `targets` ist laut
  * Rücksprache Backend-Entwickler (2026-08-18) IMMER ein Array, nie `null` — bei `displayType`
- * `'LeagueTable'` einfach leer. `leagueTablePositions` ist laut Spec dagegen `nullable`
+ * `'Table'` einfach leer. `leagueTablePositions` ist laut Spec dagegen `nullable`
  * (Spec-Sync 2026-09-04) — Konsumenten müssen `?? []` behandeln, nicht nur auf `.length` bauen.
  */
 export interface DisplayDataResponse {

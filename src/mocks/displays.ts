@@ -184,7 +184,7 @@ export function getDisplayData(accessToken: string): DisplayDataResponse | undef
 
 	if (device.displayType === 'LeagueTable') {
 		return {
-			displayType: 'LeagueTable',
+			displayType: 'Table',
 			displayTheme: device.displayTheme,
 			targets: [],
 			leagueTablePositions: getLeagueTable(veranstaltungId),
