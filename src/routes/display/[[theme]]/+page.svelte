@@ -133,7 +133,7 @@
 					scheibeA = data.targets[0];
 					scheibeB = data.targets[1];
 					view = 'CONTENT';
-				} else if (data.displayType === 'LeagueTable') {
+				} else if (data.displayType === 'Table') {
 					leagueTable = data.leagueTablePositions ?? [];
 					view = 'LEAGUE_TABLE';
 				} else {
