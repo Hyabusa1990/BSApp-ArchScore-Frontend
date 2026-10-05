@@ -1,0 +1,70 @@
+# Test-Stack spotter-test.bsapp.de (Komodo-Stack): Postgres + Fawkes-Backend + Frontend.
+# Alle persistenten Daten liegen unter /srv/spotter-test/ (Bind-Mounts, siehe unten).
+# Reverse Proxy ist der NGINX Proxy Manager (NPM), er terminiert TLS und routet:
+#   spotter-test.bsapp.de/      -> spotter-test-web:8080   (Frontend, static-web-server)
+#   spotter-test.bsapp.de/api/  -> spotter-test-api:80     (Backend, "/api" wird im NPM abgeschnitten)
+# Feste container_names, weil `api`/`web` im geteilten proxy-Netz mit anderen Stacks kollidieren
+# könnten. Die Container veröffentlichen KEINE Host-Ports; NPM erreicht sie über das externe Docker-
+# Netzwerk `proxy` (muss NPM ebenfalls angehängt sein, Name ggf. anpassen).
+#
+# Einmalig auf dem Host vorbereiten:
+#   mkdir -p /srv/spotter-test/postgres
+#   (Postgres chownt das Datenverzeichnis beim ersten Start selbst.)
+# Secrets in Komodo unter "Environment" setzen (nicht ins Repo): POSTGRES_PASSWORD.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fawkes
+      POSTGRES_USER: fawkes
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD in Komodo setzen}
+    volumes:
+      - /srv/spotter-test/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U fawkes -d fawkes']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  api:
+    container_name: spotter-test-api
+    # Tag für reproduzierbare Tests auf einen sha-<commit>-Tag pinnen:
+    # https://github.com/Hyabusa1990/BSApp-ArchScore-Backend/pkgs/container/bsapp-archscore-backend
+    image: ghcr.io/hyabusa1990/bsapp-archscore-backend:${API_TAG:-latest}
+    restart: unless-stopped
+    pull_policy: always
+    environment:
+      ASPNETCORE_URLS: http://+:80
+      # Production: kein Swagger, keine Developer-Exception-Page (die gibt sonst Header inkl.
+      # Bearer-Tokens in 500-Antworten aus). Für Swagger auf Development stellen — nur intern!
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__FawkesConnection: Host=postgres;Username=fawkes;Password=${POSTGRES_PASSWORD};Database=fawkes;TrustServerCertificate=True;
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+      - proxy
+
+  web:
+    container_name: spotter-test-web
+    # Kein veröffentlichtes Frontend-Image vorhanden -> Komodo/Compose baut es aus dem Repo.
+    # Alternativ ein Image bauen/pushen und hier `image:` statt `build:` verwenden.
+    build:
+      context: https://github.com/Hyabusa1990/BSApp-ArchScore-Frontend.git#${WEB_REF:-dev}
+      args:
+        PUBLIC_USE_MOCKS: 'false'
+        # Wird beim Build eingebrannt; Änderung braucht einen Neubau (`--build`/Redeploy).
+        PUBLIC_ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+    restart: unless-stopped
+    networks:
+      - proxy
+
+networks:
+  internal:
+  proxy:
+    external: true
