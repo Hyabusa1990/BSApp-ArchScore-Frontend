@@ -19,7 +19,7 @@
 		value = $bindable(''),
 		placeholder = '',
 		required = false,
-		autocomplete = '',
+		autocomplete = 'off',
 		icon = ''
 	}: Props = $props();
 </script>
