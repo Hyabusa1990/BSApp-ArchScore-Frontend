@@ -3,14 +3,15 @@ import type {
 	Veranstaltung,
 	CreateFixtureData,
 	FixtureUser,
-	MatchPlayChart,
 	MatchPlayChartTeam
 } from '$lib/api/veranstaltung';
-import type { LeagueTableEintrag } from '$lib/api/display';
-import type { Match, Begegnung } from '$lib/api/matchkontrolle';
-import type { Device, UpdateDeviceData } from '$lib/api/bildschirme';
+import type { LeagueTablePosition } from '$lib/api/display';
+import type { Match, Begegnung, RoundTarget } from '$lib/api/matchkontrolle';
+import type { Device, DeviceDetail, UpdateDeviceData } from '$lib/api/bildschirme';
 import { users } from './fixtures';
 import { loadState, saveState } from './persist';
+import { berechneMatchStand } from './shared-state';
+import { randomUUID } from './uuid';
 
 /**
  * Fake-Backend-Zustand für die Verwaltungsoberfläche — ein gemeinsamer Store für
@@ -26,24 +27,19 @@ import { loadState, saveState } from './persist';
  * und schreibt ihn nach jeder Änderung zurück, statt ihn einmalig beim Modul-Load zu laden.
  *
  * `Veranstaltung.id` ist seit Issue #14 die echte numerische Fawkes-Fixture-ID — alle anderen
- * hier gespeicherten Records (Match/Device/TabletPairing/currentRoundNo/fixtureUsers/
- * matchPlayCharts) referenzieren sie weiterhin über einen STRING-Schlüssel (`String(v.id)`),
+ * hier gespeicherten Records (Match/Device/currentRoundNo/fixtureUsers/matchPlayCharts)
+ * referenzieren sie weiterhin über einen STRING-Schlüssel (`String(v.id)`),
  * das sind rein interne Mock-Konzepte ohne echtes Fawkes-Pendant, ihr Schlüsseltyp ist bewusst
  * unverändert geblieben (kleinerer Diff, kein Fawkes-Kontrakt zu verletzen).
  */
 
-interface TabletPairingRecord {
-	token: string;
-	veranstaltungId: string;
-	scheibennummer: number;
-}
-
 /**
  * Intern gehaltene Erweiterung von `Device` um den `deviceCode`, mit dem sich das Gerät
- * ursprünglich registriert hat (Issue #17) — nicht Teil von `GetDeviceResponse` (die echte
- * Fawkes-Antwort an die Admin-UI kennt nur `id`/`displayType`/`matchNo`), deshalb beim
- * Rausreichen an Admin-Handler immer über `toPublicDevice` strippen. Bleibt nach dem Zuordnen
- * erhalten, damit `/Display/data` das Gerät anhand seines `deviceCode` wiederfinden kann.
+ * ursprünglich registriert hat (Issue #17) — nur Teil des Einzel-`GetDeviceResponse`
+ * (`GET /fixtures/{fixtureId}/devices/{deviceId}`, siehe `DeviceDetail`), nicht der Liste und
+ * nicht der assign/update-Antworten, deshalb dort immer über `toPublicDevice` strippen. Bleibt
+ * nach dem Zuordnen erhalten, damit `/Display/data` das Gerät anhand seines `deviceCode`
+ * wiederfinden kann.
  */
 interface StoredDevice extends Device {
 	deviceCode: string;
@@ -53,20 +49,25 @@ interface StoredDevice extends Device {
  * `currentRoundNo` (Fawkes-`roundNo`) abgeleitet, nicht mehr selbst persistiert. */
 type StoredMatch = Omit<Match, 'aktiv'>;
 
+/** Initiale Tabelle einer Fixture (Eingabe von `POST .../matchplaychart`, nicht zurücklesbar). */
+interface StoredChart {
+	fixtureId: number;
+	teams: MatchPlayChartTeam[];
+}
+
 interface State {
 	veranstaltungen: Veranstaltung[];
 	matches: StoredMatch[];
-	tabletPairings: TabletPairingRecord[];
 	/** Veranstaltungs-ID (String) -> aktuell freigegebene Runde (Fawkes-`roundNo`, Issue #10). */
 	currentRoundNo: Record<string, number>;
 	/** Veranstaltungs-ID (String) -> Fixture-Mitglieder (Fawkes `GetUserResponse[]`, Issue #13). */
 	fixtureUsers: Record<string, FixtureUser[]>;
 	/** Veranstaltungs-ID (String) -> initiale Tabelle (`GetMatchPlayChartResponse`, Issue #14). */
-	matchPlayCharts: Record<string, MatchPlayChart>;
+	matchPlayCharts: Record<string, StoredChart>;
 	/** Veranstaltungs-ID (String) -> Ligatabelle, wie sie ein `LeagueTable`-Gerät anzeigt (Issue
 	 * #18) — eigene Datenquelle ggü. `matchPlayCharts` (andere Feldnamen, siehe `display.ts`),
 	 * bewusst nur für Veranstaltungen mit `datenquelle === 'liga'` gepflegt. */
-	leagueTables: Record<string, LeagueTableEintrag[]>;
+	leagueTables: Record<string, LeagueTablePosition[]>;
 	/** Veranstaltungs-ID (String) -> zugewiesene Geräte (Fawkes `GetDeviceResponse[]`, Issue #15). */
 	devices: Record<string, StoredDevice[]>;
 	/** deviceCodes, die sich schon selbst registriert haben (`GET /Display/register`, Issue #17),
@@ -107,6 +108,11 @@ function seedState(): State {
 				}
 			}
 		],
+		// Volle Setzliste für 8 Mannschaften / 7 Matches (Rücksprache Gero, Screenshot
+		// "Setzliste von Match zu Match" 2026-09-04) — Kreisverfahren (jede Mannschaft einmal
+		// gegen jede andere), feste Scheiben-Paarung 1/2, 3/4, 5/6, 7/8 pro Match (FACHLICHKEIT.md).
+		// Mannschafts-Nummern 1–8 der Setzliste entsprechen der Reihenfolge in
+		// `matchPlayCharts['1001'].teams` unten (1=BSC Abendau … 8=BSC Rot-Rot Beerendorf).
 		matches: [
 			{
 				id: 'm-1',
@@ -116,14 +122,26 @@ function seedState(): State {
 					{
 						scheibe_a: 1,
 						scheibe_b: 2,
-						mannschaft_a: 'BSC Abendau',
-						mannschaft_b: 'SV Scharfhaus'
+						mannschaft_a: 'SV Vogelwiese',
+						mannschaft_b: 'BS Hunshausen'
 					},
 					{
 						scheibe_a: 3,
 						scheibe_b: 4,
+						mannschaft_a: 'SV Scharfhaus',
+						mannschaft_b: 'SGi Wuppenhausen'
+					},
+					{
+						scheibe_a: 5,
+						scheibe_b: 6,
+						mannschaft_a: 'BSC Abendau',
+						mannschaft_b: 'BSC Rot-Rot Beerendorf'
+					},
+					{
+						scheibe_a: 7,
+						scheibe_b: 8,
 						mannschaft_a: 'SGes Schützenschaft',
-						mannschaft_b: 'BS Hunshausen'
+						mannschaft_b: 'BS Weiß-Blau München'
 					}
 				]
 			},
@@ -132,7 +150,30 @@ function seedState(): State {
 				veranstaltung_id: '1001',
 				nummer: 2,
 				begegnungen: [
-					{ scheibe_a: 1, scheibe_b: 2, mannschaft_a: 'SV Vogelwiese', mannschaft_b: 'BSC Abendau' }
+					{
+						scheibe_a: 1,
+						scheibe_b: 2,
+						mannschaft_a: 'SGes Schützenschaft',
+						mannschaft_b: 'SV Vogelwiese'
+					},
+					{
+						scheibe_a: 3,
+						scheibe_b: 4,
+						mannschaft_a: 'BSC Rot-Rot Beerendorf',
+						mannschaft_b: 'BS Hunshausen'
+					},
+					{
+						scheibe_a: 5,
+						scheibe_b: 6,
+						mannschaft_a: 'SGi Wuppenhausen',
+						mannschaft_b: 'BSC Abendau'
+					},
+					{
+						scheibe_a: 7,
+						scheibe_b: 8,
+						mannschaft_a: 'BS Weiß-Blau München',
+						mannschaft_b: 'SV Scharfhaus'
+					}
 				]
 			},
 			{
@@ -143,13 +184,154 @@ function seedState(): State {
 					{
 						scheibe_a: 1,
 						scheibe_b: 2,
-						mannschaft_a: 'BS Weiß-Blau München',
+						mannschaft_a: 'BS Hunshausen',
 						mannschaft_b: 'SGi Wuppenhausen'
+					},
+					{
+						scheibe_a: 3,
+						scheibe_b: 4,
+						mannschaft_a: 'BSC Abendau',
+						mannschaft_b: 'BS Weiß-Blau München'
+					},
+					{
+						scheibe_a: 5,
+						scheibe_b: 6,
+						mannschaft_a: 'SV Scharfhaus',
+						mannschaft_b: 'SV Vogelwiese'
+					},
+					{
+						scheibe_a: 7,
+						scheibe_b: 8,
+						mannschaft_a: 'BSC Rot-Rot Beerendorf',
+						mannschaft_b: 'SGes Schützenschaft'
+					}
+				]
+			},
+			{
+				id: 'm-4',
+				veranstaltung_id: '1001',
+				nummer: 4,
+				begegnungen: [
+					{
+						scheibe_a: 1,
+						scheibe_b: 2,
+						mannschaft_a: 'BSC Rot-Rot Beerendorf',
+						mannschaft_b: 'SV Scharfhaus'
+					},
+					{
+						scheibe_a: 3,
+						scheibe_b: 4,
+						mannschaft_a: 'SGi Wuppenhausen',
+						mannschaft_b: 'SGes Schützenschaft'
+					},
+					{
+						scheibe_a: 5,
+						scheibe_b: 6,
+						mannschaft_a: 'BS Weiß-Blau München',
+						mannschaft_b: 'BS Hunshausen'
+					},
+					{
+						scheibe_a: 7,
+						scheibe_b: 8,
+						mannschaft_a: 'BSC Abendau',
+						mannschaft_b: 'SV Vogelwiese'
+					}
+				]
+			},
+			{
+				id: 'm-5',
+				veranstaltung_id: '1001',
+				nummer: 5,
+				begegnungen: [
+					{
+						scheibe_a: 1,
+						scheibe_b: 2,
+						mannschaft_a: 'SGi Wuppenhausen',
+						mannschaft_b: 'BS Weiß-Blau München'
+					},
+					{
+						scheibe_a: 3,
+						scheibe_b: 4,
+						mannschaft_a: 'SV Vogelwiese',
+						mannschaft_b: 'BSC Rot-Rot Beerendorf'
+					},
+					{
+						scheibe_a: 5,
+						scheibe_b: 6,
+						mannschaft_a: 'SGes Schützenschaft',
+						mannschaft_b: 'SV Scharfhaus'
+					},
+					{
+						scheibe_a: 7,
+						scheibe_b: 8,
+						mannschaft_a: 'BS Hunshausen',
+						mannschaft_b: 'BSC Abendau'
+					}
+				]
+			},
+			{
+				id: 'm-6',
+				veranstaltung_id: '1001',
+				nummer: 6,
+				begegnungen: [
+					{
+						scheibe_a: 1,
+						scheibe_b: 2,
+						mannschaft_a: 'BSC Abendau',
+						mannschaft_b: 'SGes Schützenschaft'
+					},
+					{
+						scheibe_a: 3,
+						scheibe_b: 4,
+						mannschaft_a: 'BS Hunshausen',
+						mannschaft_b: 'SV Scharfhaus'
+					},
+					{
+						scheibe_a: 5,
+						scheibe_b: 6,
+						mannschaft_a: 'BSC Rot-Rot Beerendorf',
+						mannschaft_b: 'BS Weiß-Blau München'
+					},
+					{
+						scheibe_a: 7,
+						scheibe_b: 8,
+						mannschaft_a: 'SV Vogelwiese',
+						mannschaft_b: 'SGi Wuppenhausen'
+					}
+				]
+			},
+			{
+				id: 'm-7',
+				veranstaltung_id: '1001',
+				nummer: 7,
+				begegnungen: [
+					{
+						scheibe_a: 1,
+						scheibe_b: 2,
+						mannschaft_a: 'SV Scharfhaus',
+						mannschaft_b: 'BSC Abendau'
+					},
+					{
+						scheibe_a: 3,
+						scheibe_b: 4,
+						mannschaft_a: 'BS Weiß-Blau München',
+						mannschaft_b: 'SV Vogelwiese'
+					},
+					{
+						scheibe_a: 5,
+						scheibe_b: 6,
+						mannschaft_a: 'BS Hunshausen',
+						mannschaft_b: 'SGes Schützenschaft'
+					},
+					{
+						scheibe_a: 7,
+						scheibe_b: 8,
+						mannschaft_a: 'SGi Wuppenhausen',
+						mannschaft_b: 'BSC Rot-Rot Beerendorf'
 					}
 				]
 			}
 		],
-		tabletPairings: [],
 		currentRoundNo: { '1001': 1 },
 		fixtureUsers: {
 			'1001': [{ userName: users.admin.email, isOwner: true }],
@@ -159,20 +341,84 @@ function seedState(): State {
 			'1001': {
 				fixtureId: 1001,
 				teams: [
-					{ name: 'BSC Abendau', setPoints: 15, matchPoints: 14 },
-					{ name: 'SV Scharfhaus', setPoints: 7, matchPoints: 11 },
-					{ name: 'SGes Schützenschaft', setPoints: -5, matchPoints: 11 },
-					{ name: 'BS Hunshausen', setPoints: 12, matchPoints: 6 },
-					{ name: 'SV Vogelwiese', setPoints: 8, matchPoints: 8 },
-					{ name: 'BS Weiß-Blau München', setPoints: -10, matchPoints: 2 },
-					{ name: 'SGi Wuppenhausen', setPoints: -22, matchPoints: 2 },
-					{ name: 'BSC Rot-Rot Beerendorf', setPoints: -15, matchPoints: 0 }
+					{
+						name: 'BSC Abendau',
+						setPointsWon: 15,
+						setPointsLost: 0,
+						matchPointsWon: 14,
+						matchPointsLost: 0
+					},
+					{
+						name: 'SV Scharfhaus',
+						setPointsWon: 7,
+						setPointsLost: 0,
+						matchPointsWon: 11,
+						matchPointsLost: 0
+					},
+					{
+						name: 'SGes Schützenschaft',
+						setPointsWon: 0,
+						setPointsLost: 5,
+						matchPointsWon: 11,
+						matchPointsLost: 0
+					},
+					{
+						name: 'BS Hunshausen',
+						setPointsWon: 12,
+						setPointsLost: 0,
+						matchPointsWon: 6,
+						matchPointsLost: 0
+					},
+					{
+						name: 'SV Vogelwiese',
+						setPointsWon: 8,
+						setPointsLost: 0,
+						matchPointsWon: 8,
+						matchPointsLost: 0
+					},
+					{
+						name: 'BS Weiß-Blau München',
+						setPointsWon: 0,
+						setPointsLost: 10,
+						matchPointsWon: 2,
+						matchPointsLost: 0
+					},
+					{
+						name: 'SGi Wuppenhausen',
+						setPointsWon: 0,
+						setPointsLost: 22,
+						matchPointsWon: 2,
+						matchPointsLost: 0
+					},
+					{
+						name: 'BSC Rot-Rot Beerendorf',
+						setPointsWon: 0,
+						setPointsLost: 15,
+						matchPointsWon: 0,
+						matchPointsLost: 0
+					}
 				]
 			}
 		},
 		devices: {
-			'1001': [{ id: 500, displayType: 'Match', matchNo: 1, deviceCode: 'DEV-SEED01' }],
-			'1002': [{ id: 501, displayType: 'LeagueTable', matchNo: null, deviceCode: 'DEV-SEED02' }]
+			'1001': [
+				{
+					id: 500,
+					displayType: 'Match',
+					matchNo: 1,
+					displayTheme: 'Dark',
+					deviceCode: 'DEV-SEED01'
+				}
+			],
+			'1002': [
+				{
+					id: 501,
+					displayType: 'LeagueTable',
+					matchNo: null,
+					displayTheme: 'Light',
+					deviceCode: 'DEV-SEED02'
+				}
+			]
 		},
 		leagueTables: {
 			'1002': [
@@ -182,7 +428,8 @@ function seedState(): State {
 					setPointsLost: 6,
 					matchPointsWon: 12,
 					matchPointsLost: 2,
-					position: 1
+					rank: 1,
+					rankDifference: 0
 				},
 				{
 					teamName: 'SV Kreisstadt',
@@ -190,7 +437,8 @@ function seedState(): State {
 					setPointsLost: 10,
 					matchPointsWon: 9,
 					matchPointsLost: 5,
-					position: 2
+					rank: 2,
+					rankDifference: 0
 				},
 				{
 					teamName: 'BS Ostwind',
@@ -198,7 +446,8 @@ function seedState(): State {
 					setPointsLost: 13,
 					matchPointsWon: 8,
 					matchPointsLost: 6,
-					position: 3
+					rank: 3,
+					rankDifference: 0
 				},
 				{
 					teamName: 'SGi Talblick',
@@ -206,7 +455,8 @@ function seedState(): State {
 					setPointsLost: 16,
 					matchPointsWon: 6,
 					matchPointsLost: 8,
-					position: 4
+					rank: 4,
+					rankDifference: 0
 				}
 			]
 		},
@@ -245,10 +495,12 @@ export function findVeranstaltung(user: User, id: number): Veranstaltung | undef
 	return v && canSee(user, v) ? v : undefined;
 }
 
-/** Ungefiltert wie `findTabletPairing`/`findAssignedDeviceByCode` weiter unten — der echte
- * Spotter-Info-Endpunkt ist laut Fawkes-Spec Bearer-frei, die schwer zu erratende `uniqueId`
- * selbst ist die Absicherung (siehe binocular.ts). Von der Matchkontrolle genutzt, um den
- * Confirm-Status pro Scheibe zu lesen (Issue #10). */
+/** Ungefiltert wie `findAssignedDeviceByCode` weiter unten — der echte Spotter-Info-Endpunkt ist
+ * laut Fawkes-Spec Bearer-frei, die schwer zu erratende `uniqueId` selbst ist die Absicherung
+ * (siehe binocular.ts). Doppelt genutzt: von der Matchkontrolle, um den Confirm-Status pro
+ * Scheibe zu lesen (Issue #10), UND vom Tablet-QR direkt als Pairing-„Token" (Issue #22 —
+ * ersetzt den vormaligen eigenen `generateTabletToken`-Mechanismus, kein Fawkes-Endpunkt dafür
+ * nötig, die `uniqueId` ist schon die Absicherung). */
 export function findVeranstaltungByUniqueId(uniqueId: string): Veranstaltung | undefined {
 	return load().veranstaltungen.find((v) => v.uniqueId === uniqueId);
 }
@@ -286,7 +538,7 @@ export function createVeranstaltung(user: User, data: CreateFixtureData): Verans
 	const state = load();
 	const v: Veranstaltung = {
 		id: state.nextId++,
-		uniqueId: crypto.randomUUID(),
+		uniqueId: randomUUID(),
 		...data,
 		datenquelle: null
 	};
@@ -329,27 +581,28 @@ function ensureDemoMatch(state: State, v: Veranstaltung, teams: MatchPlayChartTe
 	state.currentRoundNo[id] = 1;
 }
 
-export function getMatchPlayChart(fixtureId: number): MatchPlayChart | undefined {
-	return load().matchPlayCharts[String(fixtureId)];
-}
-
 /**
- * Sortierung wie in einer echten Ligatabelle üblich: Matchpunkte absteigend, bei Gleichstand
- * Satzpunkte absteigend als Tiebreak. `MatchPlayChartTeam` kennt nur je eine Netto-Zahl (Admin
- * gibt keine Plus/Minus-Aufteilung ein, siehe `saveTabelle`), deshalb Plus/Minus hier synthetisch
- * aus dem Vorzeichen rekonstruiert (negativ -> komplett in Minus, sonst komplett in Plus) — reine
- * Mock-Annäherung, keine echte Sieg/Niederlage-Historie.
+ * Sortierung wie in einer echten Ligatabelle üblich: Matchpunkte (netto) absteigend, bei
+ * Gleichstand Satzpunkte (netto) absteigend als Tiebreak. `rankDifference` bleibt immer 0 — der
+ * Mock kennt keine Platzierungshistorie eines vorigen Spieltags, aus der sich eine echte
+ * Bewegung ableiten ließe.
  */
-function toLeagueTableEintraege(teams: MatchPlayChartTeam[]): LeagueTableEintrag[] {
+function toLeagueTablePositions(teams: MatchPlayChartTeam[]): LeagueTablePosition[] {
+	const net = (won: number, lost: number) => won - lost;
 	return [...teams]
-		.sort((a, b) => b.matchPoints - a.matchPoints || b.setPoints - a.setPoints)
+		.sort(
+			(a, b) =>
+				net(b.matchPointsWon, b.matchPointsLost) - net(a.matchPointsWon, a.matchPointsLost) ||
+				net(b.setPointsWon, b.setPointsLost) - net(a.setPointsWon, a.setPointsLost)
+		)
 		.map((team, i) => ({
 			teamName: team.name,
-			setPointsWon: Math.max(team.setPoints, 0),
-			setPointsLost: Math.max(-team.setPoints, 0),
-			matchPointsWon: Math.max(team.matchPoints, 0),
-			matchPointsLost: Math.max(-team.matchPoints, 0),
-			position: i + 1
+			setPointsWon: team.setPointsWon,
+			setPointsLost: team.setPointsLost,
+			matchPointsWon: team.matchPointsWon,
+			matchPointsLost: team.matchPointsLost,
+			rank: i + 1,
+			rankDifference: 0
 		}));
 }
 
@@ -360,27 +613,32 @@ function toLeagueTableEintraege(teams: MatchPlayChartTeam[]): LeagueTableEintrag
  * initiale Tabelle zurück (`matchPlayCharts`, "Tabelle eintragen" im Veranstaltungs-Formular) —
  * dieselben Standings, die auch in der Verwaltungsoberfläche angezeigt werden.
  */
-export function getLeagueTable(veranstaltungId: string): LeagueTableEintrag[] {
+export function getLeagueTable(veranstaltungId: string): LeagueTablePosition[] {
 	const state = load();
 	const explizit = state.leagueTables[veranstaltungId];
 	if (explizit) return explizit;
 	const chart = state.matchPlayCharts[veranstaltungId];
-	return chart ? toLeagueTableEintraege(chart.teams) : [];
+	return chart ? toLeagueTablePositions(chart.teams) : [];
 }
 
 /**
- * Entspricht `POST /MatchPlayChart/{fixtureId}` ohne `hardOverride` (Issue #14): schlägt fehl,
+ * Entspricht `POST /fixtures/{fixtureId}/matchplaychart` ohne `hardOverride` (Issue #14): schlägt fehl,
  * wenn für diese Fixture schon eine Tabelle existiert — kein Reset-/Lösch-Pfad hier, weil dafür
- * kein echter Endpunkt verifiziert ist (siehe `veranstaltung.ts`). `undefined` = Konflikt.
+ * kein echter Endpunkt verifiziert ist (siehe `veranstaltung.ts`). Rückgabe: `'exists'` =
+ * Konflikt, `'unsupported'` = keine Standard-Auslosung für diese Mannschaftszahl (Backend
+ * kennt 2026-10-05 nur 7/8), sonst `undefined` bei Erfolg.
  */
 export function createMatchPlayChart(
 	v: Veranstaltung,
 	teams: MatchPlayChartTeam[],
 	hardOverride = false
-): MatchPlayChart | undefined {
+): 'exists' | 'unsupported' | undefined {
 	const state = load();
 	const id = String(v.id);
-	if (state.matchPlayCharts[id] && !hardOverride) return undefined;
+	if (state.matchPlayCharts[id] && !hardOverride) return 'exists';
+	// Spiegelt das echte Backend: ohne `targetAssignments` gibt es nur den Standard-Spielplan für
+	// 7/8 Mannschaften. (Das echte Backend löscht den alten Spielplan davor schon — hier nicht.)
+	if (teams.length !== 7 && teams.length !== 8) return 'unsupported';
 
 	if (hardOverride) {
 		// Spiegelt das echte `hardOverride`-Verhalten (Rücksprache Gero, 2026-08-31): löscht
@@ -389,8 +647,7 @@ export function createMatchPlayChart(
 		delete state.currentRoundNo[id];
 	}
 
-	const chart: MatchPlayChart = { fixtureId: v.id, teams };
-	state.matchPlayCharts[id] = chart;
+	state.matchPlayCharts[id] = { fixtureId: v.id, teams };
 
 	const target = state.veranstaltungen.find((x) => x.id === v.id) ?? v;
 	target.datenquelle = 'tabelle';
@@ -398,7 +655,7 @@ export function createMatchPlayChart(
 	ensureDemoMatch(state, target, teams);
 
 	persist(state);
-	return chart;
+	return undefined;
 }
 
 export function connectLiga(
@@ -450,18 +707,18 @@ function randomDeviceCode(): string {
 	return `DEV-${suffix}`;
 }
 
-/** Nie an Admin-Handler durchreichen — `GetDeviceResponse` kennt kein `deviceCode`-Feld. */
-function toPublicDevice({ id, displayType, matchNo }: StoredDevice): Device {
-	return { id, displayType, matchNo };
+/** Für Liste/assign/update — nur der Einzel-GET (`findDevice`) reicht den `deviceCode` durch. */
+function toPublicDevice({ id, displayType, matchNo, displayTheme }: StoredDevice): Device {
+	return { id, displayType, matchNo, displayTheme };
 }
 
 export function devicesFor(veranstaltungId: string): Device[] {
 	return (load().devices[veranstaltungId] ?? []).map(toPublicDevice);
 }
 
-export function findDevice(veranstaltungId: string, deviceId: number): Device | undefined {
+export function findDevice(veranstaltungId: string, deviceId: number): DeviceDetail | undefined {
 	const d = (load().devices[veranstaltungId] ?? []).find((d) => d.id === deviceId);
-	return d && toPublicDevice(d);
+	return d && { ...toPublicDevice(d), deviceCode: d.deviceCode };
 }
 
 /**
@@ -493,6 +750,10 @@ export function assignDevice(veranstaltungId: string, deviceCode: string): Devic
 		id: state.nextId++,
 		displayType: 'None',
 		matchNo: null,
+		// Kein echter Referenz-Endpunkt verifizierbar (`GET /Display/register` liefert auf dem
+		// Live-Server aktuell `500 NotImplementedException`, Stand 2026-09-04) — Default
+		// mangels Vorgabe auf `Dark` gesetzt, wie bisher schon App-weiter Default.
+		displayTheme: 'Dark',
 		deviceCode
 	};
 	(state.devices[veranstaltungId] ??= []).push(device);
@@ -542,33 +803,58 @@ export function begegnungenForMatch(veranstaltungId: string, matchNo: number): B
 	return match?.begegnungen ?? [];
 }
 
-/** Entspricht `PUT /fixtures/{fixtureId}/devices/{deviceId}/unassign`. */
+/**
+ * Entspricht `GET /fixtures/{fixtureId}/rounds/{roundNo}` (Fawkes-`DosController`, Issue #22) —
+ * leeres Array = Runde existiert nicht (wie das echte Backend: 200 mit `targets: []`, kein 404). Liefert die flache Scheiben-Liste, wie es die echte API
+ * auch tut (keine Begegnungs-Paarung, die macht der Client, siehe `matchkontrolle.ts`).
+ *
+ * Satzpunkte kommen über `berechneMatchStand` (`shared-state.ts`) — bislang nur von
+ * Binocular/Display genutzt, weil das Admin-Modell hier bewusst von laufenden Scoring-Daten
+ * getrennt war. Diese Trennung war zu streng für ein Feature, das laut echtem Kontrakt keins
+ * ist: der reale Fawkes-Server berechnet Satzpunkte für `GetRoundResponse` ebenso serverseitig,
+ * der Client bekommt nur das fertige Ergebnis. Kein zirkulärer Import: `shared-state.ts`
+ * importiert selbst nichts aus dieser Datei.
+ */
+export function getRoundInfo(veranstaltungId: string, roundNo: number): RoundTarget[] {
+	const begegnungen = begegnungenForMatch(veranstaltungId, roundNo);
+	if (begegnungen.length === 0) return [];
+
+	const targets: RoundTarget[] = [];
+	for (const b of begegnungen) {
+		const stand = berechneMatchStand(b.scheibe_a, b.scheibe_b);
+		targets.push({
+			targetNo: b.scheibe_a,
+			teamName: b.mannschaft_a,
+			totalSetPoints: stand.satzpunkteA,
+			setScores: stand.ergebnisse.map((e) => e.ringeA)
+		});
+		targets.push({
+			targetNo: b.scheibe_b,
+			teamName: b.mannschaft_b,
+			totalSetPoints: stand.satzpunkteB,
+			setScores: stand.ergebnisse.map((e) => e.ringeB)
+		});
+	}
+	return targets;
+}
+
+/**
+ * Entspricht `PUT /fixtures/{fixtureId}/devices/{deviceId}/unassign` (kein Response-Body). Der
+ * `deviceCode` kommt zurück in `pendingDeviceCodes` — entspricht genau dem Zustand "registriert,
+ * aber (noch) keiner Fixture zugeordnet", derselbe Pool wie bei einer frischen
+ * Selbst-Registrierung (siehe `registerDeviceCode`). Damit lässt sich ein gelöstes Gerät sofort
+ * woanders neu zuordnen (Issue #23), den Code holt sich die Admin-UI vorher per `findDevice`.
+ */
 export function unassignDevice(veranstaltungId: string, deviceId: number): boolean {
 	const state = load();
 	const list = state.devices[veranstaltungId];
 	if (!list) return false;
 	const index = list.findIndex((d) => d.id === deviceId);
 	if (index === -1) return false;
-	list.splice(index, 1);
+	const [removed] = list.splice(index, 1);
+	state.pendingDeviceCodes.push(removed.deviceCode);
 	persist(state);
 	return true;
-}
-
-// Anders als vorher (#9, zustandslos erzeugt) merkt sich das jetzt ausgestellte Tokens —
-// erst dadurch kann der Binocular-Mock (#4) sie überhaupt validieren, siehe Issue #10.
-export function generateTabletToken(
-	veranstaltungId: string,
-	scheibennummer: number
-): { scheibennummer: number; token: string } {
-	const state = load();
-	const token = `tablet-${crypto.randomUUID()}`;
-	state.tabletPairings.push({ token, veranstaltungId, scheibennummer });
-	persist(state);
-	return { scheibennummer, token };
-}
-
-export function findTabletPairing(token: string): TabletPairingRecord | undefined {
-	return load().tabletPairings.find((p) => p.token === token);
 }
 
 // ── Lookups für Display (#1–#3) und Binocular (#4–#5) — siehe Issue #10 ─────────────────

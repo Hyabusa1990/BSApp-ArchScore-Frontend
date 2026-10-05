@@ -25,11 +25,10 @@
 	let pendingScheibennummer = $state<string | null>(null);
 	let videoEl = $state<HTMLVideoElement | undefined>();
 
-	// Bewusst kein strenger UUID4-Regex fürs Token-Segment: der reale Tablet-Pairing-Token
-	// (siehe src/mocks/veranstaltungen.ts generateTabletToken -> `tablet-${crypto.randomUUID()}`)
-	// ist kein nackter UUID4-String, sondern mit Präfix versehen. Validiert wird daher nur die
-	// Pfadstruktur /tablet/<token>/<scheibennummer> auf demselben Origin — das exakte
-	// Token-Format bleibt Sache des Backends (401 beim Laden bei ungültigem Token).
+	// Seit Issue #22 ist das erste Segment die `fixtureUniqueId` der Veranstaltung direkt (ein
+	// UUID4), kein eigenes Pairing-Token mehr — Regex bleibt bewusst locker (kein strenges
+	// UUID4-Pattern) statt das Format hier zu duplizieren, das ist weiterhin Sache des Backends
+	// (401 beim Laden bei unbekannter `fixtureUniqueId`).
 	const TABLET_PATH_RE = /^\/tablet\/([^/]+)\/(\d+)$/;
 
 	function handleDecoded(text: string) {
@@ -84,8 +83,8 @@
 
 	function confirmSwitch() {
 		if (!pendingToken || !pendingScheibennummer) return;
-		const path = resolve('/tablet/[token]/[scheibennummer]', {
-			token: pendingToken,
+		const path = resolve('/tablet/[fixtureUniqueId]/[scheibennummer]', {
+			fixtureUniqueId: pendingToken,
 			scheibennummer: pendingScheibennummer
 		});
 		onClose();

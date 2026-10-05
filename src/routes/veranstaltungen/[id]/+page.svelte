@@ -12,13 +12,17 @@
 	import { APIError } from '$lib/api/client';
 	import {
 		Container,
+		Row,
+		Col,
 		Card,
 		CardBody,
 		Alert,
 		Badge,
 		Button,
 		Form,
-		Spinner
+		Spinner,
+		Collapse,
+		Icon
 	} from '@sveltestrap/sveltestrap';
 	import FormField from '$lib/components/FormField.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
@@ -41,7 +45,7 @@
 	let chosenSource = $state<'tabelle' | 'liga' | null>(null);
 
 	// Sobald eine Tabelle einmal angelegt ist, zeigt die UI standardmäßig nur noch eine
-	// Leseansicht — POST /MatchPlayChart schlägt ohne hardOverride fehl, wenn für diese Fixture
+	// Leseansicht — POST .../matchplaychart schlägt ohne hardOverride fehl, wenn für diese Fixture
 	// schon Daten existieren (Standardverhalten laut Spec). Mit hardOverride: true überschreibt
 	// derselbe Endpunkt aber trotzdem (mit Backend-Entwickler bestätigt, 2026-08-31) — löscht
 	// dabei alle bisher erfassten Ergebnisse. `editingTabelle` schaltet die Leseansicht erst nach
@@ -56,9 +60,10 @@
 	type TabelleRow = { mannschaft_name: string; satzpunkte: number; matchpunkte: number };
 	let rows = $state<TabelleRow[]>([]);
 
-	// Ligagröße laut Gero (2026-08-18) immer zwischen 4 und 8 Mannschaften — feste Grenzen statt
-	// frei dynamischer Zeilenzahl, Start-Tabelle deshalb direkt mit 8 leeren Zeilen vorbelegt.
-	const MIN_MANNSCHAFTEN = 4;
+	// Ligagröße: 7 oder 8 Mannschaften — das Backend kennt (Stand 2026-10-05) nur für diese beiden
+	// einen Standard-Spielplan (ohne `targetAssignments`, sonst 400). Start-Tabelle deshalb direkt mit
+	// 8 leeren Zeilen vorbelegt, bei 7 Mannschaften eine Zeile löschen.
+	const MIN_MANNSCHAFTEN = 7;
 	const MAX_MANNSCHAFTEN = 8;
 	function leereRow(): TabelleRow {
 		return { mannschaft_name: '', satzpunkte: 0, matchpunkte: 0 };
@@ -71,6 +76,10 @@
 
 	// Fixture-Mitgliedschaft (#13) — eigene Achse ggü. Account-role, Owner-Status kommt aus der
 	// geladenen Mitgliederliste selbst (kein separates Feld an Veranstaltung).
+	// Klappbar, Standard zu (Wunsch Gero, 2026-09-04): die Mitgliederliste braucht man nur beim
+	// Einrichten, nicht bei jedem Aufruf der Veranstaltung — gleiches Auf-/Zuklapp-Muster wie
+	// "Neue Veranstaltung" auf der Übersichtsseite (`routes/veranstaltungen/+page.svelte`).
+	let mitgliederOpen = $state(false);
 	let fixtureUsers = $state<FixtureUser[]>([]);
 	let usersLoading = $state(true);
 	let usersError = $state<string | null>(null);
@@ -95,13 +104,20 @@
 		try {
 			veranstaltung = await veranstaltungApi.get(auth.accessToken!, fixtureId);
 			chosenSource = veranstaltung.datenquelle ?? null;
-			if (chosenSource === 'tabelle') {
-				const chart = await veranstaltungApi.getMatchPlayChart(auth.accessToken!, fixtureId);
-				rows = chart.teams.map((t) => ({
-					mannschaft_name: t.name,
-					satzpunkte: t.setPoints,
-					matchpunkte: t.matchPoints
+			// `datenquelle` ist Mock-only (echte API kennt das Feld nicht) — ob ein Spielplan
+			// existiert, zeigen die Runden. Die Tabellenpunkte sind nicht zurücklesbar, die
+			// Leseansicht zeigt deshalb nur die Mannschaften.
+			const chart =
+				chosenSource === 'liga'
+					? null
+					: await veranstaltungApi.getMatchPlayChart(auth.accessToken!, fixtureId);
+			if (chart && chart.teamNames.length > 0) {
+				rows = chart.teamNames.map((name) => ({
+					mannschaft_name: name,
+					satzpunkte: 0,
+					matchpunkte: 0
 				}));
+				chosenSource = 'tabelle';
 				chartCreated = true;
 			} else {
 				rows = Array.from({ length: MAX_MANNSCHAFTEN }, leereRow);
@@ -190,8 +206,11 @@
 			.filter((r) => r.mannschaft_name.trim())
 			.map((r) => ({
 				name: r.mannschaft_name.trim(),
-				setPoints: r.satzpunkte,
-				matchPoints: r.matchpunkte
+				// Eingabe bleibt je eine Netto-Zahl pro Spalte, das Backend will Plus/Minus getrennt.
+				setPointsWon: Math.max(r.satzpunkte, 0),
+				setPointsLost: Math.max(-r.satzpunkte, 0),
+				matchPointsWon: Math.max(r.matchpunkte, 0),
+				matchPointsLost: Math.max(-r.matchpunkte, 0)
 			}));
 		// Leere Zeilen werden oben rausgefiltert statt gelöscht (Löschen bleibt hart auf
 		// MIN_MANNSCHAFTEN begrenzt) — deshalb hier nochmal prüfen, bevor gespeichert wird.
@@ -211,9 +230,15 @@
 			chartCreated = true;
 			editingTabelle = false;
 		} catch (err) {
-			saveError =
-				err instanceof APIError && err.status === 409
-					? $_('veranstaltungen.error_tabelle_exists')
+			// Fehlerkennung nur über den Text (400 für beide Fälle, kein eigener Code).
+			const message =
+				err instanceof APIError && err.status === 400
+					? String((err.data as { message?: string })?.message ?? '')
+					: '';
+			saveError = message.includes('already exists')
+				? $_('veranstaltungen.error_tabelle_exists')
+				: message.includes('No default match play chart')
+					? $_('veranstaltungen.error_tabelle_unsupported')
 					: $_('veranstaltungen.error_save');
 		} finally {
 			saving = false;
@@ -271,89 +296,108 @@
 	{:else if loadError || !veranstaltung}
 		<Alert color="danger">{loadError}</Alert>
 	{:else}
-		<div class="d-flex justify-content-between align-items-center mb-4">
-			<h4 class="mb-0">{anzeigename}</h4>
-			<div class="d-flex gap-2">
-				<a
-					href={resolve('/veranstaltungen/[id]/bildschirme', { id })}
-					class="btn btn-outline-secondary btn-sm"
-				>
-					{$_('veranstaltungen.bildschirme_btn')}
-				</a>
-				{#if veranstaltung.datenquelle !== null}
-					<a
-						href={resolve('/veranstaltungen/[id]/matchkontrolle', { id })}
-						class="btn btn-outline-primary btn-sm"
-					>
-						{$_('veranstaltungen.matchkontrolle_btn')}
-					</a>
-				{/if}
-			</div>
-		</div>
+		<h4 class="mb-4">{anzeigename}</h4>
 
 		<Card class="shadow-sm mb-4">
 			<CardBody class="p-4">
-				<h6 class="text-muted text-uppercase small fw-semibold mb-3">
+				<button
+					type="button"
+					class="btn btn-link p-0 text-muted text-uppercase small fw-semibold text-decoration-none d-flex align-items-center gap-2"
+					class:mb-3={mitgliederOpen}
+					aria-expanded={mitgliederOpen}
+					onclick={() => (mitgliederOpen = !mitgliederOpen)}
+				>
+					<Icon name={mitgliederOpen ? 'chevron-down' : 'chevron-right'} />
 					{$_('veranstaltungen.mitglieder_heading')}
-				</h6>
-				{#if usersLoading}
-					<div class="d-flex justify-content-center py-3"><Spinner size="sm" /></div>
-				{:else}
-					{#if usersError}
-						<Alert color="danger" class="py-2">{usersError}</Alert>
-					{/if}
-					{#if fixtureUsers.length === 0}
-						<p class="text-muted small mb-3">{$_('veranstaltungen.mitglieder_empty')}</p>
+				</button>
+				<Collapse isOpen={mitgliederOpen}>
+					{#if usersLoading}
+						<div class="d-flex justify-content-center py-3"><Spinner size="sm" /></div>
 					{:else}
-						<ul class="list-unstyled mb-3">
-							{#each fixtureUsers as u (u.userName)}
-								<li class="d-flex justify-content-between align-items-center py-1">
-									<span>
-										{u.userName}
-										{#if u.isOwner}
-											<Badge color="secondary" class="ms-2">
-												{$_('veranstaltungen.mitglieder_owner_badge')}
-											</Badge>
-										{/if}
-									</span>
-									{#if currentUserIsOwner}
-										<button
-											type="button"
-											class="btn btn-sm btn-outline-danger"
-											disabled={removingUserName === u.userName}
-											onclick={() => removeMember(u.userName)}
-										>
-											{#if removingUserName === u.userName}
-												<Spinner size="sm" />
-											{:else}
-												{$_('veranstaltungen.mitglieder_remove_btn')}
+						{#if usersError}
+							<Alert color="danger" class="py-2">{usersError}</Alert>
+						{/if}
+						{#if fixtureUsers.length === 0}
+							<p class="text-muted small mb-3">{$_('veranstaltungen.mitglieder_empty')}</p>
+						{:else}
+							<ul class="list-unstyled mb-3">
+								{#each fixtureUsers as u (u.userName)}
+									<li class="d-flex justify-content-between align-items-center py-1">
+										<span>
+											{u.userName}
+											{#if u.isOwner}
+												<Badge color="secondary" class="ms-2">
+													{$_('veranstaltungen.mitglieder_owner_badge')}
+												</Badge>
 											{/if}
-										</button>
+										</span>
+										{#if currentUserIsOwner}
+											<button
+												type="button"
+												class="btn btn-sm btn-outline-danger"
+												disabled={removingUserName === u.userName}
+												onclick={() => removeMember(u.userName)}
+											>
+												{#if removingUserName === u.userName}
+													<Spinner size="sm" />
+												{:else}
+													{$_('veranstaltungen.mitglieder_remove_btn')}
+												{/if}
+											</button>
+										{/if}
+									</li>
+								{/each}
+							</ul>
+						{/if}
+						{#if currentUserIsOwner}
+							<Form onsubmit={addMember} class="d-flex gap-2">
+								<input
+									class="form-control form-control-sm"
+									bind:value={newUserName}
+									placeholder={$_('veranstaltungen.mitglieder_username_placeholder')}
+									required
+								/>
+								<Button color="primary" size="sm" type="submit" disabled={addingUser}>
+									{#if addingUser}
+										<Spinner size="sm" />
+									{:else}
+										{$_('veranstaltungen.mitglieder_add_btn')}
 									{/if}
-								</li>
-							{/each}
-						</ul>
+								</Button>
+							</Form>
+						{/if}
 					{/if}
-					{#if currentUserIsOwner}
-						<Form onsubmit={addMember} class="d-flex gap-2">
-							<input
-								class="form-control form-control-sm"
-								bind:value={newUserName}
-								placeholder={$_('veranstaltungen.mitglieder_username_placeholder')}
-								required
-							/>
-							<Button color="primary" size="sm" type="submit" disabled={addingUser}>
-								{#if addingUser}
-									<Spinner size="sm" />
-								{:else}
-									{$_('veranstaltungen.mitglieder_add_btn')}
-								{/if}
-							</Button>
-						</Form>
-					{/if}
-				{/if}
+				</Collapse>
 			</CardBody>
 		</Card>
+
+		<Row class="mb-4 g-3">
+			<Col md={veranstaltung.datenquelle !== null ? 6 : { size: 6, offset: 3 }}>
+				<a href={resolve('/veranstaltungen/[id]/bildschirme', { id })} class="text-decoration-none">
+					<Card class="shadow-sm action-card text-center">
+						<CardBody class="p-4">
+							<i class="bi bi-display fs-1 d-block mb-2 text-secondary"></i>
+							<div class="fw-semibold">{$_('veranstaltungen.bildschirme_btn')}</div>
+						</CardBody>
+					</Card>
+				</a>
+			</Col>
+			{#if veranstaltung.datenquelle !== null}
+				<Col md={6}>
+					<a
+						href={resolve('/veranstaltungen/[id]/matchkontrolle', { id })}
+						class="text-decoration-none"
+					>
+						<Card class="shadow-sm action-card text-center">
+							<CardBody class="p-4">
+								<i class="bi bi-joystick fs-1 d-block mb-2 text-primary"></i>
+								<div class="fw-semibold">{$_('veranstaltungen.matchkontrolle_btn')}</div>
+							</CardBody>
+						</Card>
+					</a>
+				</Col>
+			{/if}
+		</Row>
 
 		{#if saveError}
 			<Alert color="danger">{saveError}</Alert>
@@ -399,8 +443,10 @@
 								<tr>
 									<th style="width: 3rem;">{$_('veranstaltungen.tabelle_platz')}</th>
 									<th>{$_('veranstaltungen.tabelle_mannschaft')}</th>
-									<th style="width: 8rem;">{$_('veranstaltungen.tabelle_satzpunkte')}</th>
-									<th style="width: 8rem;">{$_('veranstaltungen.tabelle_matchpunkte')}</th>
+									{#if tabelleEditable}
+										<th style="width: 8rem;">{$_('veranstaltungen.tabelle_satzpunkte')}</th>
+										<th style="width: 8rem;">{$_('veranstaltungen.tabelle_matchpunkte')}</th>
+									{/if}
 									{#if tabelleEditable}<th style="width: 3rem;"></th>{/if}
 								</tr>
 							</thead>
@@ -410,8 +456,6 @@
 										<td class="fw-bold text-muted">{i + 1}</td>
 										{#if !tabelleEditable}
 											<td>{row.mannschaft_name}</td>
-											<td>{row.satzpunkte}</td>
-											<td>{row.matchpunkte}</td>
 										{:else}
 											<td>
 												<input
@@ -563,3 +607,16 @@
 	onConfirm={confirmHardOverride}
 	onCancel={() => (showHardOverrideConfirm = false)}
 />
+
+<style>
+	:global(.action-card) {
+		transition:
+			transform 0.15s ease,
+			box-shadow 0.15s ease;
+	}
+
+	:global(.action-card:hover) {
+		transform: translateY(-2px);
+		box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1) !important;
+	}
+</style>

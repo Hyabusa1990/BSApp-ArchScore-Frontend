@@ -1,0 +1,60 @@
+# Baut das Frontend-Image und pusht es in die GitHub Container Registry (ghcr.io), sobald auf
+# `main` etwas landet (= Merge eines PRs nach main oder direkter Push).
+# Ergebnis: ghcr.io/<owner>/<repo>:latest und :sha-<commit>
+#
+# Build-Zeit-Konfiguration (wird ins Bundle eingebrannt, siehe Dockerfile): optionale
+# Repository-Variable `PUBLIC_ALLOW_REGISTRATION` (Settings > Secrets and variables > Actions >
+# Variables), Standard `false`. Der Test-Stack (docker/spotter-test.compose.yaml) kann dieses
+# Image statt `build:` per `image:` nutzen.
+
+name: Build and push image
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: build-and-push-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Lowercase-Namen und Tags (latest + sha-<commit>) erzeugt die Action selbst.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
+          tags: |
+            type=raw,value=latest
+            type=sha
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            PUBLIC_USE_MOCKS=false
+            PUBLIC_ALLOW_REGISTRATION=${{ vars.PUBLIC_ALLOW_REGISTRATION || 'false' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

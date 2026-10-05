@@ -1,0 +1,53 @@
+# Fawkes-Backend + Postgres lokal hochziehen, um gegen die reelle API statt der
+# MSW-Mocks zu testen. Frontend selbst läuft NICHT hier drin, sondern weiter per
+# `npm run dev` (Vite-Proxy /api -> http://localhost:8000, siehe vite.config.ts).
+#
+# Nutzung:
+#   docker compose up -d
+#   # .env: PUBLIC_USE_MOCKS=false setzen, dann `npm run dev`
+#
+# Image wird bei jedem Push auf main im Backend-Repo neu gebaut und gepusht
+# (.github/workflows/build-and-push.yml), Tag "latest" ist daher der jeweils
+# aktuellste main-Stand. Für reproduzierbare Runs stattdessen einen
+# sha-<commit>-Tag von https://github.com/Hyabusa1990/BSApp-ArchScore-Backend/pkgs/container/bsapp-archscore-backend
+# pinnen.
+#
+# Quelle der Werte: Fawkes/Fawkes.Api/docker-compose.yml im Backend-Repo (Stand
+# 2026-09-28) — hier nur der Host-Port an unseren Vite-Proxy (8000 statt 8080)
+# angepasst und ASPNETCORE_URLS korrigiert (Original fehlt der Doppelpunkt vor
+# dem Port).
+
+services:
+  fawkes-api:
+    image: ghcr.io/hyabusa1990/bsapp-archscore-backend:latest
+    ports:
+      - '8000:80'
+    environment:
+      ASPNETCORE_URLS: http://+:80
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__FawkesConnection: >-
+        Host=postgres;Username=postgres;Password=postgres;Database=fawkes;TrustServerCertificate=True;
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    environment:
+      POSTGRES_DB: fawkes
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - fawkes_postgres_data:/var/lib/postgresql/data
+    # Für direkten DB-Zugriff (psql, DBeaver, ...) bei Bedarf freischalten:
+    # ports:
+    #   - "5433:5432"
+
+volumes:
+  fawkes_postgres_data:

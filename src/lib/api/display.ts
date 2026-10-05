@@ -3,11 +3,18 @@ import { apiClient } from './client';
 /**
  * Shapes folgen seit Issue #17 1:1 dem echten Fawkes-`DisplayController`-Kontrakt
  * (`docs/Fawkes-OpenApi.json`) statt eines eigenen JWT+PIN-Fake-Schemas:
- * `GET /Display/register` liefert einen `deviceCode` (denselben, den der Admin über
+ * `GET /displays/register` liefert einen `deviceCode` (denselben, den der Admin über
  * `bildschirmeApi.assign` einer Fixture zuordnet, siehe `$lib/api/bildschirme.ts`) plus
  * `accessToken`/`refreshToken`/`expiresIn` — das Gerät ist ab Registrierung ein normaler
- * Bearer-Client. `GET /Display/data` liefert `displayType` (`Unassigned` bis der Admin
+ * Bearer-Client. `GET /displays/data` liefert `displayType` (`Unassigned` bis der Admin
  * zuordnet, sonst `None`/`Match`) + `targets`.
+ *
+ * Pfad-Sync 2026-09-28 (erster Docker-Release): Fawkes schreibt Controller-Routen jetzt
+ * klein/Plural (`/displays` statt `/Display`) — reiner Pfad-Umbau. `LeagueTablePosition.position`
+ * heißt jetzt `rank`, plus neues Pflichtfeld `rankDifference` (passt zu den `Rank`/
+ * `RankDifference`-Spalten aus der Teams-Tabellen-Migration). `DisplayDataResponse` hat außerdem
+ * ein neues Top-Level-Feld `deviceCode` (aktuell ungenutzt — die Seite merkt sich den Code weiter
+ * selbst aus der `register`-Antwort in `localStorage`).
  *
  * `Table` existiert zwar im Spec-Enum von `DisplayController.DisplayType`, aber
  * `DeviceManagementController.UpdateDeviceData` (Admin-seitige Zuordnung) kennt nur
@@ -15,9 +22,19 @@ import { apiClient } from './client';
  * abgebildet, bis das vom Backend geklärt ist. `LeagueTable` (Issue #18, Rücksprache
  * Backend-Entwickler 2026-08-18, Wording auf `LeagueTable`/`leagueTable` korrigiert 2026-08-18)
  * ersetzt das alte Mock-only `mode: 'tabelle'`-Konzept — die Ligatabelle kommt jetzt direkt
- * eingebettet in `GET /Display/data` (`leagueTable`-Feld) statt separat aus `MatchPlayChart`
- * abgeleitet zu werden, deshalb auch andere Feldnamen (`setPointsWon`/`setPointsLost`/
- * `matchPointsWon`/`matchPointsLost`/`position` statt `setPoints`/`matchPoints`).
+ * eingebettet in `GET /Display/data` statt separat aus `MatchPlayChart` abgeleitet zu werden,
+ * deshalb auch andere Feldnamen (`setPointsWon`/`setPointsLost`/`matchPointsWon`/
+ * `matchPointsLost`/`position` statt `setPoints`/`matchPoints`). Feldname zunächst `leagueTable`
+ * geraten (vor Spec-Klärung gebaut) — Spec-Sync 2026-09-04 hat den echten Namen
+ * `leagueTablePositions` gebracht (Schema `LeagueTablePosition`, Felder identisch), hier
+ * entsprechend korrigiert. Die Spec markiert das Feld außerdem `nullable` — anders als zuvor
+ * angenommen, Konsumenten müssen `?? []` behandeln.
+ *
+ * `displayTheme` (ebenfalls Spec-Sync 2026-09-04, required) macht das Anzeige-Theme ab jetzt
+ * backend-seitig: der Admin legt es pro Gerät fest (`$lib/api/bildschirme.ts`), diese Antwort
+ * liefert den aktuellen Wert. Ersetzt die bisherige rein URL-routenbasierte Theme-Wahl
+ * (`routes/display/[[theme]]`) als Wahrheitsquelle — das Routen-Segment bleibt nur noch als
+ * Rate-Wert für den allerersten Ladezustand.
  *
  * `TargetDisplayData` folgt weiterhin 1:1 dem Fawkes-Feldnamen-Schema (englisch, camelCase),
  * siehe bisherige Begründung unten bei `deriveMonitorStatus`.
@@ -32,6 +49,11 @@ export interface DeviceTokenResponse {
 }
 
 export type DisplayDataType = 'Unassigned' | 'None' | 'Match' | 'LeagueTable';
+
+/** `Fawkes.Api.Controllers.DisplayController.DisplayTheme` — eigenes Schema ggü.
+ * `bildschirme.ts`s `DisplayTheme`, gleiche zwei Werte, wie schon bei `DisplayType`/
+ * `DisplayDataType` nie im selben File verwendet. */
+export type DisplayTheme = 'Light' | 'Dark';
 
 /** `Fawkes.Api.Controllers.DisplayController.TargetDisplayData`. */
 export interface DisplaySeite {
@@ -69,9 +91,13 @@ export function deriveMonitorStatus(seite: DisplaySeite | null): MonitorStatus {
 	return 'VOR_DEM_MATCH';
 }
 
-/** `Fawkes.Api.Controllers.DisplayController.LeagueTableEntry` (Issue #18). */
-export interface LeagueTableEintrag {
-	position: number;
+/** `Fawkes.Api.Controllers.DisplayController.LeagueTablePosition` (Issue #18, Feldname
+ * korrigiert im Spec-Sync 2026-09-04 — hieß vorher `LeagueTableEintrag`). `position` hieß bis
+ * zum Pfad-Sync 2026-09-28 anders und ist jetzt `rank`, `rankDifference` ist neu dazugekommen. */
+export interface LeagueTablePosition {
+	rank: number;
+	/** Platzierungsänderung seit dem letzten Spieltag (+/-), 0 = unverändert. */
+	rankDifference: number;
 	teamName: string;
 	setPointsWon: number;
 	setPointsLost: number;
@@ -80,16 +106,20 @@ export interface LeagueTableEintrag {
 }
 
 /**
- * `Fawkes.Api.Controllers.DisplayController.DisplayDataResponse`. Beide Arrays sind laut
- * Rücksprache Backend-Entwickler (2026-08-18) IMMER Arrays, nie `null` — bei `displayType`
- * `'LeagueTable'` ist `targets` leer, bei `'Match'`/`'None'`/`'Unassigned'` ist `leagueTable`
- * leer. Konsumierender Code darf sich also nie auf `null` verlassen, nur auf `.length`.
+ * `Fawkes.Api.Controllers.DisplayController.DisplayDataResponse`. `targets` ist laut
+ * Rücksprache Backend-Entwickler (2026-08-18) IMMER ein Array, nie `null` — bei `displayType`
+ * `'LeagueTable'` einfach leer. `leagueTablePositions` ist laut Spec dagegen `nullable`
+ * (Spec-Sync 2026-09-04) — Konsumenten müssen `?? []` behandeln, nicht nur auf `.length` bauen.
  */
 export interface DisplayDataResponse {
 	displayType: DisplayDataType;
+	displayTheme: DisplayTheme;
 	targets: DisplaySeite[];
-	/** Nur befüllt, wenn `displayType === 'LeagueTable'` — sonst leer. */
-	leagueTable: LeagueTableEintrag[];
+	/** Nur befüllt, wenn `displayType === 'LeagueTable'` — sonst leer/`null`. */
+	leagueTablePositions: LeagueTablePosition[] | null;
+	/** Seit Pfad-Sync 2026-09-28 neu — derselbe Code wie aus `register()`, hier nochmal vom
+	 * Server bestätigt. Aktuell ungenutzt, siehe Modul-Kommentar oben. */
+	deviceCode: string;
 }
 
 /** `Fawkes.Api.Controllers.AuthController.TokenResponse` — generischer Refresh-Endpunkt, gilt
@@ -103,10 +133,10 @@ export interface RefreshedDeviceToken {
 }
 
 export const displayApi = {
-	register: () => apiClient.get<DeviceTokenResponse>('/Display/register'),
+	register: () => apiClient.get<DeviceTokenResponse>('/displays/register'),
 
 	getData: (accessToken: string) =>
-		apiClient.get<DisplayDataResponse>('/Display/data', accessToken),
+		apiClient.get<DisplayDataResponse>('/displays/data', accessToken),
 
 	refresh: (refreshToken: string) =>
 		apiClient.post<RefreshedDeviceToken>('/Auth/refresh', { refreshToken })

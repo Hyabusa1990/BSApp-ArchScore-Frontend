@@ -9,11 +9,9 @@ import {
 	createMatchPlayChart,
 	createVeranstaltung,
 	findVeranstaltung,
-	generateTabletToken,
 	getCurrentRoundNo,
-	getMatchPlayChart,
+	getRoundInfo,
 	isFixtureOwner,
-	matchesFor,
 	removeFixtureUser,
 	removeVeranstaltung,
 	setCurrentRoundNo,
@@ -28,10 +26,12 @@ import {
  * (siehe Issue #6 — kein role==="admin"-Gate, jeder eingeloggte Account darf rein,
  * sieht aber nur, was für ihn sichtbar ist — seit #14 über echte Fixture-Mitgliedschaft).
  *
- * `/Fixture`, `/Fixture/{id}`, `/Fixture/{id}/users...`, `/MatchPlayChart/{fixtureId}` folgen
- * dem echten Fawkes-Kontrakt (Issue #14). `/veranstaltungen/{id}/...` bleiben eigene, nicht in
- * der Spec vorhandene Sub-Ressourcen (Matches/Bildschirme/Tablet-Pairing/Liga-Verbindung) —
- * ihr `:id` ist seit #14 einfach die stringifizierte Fixture-ID.
+ * `/fixtures`, `/fixtures/{id}`, `/fixtures/{id}/users...` folgen dem echten Fawkes-Kontrakt
+ * (Issue #14, Pfad-Sync 2026-09-28: Fawkes schreibt Controller-Routen jetzt klein/Plural).
+ * `/veranstaltungen/{id}/...` bleiben eigene, nicht in der Spec vorhandene Sub-Ressourcen
+ * (Matches/Bildschirme/Tablet-Pairing/Liga-Verbindung) — ihr `:id` ist seit #14 einfach die
+ * stringifizierte Fixture-ID. `POST /fixtures/{id}/matchplaychart` und die Runden-Endpunkte
+ * folgen dem Backend-Stand vom 2026-10-05 (`$lib/api/veranstaltung.ts`).
  */
 
 function requireUser(request: Request): User | undefined {
@@ -57,13 +57,13 @@ function forbidden() {
 }
 
 export const veranstaltungHandlers = [
-	http.get(`${API_URL}/Fixture`, ({ request }) => {
+	http.get(`${API_URL}/fixtures`, ({ request }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		return HttpResponse.json(visibleVeranstaltungen(user));
 	}),
 
-	http.post(`${API_URL}/Fixture`, async ({ request }) => {
+	http.post(`${API_URL}/fixtures`, async ({ request }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		const body = (await request.json()) as {
@@ -93,7 +93,7 @@ export const veranstaltungHandlers = [
 		);
 	}),
 
-	http.get(`${API_URL}/Fixture/:id`, ({ request, params }) => {
+	http.get(`${API_URL}/fixtures/:id`, ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		const v = findVeranstaltung(user, Number(params.id));
@@ -101,28 +101,17 @@ export const veranstaltungHandlers = [
 		return HttpResponse.json(v);
 	}),
 
-	http.delete(`${API_URL}/Fixture/:id`, ({ request, params }) => {
+	http.delete(`${API_URL}/fixtures/:id`, ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		if (!removeVeranstaltung(user, Number(params.id))) return notFound();
 		return new HttpResponse(null, { status: 204 });
 	}),
 
-	http.get(`${API_URL}/MatchPlayChart/:fixtureId`, ({ request, params }) => {
-		const user = requireUser(request);
-		if (!user) return unauthorized();
-		const v = findVeranstaltung(user, Number(params.fixtureId));
-		if (!v) return notFound();
-		const chart = getMatchPlayChart(v.id);
-		if (!chart)
-			return HttpResponse.json({ detail: 'Noch keine Tabelle angelegt' }, { status: 404 });
-		return HttpResponse.json(chart);
-	}),
-
-	// Ohne hardOverride -> 409, falls für diese Fixture schon eine Tabelle existiert
-	// (Standardverhalten laut Spec: Fehler statt Überschreiben). Mit hardOverride: true wird
-	// überschrieben und alle bisher erfassten Ergebnisse gelöscht, siehe createMatchPlayChart.
-	http.post(`${API_URL}/MatchPlayChart/:fixtureId`, async ({ request, params }) => {
+	// Ohne hardOverride -> 400, falls für diese Fixture schon eine Tabelle existiert (wie das
+	// echte Backend, kein 409). Mit hardOverride: true wird überschrieben und alle bisher erfassten
+	// Ergebnisse gelöscht, siehe createMatchPlayChart. Erfolg = bare 200 ohne Body.
+	http.post(`${API_URL}/fixtures/:fixtureId/matchplaychart`, async ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		const v = findVeranstaltung(user, Number(params.fixtureId));
@@ -134,14 +123,22 @@ export const veranstaltungHandlers = [
 		if (!Array.isArray(body.teams) || body.teams.length === 0) {
 			return HttpResponse.json({ detail: 'teams fehlt oder ist leer' }, { status: 422 });
 		}
-		const chart = createMatchPlayChart(v, body.teams, body.hardOverride === true);
-		if (!chart) {
+		const result = createMatchPlayChart(v, body.teams, body.hardOverride === true);
+		if (result === 'exists') {
 			return HttpResponse.json(
-				{ detail: 'Für diese Fixture existiert bereits eine Tabelle' },
-				{ status: 409 }
+				{
+					message: `Match play chart already exists for fixture ${v.id}. Use hardOverride to force creation.`
+				},
+				{ status: 400 }
 			);
 		}
-		return HttpResponse.json(chart);
+		if (result === 'unsupported') {
+			return HttpResponse.json(
+				{ message: `No default match play chart available for ${body.teams.length} teams.` },
+				{ status: 400 }
+			);
+		}
+		return new HttpResponse(null, { status: 200 });
 	}),
 
 	http.post(`${API_URL}/veranstaltungen/:id/liga`, async ({ request, params }) => {
@@ -153,12 +150,18 @@ export const veranstaltungHandlers = [
 		return HttpResponse.json(connectLiga(v, body));
 	}),
 
-	http.get(`${API_URL}/veranstaltungen/:id/matches`, ({ request, params }) => {
+	// Fawkes-`DosController`-Kontrakt (siehe Issue #22): ersetzt den vormals erfundenen
+	// `/veranstaltungen/:id/matches`-Pfad — eine Runde pro Aufruf, flache Scheiben-Liste statt
+	// gepaarter Begegnungen (siehe `getRoundInfo`/`matchkontrolle.ts`).
+	http.get(`${API_URL}/fixtures/:fixtureId/rounds/:roundNo`, ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
-		const v = findVeranstaltung(user, Number(params.id));
+		const v = findVeranstaltung(user, Number(params.fixtureId));
 		if (!v) return notFound();
-		return HttpResponse.json(matchesFor(String(v.id)));
+		const roundNo = Number(params.roundNo);
+		// Nicht existierende Runde: wie das echte Backend 200 mit leerem `targets` (kein 404).
+		const targets = getRoundInfo(String(v.id), roundNo);
+		return HttpResponse.json({ fixtureId: v.id, roundNo, targets });
 	}),
 
 	// Fawkes-`DosController`-Kontrakt (siehe Issue #10, korrigiert #5/#7/#8): fixtureId statt
@@ -189,24 +192,13 @@ export const veranstaltungHandlers = [
 
 	// Alte `/veranstaltungen/:id/bildschirme...`-CRUD-Endpunkte (Mock-only) sind seit #15 durch
 	// die echten `/fixtures/:fixtureId/devices...`-Endpunkte ersetzt (siehe handlers/devices.ts).
-	// Der zugrundeliegende Bildschirm/PIN-Zustand bleibt bestehen (siehe veranstaltungen.ts),
-	// treibt aber nur noch die unangetastete Display-Konsum-Seite, nicht mehr die Admin-UI.
-
-	http.post(`${API_URL}/veranstaltungen/:id/tablet-token`, async ({ request, params }) => {
-		const user = requireUser(request);
-		if (!user) return unauthorized();
-		const v = findVeranstaltung(user, Number(params.id));
-		if (!v) return notFound();
-		const body = (await request.json()) as { scheibennummer?: number };
-		if (typeof body.scheibennummer !== 'number') {
-			return HttpResponse.json({ detail: 'scheibennummer fehlt oder ungültig' }, { status: 422 });
-		}
-		return HttpResponse.json(generateTabletToken(String(v.id), body.scheibennummer));
-	}),
+	// `/veranstaltungen/:id/tablet-token` (Mock-only Tablet-Pairing) ist seit #22 ebenfalls weg —
+	// das Tablet-QR kodiert jetzt direkt die `fixtureUniqueId` der Veranstaltung, kein eigener
+	// Token-Endpunkt mehr nötig (siehe `bildschirme/+page.svelte`, `binoculars.ts`).
 
 	// Fixture-Mitgliedschaft (Fawkes `FixtureController`, siehe Issue #13) — eigene Achse
 	// gegenüber der Account-`role`, gated auf `isOwner` PRO Fixture, nicht global.
-	http.get(`${API_URL}/Fixture/:fixtureId/users`, ({ request, params }) => {
+	http.get(`${API_URL}/fixtures/:fixtureId/users`, ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		const v = findVeranstaltung(user, Number(params.fixtureId));
@@ -214,7 +206,7 @@ export const veranstaltungHandlers = [
 		return HttpResponse.json(usersFor(String(v.id)));
 	}),
 
-	http.post(`${API_URL}/Fixture/:fixtureId/users/add`, async ({ request, params }) => {
+	http.post(`${API_URL}/fixtures/:fixtureId/users/add`, async ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		const v = findVeranstaltung(user, Number(params.fixtureId));
@@ -227,7 +219,7 @@ export const veranstaltungHandlers = [
 		return HttpResponse.json(addFixtureUser(String(v.id), body.userName));
 	}),
 
-	http.delete(`${API_URL}/Fixture/:fixtureId/users/:userName`, ({ request, params }) => {
+	http.delete(`${API_URL}/fixtures/:fixtureId/users/:userName`, ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		const v = findVeranstaltung(user, Number(params.fixtureId));

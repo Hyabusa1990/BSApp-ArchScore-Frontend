@@ -7,8 +7,12 @@
 	import ConnectivityBanner from '$lib/components/ConnectivityBanner.svelte';
 	import { connectivity } from '$lib/stores/connectivity.svelte';
 
-	let { data } = $props<{ data: { token: string; scheibennummer: number } }>();
-	const token = $derived(data.token);
+	let { data } = $props<{ data: { fixtureUniqueId: string; scheibennummer: number } }>();
+	// Lokal weiterhin `token` genannt (matcht `binocularApi`s Parameternamen, siehe binocular.ts)
+	// — der Routen-Parameter selbst heißt seit Issue #22 `fixtureUniqueId`, weil es das jetzt
+	// auch tatsächlich ist: kein eigenes Pairing-Token mehr, das QR kodiert direkt die
+	// `fixtureUniqueId` der Veranstaltung.
+	const token = $derived(data.fixtureUniqueId);
 	const scheibennummer = $derived(data.scheibennummer);
 
 	type ViewState = 'LOADING' | 'ERROR' | 'WARTET' | 'READY' | 'EXPIRED';
@@ -38,8 +42,8 @@
 		return [null, null, null, null, null, null];
 	}
 
-	function arrowsFromShots(shots: string): (number | null)[] {
-		const chars = shots.split('');
+	function arrowsFromShots(shots: string | null): (number | null)[] {
+		const chars = (shots ?? '').split('');
 		return Array.from({ length: 6 }, (_, i) => (i < chars.length ? decodeShot(chars[i]) : null));
 	}
 
@@ -97,8 +101,10 @@
 	// durch die Turnierleitung: shots wird leer, isConfirmed fällt zurück auf false.
 	// Während einer laufenden Aktion (sending) wird nicht synchronisiert, um ein
 	// optimistisches Tap-Update nicht mit einer zwischenzeitlich veralteten Poll-Antwort zu
-	// überschreiben. In WARTET oder bei geändertem extern_match_id (neues Match auf
-	// derselben Scheibe): vollständig neu übernehmen.
+	// überschreiben. In WARTET oder bei geändertem teamName (andere Begegnung jetzt auf
+	// derselben Scheibe — einzig verfügbares echtes Signal dafür, seit `GetTargetResponse` kein
+	// eigenes Match-Kennzeichen mehr hat, siehe `$lib/api/binocular.ts`): vollständig neu
+	// übernehmen.
 	$effect(() => {
 		if (view !== 'READY' && view !== 'WARTET') return;
 		const interval = setInterval(async () => {
@@ -107,7 +113,7 @@
 				// Server hat geantwortet -> Verbindung steht, unabhängig davon, ob sich der
 				// Match-Stand geändert hat (Issue #20).
 				connectivity.reportSuccess();
-				if (view === 'WARTET' || matchData?.extern_match_id !== md.extern_match_id) {
+				if (view === 'WARTET' || matchData?.teamName !== md.teamName) {
 					uebernehmeMatchDaten(md);
 					view = 'READY';
 				} else if (!sending) {
@@ -354,80 +360,72 @@
 			<span class="small text-muted"
 				>{$_('binocular.lane_label', { values: { lane: scheibennummer } })}</span
 			>
-			<div class="fw-bold text-truncate">{matchData.mannschaft_name}</div>
+			<div class="fw-bold text-truncate">{matchData.teamName}</div>
 		</div>
 
 		<div class="binocular-content d-flex flex-column align-items-center justify-content-center">
-			{#if matchData.status !== 'ACTIVE'}
-				<Alert color="warning" class="text-center py-4 mb-0">
-					<i class="bi bi-hourglass-split fs-1 d-block mb-3"></i>
-					<h5 class="fw-bold mb-0">
-						{matchData.status === 'COMPLETED'
-							? $_('binocular.completed_title')
-							: $_('binocular.waiting_title')}
-					</h5>
-				</Alert>
-			{:else}
-				<!-- Satzweise Anzeige: alle 6 Pfeile des aktuellen Satzes. Bereits erfasste
-				     Pfeile sind antippbar, um sie nachträglich zu korrigieren (solange nicht
-				     bestätigt/gesperrt). -->
-				<div class="satz-grid">
-					{#each [0, 1, 2] as posIdx (posIdx)}
-						<div
-							class="passe-row {posIdx === aktivePosition &&
-							!confirming &&
-							!locked &&
-							korrekturIndex === null
-								? 'passe-aktiv'
-								: ''}"
-						>
-							{#each [posIdx * 2, posIdx * 2 + 1] as idx (idx)}
-								<button
-									type="button"
-									class="pfeil-feld {pfeilColorClass(arrows[idx])} {korrekturIndex === idx
-										? 'pfeil-korrektur'
-										: ''}"
-									disabled={arrows[idx] === null || sending || locked}
-									onclick={() => toggleKorrektur(idx)}
-								>
-									{pfeilLabel(arrows[idx])}
-								</button>
-							{/each}
-						</div>
-					{/each}
-				</div>
+			<!-- Satzweise Anzeige: alle 6 Pfeile des aktuellen Satzes. Bereits erfasste Pfeile
+			     sind antippbar, um sie nachträglich zu korrigieren (solange nicht
+			     bestätigt/gesperrt). `locked` deckt sowohl "nächster Satz noch nicht freigegeben"
+			     als auch "Match auf dieser Scheibe komplett entschieden" ab — die echte Fawkes-API
+			     unterscheidet das nicht (kein eigenes Match-Ende-Feld, nur `isConfirmed`), aus
+			     Spotter-Sicht ist beides ohnehin "nichts zu tun, auf die Turnierleitung warten". -->
+			<div class="satz-grid">
+				{#each [0, 1, 2] as posIdx (posIdx)}
+					<div
+						class="passe-row {posIdx === aktivePosition &&
+						!confirming &&
+						!locked &&
+						korrekturIndex === null
+							? 'passe-aktiv'
+							: ''}"
+					>
+						{#each [posIdx * 2, posIdx * 2 + 1] as idx (idx)}
+							<button
+								type="button"
+								class="pfeil-feld {pfeilColorClass(arrows[idx])} {korrekturIndex === idx
+									? 'pfeil-korrektur'
+									: ''}"
+								disabled={arrows[idx] === null || sending || locked}
+								onclick={() => toggleKorrektur(idx)}
+							>
+								{pfeilLabel(arrows[idx])}
+							</button>
+						{/each}
+					</div>
+				{/each}
+			</div>
 
-				{#if korrekturIndex !== null}
-					<Alert color="info" class="text-center mt-3 mb-0 w-100 py-2">
-						{$_('binocular.korrektur_hint', { values: { n: korrekturIndex + 1 } })}
-						<button
-							type="button"
-							class="btn btn-sm btn-link p-0 ms-2"
-							onclick={() => (korrekturIndex = null)}
-						>
-							{$_('binocular.korrektur_cancel')}
-						</button>
-					</Alert>
-				{:else if confirming}
-					<Alert color="success" class="text-center mt-3 mb-0 w-100">
-						<div class="fw-bold mb-2">{$_('binocular.confirm_title')}</div>
-						<button
-							class="btn btn-success w-100 py-2 fw-bold"
-							disabled={satzSaving}
-							onclick={bestaetigen}
-						>
-							{#if satzSaving}
-								<Spinner size="sm" class="me-2" />
-							{/if}
-							{$_('binocular.confirm_btn')}
-						</button>
-					</Alert>
-				{:else if locked}
-					<Alert color="info" class="text-center mt-3 mb-0 w-100 py-3">
-						<i class="bi bi-check2-circle fs-2 d-block mb-2"></i>
-						{$_('binocular.confirmed_waiting')}
-					</Alert>
-				{/if}
+			{#if korrekturIndex !== null}
+				<Alert color="info" class="text-center mt-3 mb-0 w-100 py-2">
+					{$_('binocular.korrektur_hint', { values: { n: korrekturIndex + 1 } })}
+					<button
+						type="button"
+						class="btn btn-sm btn-link p-0 ms-2"
+						onclick={() => (korrekturIndex = null)}
+					>
+						{$_('binocular.korrektur_cancel')}
+					</button>
+				</Alert>
+			{:else if confirming}
+				<Alert color="success" class="text-center mt-3 mb-0 w-100">
+					<div class="fw-bold mb-2">{$_('binocular.confirm_title')}</div>
+					<button
+						class="btn btn-success w-100 py-2 fw-bold"
+						disabled={satzSaving}
+						onclick={bestaetigen}
+					>
+						{#if satzSaving}
+							<Spinner size="sm" class="me-2" />
+						{/if}
+						{$_('binocular.confirm_btn')}
+					</button>
+				</Alert>
+			{:else if locked}
+				<Alert color="info" class="text-center mt-3 mb-0 w-100 py-3">
+					<i class="bi bi-check2-circle fs-2 d-block mb-2"></i>
+					{$_('binocular.confirmed_waiting')}
+				</Alert>
 			{/if}
 		</div>
 
@@ -437,7 +435,7 @@
 			</div>
 		{/if}
 
-		{#if matchData.status === 'ACTIVE' && !locked}
+		{#if !locked}
 			<div class="binocular-keypad border-top bg-white p-2">
 				{#if korrekturIndex !== null || !confirming}
 					<div class="row g-2 mb-2">
@@ -556,16 +554,21 @@
 		font-weight: 700;
 	}
 
-	/* ── Satzweise Pfeilanzeige ── */
+	/* ── Satzweise Pfeilanzeige ──
+	   Alle 6 Pfeile in einer Zeile, nach Schütze gruppiert (2|2|2): innerhalb einer Gruppe
+	   kleiner, zwischen den Gruppen großer Abstand. Bewusste Abweichung vom Referenzprojekt
+	   (dort 3 Zeilen à 2 Pfeile) — auf Wunsch des Auftraggebers nach Issue #25 auch fürs
+	   Tablet übernommen, nicht nur fürs Smartphone. */
 	.satz-grid {
 		display: flex;
-		flex-direction: column;
-		gap: 0.6rem;
+		flex-direction: row;
+		justify-content: center;
+		gap: 1.5rem;
 	}
 
 	.passe-row {
 		display: flex;
-		gap: 0.6rem;
+		gap: 0.5rem;
 		justify-content: center;
 		border-radius: 0.75rem;
 		padding: 0.25rem;
@@ -632,5 +635,90 @@
 		background: #fff;
 		color: #000;
 		border-color: #212529;
+	}
+
+	/* ── Smartphone im Hochformat (Issue #25) ──
+	   Nur unterhalb des Bootstrap-`sm`-Breakpoints — ab 576 px (jedes Tablet, hoch und quer)
+	   greift ausschließlich das Tablet-Layout oben, dieser Block ändert dort nichts. Engpass
+	   auf dem Handy ist Höhe und Breite: kleinere Pfeilfelder, flachere Tasten. Touch-Targets
+	   bleiben ≥ 44 px (außer dem bewusst kleinen QR-Trigger, Issue #19). */
+	@media (max-width: 575.98px) {
+		.binocular-header {
+			/* Platz für den fixen QR-Trigger (28 px + Abstand) rechts oben */
+			padding-right: 2.75rem !important;
+			padding-top: 0.35rem !important;
+			padding-bottom: 0.35rem !important;
+			line-height: 1.25;
+		}
+
+		.binocular-content {
+			/* Genug Rand, damit die Outlines (aktiver Schütze/Korrektur, je 3 px + 2 px Offset)
+			   nicht vom overflow abgeschnitten werden. */
+			padding: 0.6rem 0.5rem;
+		}
+
+		.satz-grid {
+			gap: 0.7rem;
+		}
+
+		.passe-row {
+			gap: 0.25rem;
+			padding: 0.15rem;
+			border-radius: 0.6rem;
+		}
+
+		.pfeil-feld {
+			width: clamp(44px, 13vw, 3.25rem);
+			height: clamp(44px, 13vw, 3.25rem);
+			font-size: clamp(1.2rem, 6vw, 1.6rem);
+			border-radius: 0.5rem;
+		}
+
+		.binocular-content :global(.alert) {
+			margin-top: 0.6rem !important;
+			padding: 0.5rem 0.75rem !important;
+		}
+
+		.binocular-content :global(.alert .fs-2) {
+			font-size: 1.5rem !important;
+			margin-bottom: 0.25rem !important;
+		}
+
+		.binocular-content :global(.alert .btn) {
+			min-height: 44px;
+		}
+
+		.binocular-content :global(.alert .btn-link) {
+			display: inline-flex;
+			align-items: center;
+		}
+
+		.binocular-keypad {
+			padding: 0.4rem !important;
+		}
+
+		.binocular-keypad :global(.row) {
+			--bs-gutter-x: 0.4rem;
+			--bs-gutter-y: 0.4rem;
+			margin-bottom: 0.4rem !important;
+		}
+
+		.keypad-btn-primary {
+			min-height: 64px;
+			font-size: 1.6rem;
+		}
+
+		.keypad-btn-secondary {
+			min-height: 48px;
+		}
+
+		.toggle-btn {
+			margin-bottom: 0.4rem !important;
+		}
+
+		.undo-btn {
+			min-height: 48px;
+			font-size: 1rem;
+		}
 	}
 </style>

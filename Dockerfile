@@ -25,6 +25,9 @@ COPY . .
 # schlägt der Build hart fehl. In Produktion immer "false"; der Fake-API-Start ist ohnehin
 # zusätzlich an den Dev-Modus gekoppelt (siehe +layout.ts) und liefe im Produktionsbuild
 # so oder so nie an, das hier ist nur für einen sauberen, eindeutigen Build nötig.
+ARG PUBLIC_ALLOW_REGISTRATION=false
+ENV PUBLIC_ALLOW_REGISTRATION=${PUBLIC_ALLOW_REGISTRATION}
+
 ARG PUBLIC_USE_MOCKS=false
 ENV PUBLIC_USE_MOCKS=${PUBLIC_USE_MOCKS}
 

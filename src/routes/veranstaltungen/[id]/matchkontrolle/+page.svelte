@@ -8,11 +8,14 @@
 	import {
 		Container,
 		Card,
+		CardHeader,
 		CardBody,
+		CardFooter,
 		Row,
 		Col,
 		Badge,
 		Alert,
+		Button,
 		Spinner
 	} from '@sveltestrap/sveltestrap';
 
@@ -50,12 +53,12 @@
 		loading = true;
 		loadError = null;
 		try {
-			const [v, ms] = await Promise.all([
-				veranstaltungApi.get(auth.accessToken!, Number(veranstaltungId)),
-				matchkontrolleApi.list(auth.accessToken!, veranstaltungId)
-			]);
+			const v = await veranstaltungApi.get(auth.accessToken!, Number(veranstaltungId));
 			veranstaltung = v;
-			const phase = await matchkontrolleApi.getPhase(auth.accessToken!, v.id);
+			const [ms, phase] = await Promise.all([
+				matchkontrolleApi.list(auth.accessToken!, v.id),
+				matchkontrolleApi.getPhase(auth.accessToken!, v.id)
+			]);
 			matches = ms.map((m) => ({ ...m, aktiv: m.nummer === phase.roundNo }));
 			await ladeConfirmStatus();
 		} catch {
@@ -122,10 +125,12 @@
 			{#each matches as match (match.id)}
 				<Col md={4} sm={6} class="mb-3">
 					<Card class="shadow-sm h-100">
-						<CardBody class="p-3 text-center d-flex flex-column align-items-center gap-2">
+						<CardHeader class="text-center">
 							<div class="fw-bold">
 								{$_('matchkontrolle.match_label', { values: { n: match.nummer } })}
 							</div>
+						</CardHeader>
+						<CardBody class="p-3 text-center d-flex flex-column align-items-center gap-2">
 							<Badge color={match.aktiv ? 'success' : 'warning'} class="px-3 py-2 fs-6">
 								{match.aktiv ? $_('matchkontrolle.aktiv') : $_('matchkontrolle.inaktiv')}
 							</Badge>
@@ -143,20 +148,25 @@
 										</Badge>
 									{/each}
 								</div>
-							{:else}
-								<button
-									type="button"
-									class="btn btn-sm btn-link text-success text-decoration-none"
+							{/if}
+						</CardBody>
+						{#if !match.aktiv}
+							<CardFooter>
+								<Button
+									color="success"
+									class="w-100"
 									disabled={freigebend !== null}
 									onclick={() => freigeben(match)}
 								>
 									{#if freigebend === match.id}
-										<Spinner size="sm" class="me-1" />
+										<Spinner size="sm" class="me-2" />
+									{:else}
+										<i class="bi bi-play-circle-fill me-2"></i>
 									{/if}
 									{$_('matchkontrolle.freigeben_btn')}
-								</button>
-							{/if}
-						</CardBody>
+								</Button>
+							</CardFooter>
+						{/if}
 					</Card>
 				</Col>
 			{/each}

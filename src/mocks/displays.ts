@@ -3,6 +3,7 @@ import {
 	begegnungenForMatch,
 	findAktivesMatchFuerScheibe,
 	findAssignedDeviceByCode,
+	getCurrentRoundNo,
 	getLeagueTable,
 	mannschaftUndGegner,
 	registerDeviceCode
@@ -10,6 +11,7 @@ import {
 import { berechneMatchStand, peekScoringState, ringSumme } from './shared-state';
 import { encodeShots } from './binoculars';
 import { loadState, saveState } from './persist';
+import { randomUUID } from './uuid';
 
 /**
  * Fake-Backend-Zustand für Displays (Issue #17) — folgt seit hier dem echten
@@ -51,8 +53,8 @@ function persistSessions(state: SessionState): void {
 
 function issueDeviceTokens(deviceCode: string): DeviceTokenResponse {
 	const state = loadSessions();
-	const accessToken = `mock-display.${crypto.randomUUID()}`;
-	const refreshToken = `mock-display-refresh.${crypto.randomUUID()}`;
+	const accessToken = `mock-display.${randomUUID()}`;
+	const refreshToken = `mock-display-refresh.${randomUUID()}`;
 	state.accessTokens[accessToken] = deviceCode;
 	state.refreshTokens[refreshToken] = deviceCode;
 	persistSessions(state);
@@ -148,11 +150,14 @@ function buildSeiteForScheibe(scheibennummer: number | null): DisplaySeite {
  * `displayType` auf `Unassigned` — genau der Zustand, den die Konsum-Seite als Pairing-Screen
  * zeigt (siehe `+page.svelte`).
  *
- * Zeigt bewusst nur die ERSTE Begegnung des zugeordneten Matches (`begegnungenForMatch`) — ein
- * Match kann mehrere gleichzeitige Begegnungen (mehrere Scheiben-Paare) haben, ein einzelnes
- * Gerät kennt aber nur `matchNo`, keine konkrete Scheibenpaar-Auswahl. Mehrere Begegnungen auf
- * einem Gerät sauber darzustellen ist ein offenes Design-Thema, keine Backend-Kontraktfrage —
- * hier bewusst nicht vorweggenommen.
+ * `matchNo` bei `displayType === 'Match'` ist entgegen dem Namen KEINE Runden-/Match-Nummer
+ * (das wäre `Match.nummer`, 1–7 in der Setzliste) — ein Gerät hängt physisch fest zwischen zwei
+ * Scheiben (FACHLICHKEIT.md) und zeigt über alle Runden hinweg, was dort gerade läuft. `matchNo`
+ * ist stattdessen der 1-basierte Index der Begegnung *innerhalb der aktuell über die
+ * Matchkontrolle freigegebenen Runde* (`currentRoundNo`) — 1=Scheibe 1/2, 2=Scheibe 3/4, 3=Scheibe
+ * 5/6, 4=Scheibe 7/8 (Reihenfolge der `begegnungen`-Arrays in `veranstaltungen.ts`, siehe dort).
+ * Klargestellt 2026-09-04 (Gero) — vorher fälschlich als Runden-Nummer behandelt, wodurch jedes
+ * Gerät unabhängig vom gewählten Wert immer die erste Begegnung (Scheibe 1/2) zeigte.
  *
  * `LeagueTable` (Issue #18) liest unabhängig vom `matches`/`currentRoundNo`-Zustand direkt aus
  * `leagueTables` — die Ligatabelle läuft über den ganzen Wettkampftag, nicht pro Runde.
@@ -162,28 +167,61 @@ export function getDisplayData(accessToken: string): DisplayDataResponse | undef
 	if (!deviceCode) return undefined;
 
 	const assigned = findAssignedDeviceByCode(deviceCode);
-	if (!assigned) return { displayType: 'Unassigned', targets: [], leagueTable: [] };
+	if (!assigned) {
+		// Noch keiner Fixture zugeordnet — kein Device-Record mit eigenem `displayTheme`
+		// existiert an dieser Stelle. Kein echter Referenz-Endpunkt verifizierbar (siehe
+		// veranstaltungen.ts, `assignDevice`), Default mangels Vorgabe auf `Dark`.
+		return {
+			displayType: 'Unassigned',
+			displayTheme: 'Dark',
+			targets: [],
+			leagueTablePositions: [],
+			deviceCode
+		};
+	}
 
 	const { veranstaltungId, device } = assigned;
 
 	if (device.displayType === 'LeagueTable') {
 		return {
 			displayType: 'LeagueTable',
+			displayTheme: device.displayTheme,
 			targets: [],
-			leagueTable: getLeagueTable(veranstaltungId)
+			leagueTablePositions: getLeagueTable(veranstaltungId),
+			deviceCode
 		};
 	}
 
 	if (device.displayType !== 'Match' || device.matchNo === null) {
-		return { displayType: 'None', targets: [], leagueTable: [] };
+		return {
+			displayType: 'None',
+			displayTheme: device.displayTheme,
+			targets: [],
+			leagueTablePositions: [],
+			deviceCode
+		};
 	}
 
-	const [begegnung] = begegnungenForMatch(veranstaltungId, device.matchNo);
-	if (!begegnung) return { displayType: 'None', targets: [], leagueTable: [] };
+	const aktiveRundeNo = getCurrentRoundNo(veranstaltungId);
+	const begegnung =
+		aktiveRundeNo !== undefined
+			? begegnungenForMatch(veranstaltungId, aktiveRundeNo)[device.matchNo - 1]
+			: undefined;
+	if (!begegnung) {
+		return {
+			displayType: 'None',
+			displayTheme: device.displayTheme,
+			targets: [],
+			leagueTablePositions: [],
+			deviceCode
+		};
+	}
 
 	return {
 		displayType: 'Match',
+		displayTheme: device.displayTheme,
 		targets: [buildSeiteForScheibe(begegnung.scheibe_a), buildSeiteForScheibe(begegnung.scheibe_b)],
-		leagueTable: []
+		leagueTablePositions: [],
+		deviceCode
 	};
 }

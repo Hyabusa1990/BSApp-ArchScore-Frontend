@@ -1,7 +1,6 @@
 import { decodeShot, encodeShot, type BinocularMatch } from '$lib/api/binocular';
 import {
 	findAktivesMatchFuerScheibe,
-	findTabletPairing,
 	findVeranstaltungByUniqueId,
 	mannschaftUndGegner,
 	type AktivesMatchFuerScheibe
@@ -9,16 +8,17 @@ import {
 import {
 	berechneMatchStand,
 	getScoringState,
+	ringSumme,
 	saveScoringState,
-	type ScheibenScoringState
+	type ScheibenScoringState,
+	type VorlaeufigePasse
 } from './shared-state';
 
 /**
  * Auflösung jetzt über den echten Admin-Verwaltungs-Mock (#6–#9) statt eigener Demo-Tokens —
- * siehe Issue #10. Tablet-Tokens kommen aus der Bildschirm-/Tablet-Verwaltung (#9), das
- * aktive Match aus der Matchkontrolle (#8). Der laufende Pfeil-/Satz-Fortschritt lebt
- * weiterhin separat (im geteilten `shared-state.ts`), weil das Admin-Modell keine laufenden
- * Scoring-Daten kennt — nur "welches Match ist aktiv".
+ * siehe Issue #10. Das aktive Match kommt aus der Matchkontrolle (#8). Der laufende Pfeil-/
+ * Satz-Fortschritt lebt weiterhin separat (im geteilten `shared-state.ts`), weil das
+ * Admin-Modell keine laufenden Scoring-Daten kennt — nur "welches Match ist aktiv".
  */
 
 interface Resolved {
@@ -34,20 +34,16 @@ type ResolveOutcome =
 
 // Fester Demo-Token für Issue #19: es gibt (noch) keinen echten Ablaufmechanismus im Mock, aber
 // der 440-Flow (abgelaufenes Token -> eingebauter QR-Scanner) muss manuell testbar sein — daher
-// wird genau dieser Token immer als abgelaufen aufgelöst, unabhängig von Scheibennummer.
+// wird genau dieser String immer als abgelaufen aufgelöst, unabhängig von Scheibennummer.
 export const EXPIRED_DEMO_TOKEN = 'expired-demo-token';
 
-// Zwei gültige Token-Arten für denselben Spotter-Info-Call: das Tablet-Pairing-Token (echte
-// Spotter-Seite, ein Token pro Scheibe) oder die fixtureUniqueId der Veranstaltung (Matchkontrolle
-// ruft #10 denselben Endpunkt direkt auf, um den Confirm-Status pro Scheibe zu lesen — echter
-// Fawkes-Kontrakt, kein Tablet-Pairing nötig).
+// `token` ist hier IMMER die `fixtureUniqueId` der Veranstaltung — sowohl das Tablet-QR (Issue
+// #22, ersetzt den vormaligen eigenen `generateTabletToken`-Mechanismus) als auch die
+// Matchkontrolle (Confirm-Status pro Scheibe, #10) adressieren denselben Bearer-freien
+// Spotter-Info-Call darüber. Kein eigenes Pairing-Token-Konzept mehr nötig.
 function resolvePairing(token: string, scheibennummer: number): ResolveOutcome {
 	if (token === EXPIRED_DEMO_TOKEN) return { kind: 'expired' };
-
-	const gueltigerToken =
-		findTabletPairing(token)?.scheibennummer === scheibennummer ||
-		findVeranstaltungByUniqueId(token) !== undefined;
-	if (!gueltigerToken) return { kind: 'invalid-token' };
+	if (!findVeranstaltungByUniqueId(token)) return { kind: 'invalid-token' };
 
 	const found = findAktivesMatchFuerScheibe(scheibennummer);
 	if (!found) return { kind: 'no-match' };
@@ -61,7 +57,7 @@ function resolvePairing(token: string, scheibennummer: number): ResolveOutcome {
 /** Passen des aktuellen Satzes, Position-sortiert, -> Fawkes-shots-String (siehe binocular.ts).
  * Auch von displays.ts wiederverwendet, um das `shots`-Feld der Match-Anzeige aus denselben
  * Roh-Passen abzuleiten (Issue #16) — dieselbe Kodierung, keine zweite Implementierung. */
-export function encodeShots(passenImSatz: BinocularMatch['vorlaeufige_passen']): string {
+export function encodeShots(passenImSatz: VorlaeufigePasse[]): string {
 	const sortiert = [...passenImSatz].sort((a, b) => a.position - b.position);
 	const chars: string[] = [];
 	for (const p of sortiert) {
@@ -77,7 +73,7 @@ function buildMatch(scheibennummer: number, { found, scoring }: Resolved): Binoc
 		found.seite === 'a' ? scheibennummer : gegnerScheibe,
 		found.seite === 'a' ? gegnerScheibe : scheibennummer
 	);
-	const { mannschaft, gegner } = mannschaftUndGegner(found.begegnung, found.seite);
+	const { mannschaft } = mannschaftUndGegner(found.begegnung, found.seite);
 	// Nur der aktuelle Satz — 1:1 wie im scoring-Referenzprojekt (_binocular_dict filtert
 	// dort genauso). scoring.vorlaeufige_passen selbst sammelt alle Sätze (für
 	// displays.ts/berechneMatchStand gebraucht, siehe #16), aber die Binocular-UI indiziert
@@ -86,19 +82,23 @@ function buildMatch(scheibennummer: number, { found, scoring }: Resolved): Binoc
 	const passenImSatz = scoring.vorlaeufige_passen.filter(
 		(p) => p.lfd_nr === scoring.aktueller_satz
 	);
+	const shots = encodeShots(passenImSatz);
 
 	return {
-		extern_match_id: scoring.externMatchId,
-		status: stand.beendet ? 'COMPLETED' : 'ACTIVE',
-		mannschaft_name: mannschaft,
-		gegner_name: gegner,
-		// Admin-Modell kennt keine Schützen-Aufstellung pro Begegnung — bewusst leer.
-		selected_members: [],
-		aktueller_satz: scoring.aktueller_satz,
-		vorlaeufige_passen: passenImSatz,
-		schuetze_bestaetigte_saetze: scoring.schuetze_bestaetigte_saetze,
-		shots: encodeShots(passenImSatz),
-		isConfirmed: scoring.schuetze_bestaetigte_saetze.includes(scoring.aktueller_satz)
+		targetNo: scheibennummer,
+		teamName: mannschaft,
+		currentSetNo: scoring.aktueller_satz,
+		currentSetScore: shots ? ringSumme(scoring.vorlaeufige_passen, scoring.aktueller_satz) : null,
+		shots,
+		// Bewusst nicht nur "aktueller Satz schon bestätigt": ist das Match auf dieser Scheibe
+		// komplett entschieden (stand.beendet), kommt nie wieder ein neuer Satz, den man
+		// bestätigen könnte — ohne diese Ergänzung bliebe isConfirmed für immer `false`, obwohl
+		// nichts mehr aussteht (Bug-Report Gero, 2026-09-04: Matchkontrolle-Badge hing für immer
+		// auf "ausstehend"). `status`/`stand.beendet` selbst bleibt rein Mock-intern, die echte
+		// Fawkes-API kennt dafür kein eigenes Feld — reduziert sich für den Client auf dieses
+		// eine echte Boolean.
+		isConfirmed:
+			stand.beendet || scoring.schuetze_bestaetigte_saetze.includes(scoring.aktueller_satz)
 	};
 }
 
@@ -115,8 +115,8 @@ export function getScheibe(token: string, scheibennummer: number): ResolveResult
 }
 
 /** Fawkes-shots-String -> Passen des aktuellen Satzes (Gegenrichtung zu encodeShots). */
-function decodeShots(shots: string, lfdNr: number): BinocularMatch['vorlaeufige_passen'] {
-	const passen: BinocularMatch['vorlaeufige_passen'] = [];
+function decodeShots(shots: string, lfdNr: number): VorlaeufigePasse[] {
+	const passen: VorlaeufigePasse[] = [];
 	for (let i = 0; i < shots.length; i++) {
 		const position = Math.floor(i / 2) + 1;
 		let passe = passen.find((p) => p.position === position);

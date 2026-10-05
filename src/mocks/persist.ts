@@ -14,7 +14,7 @@ const PREFIX = 'archscore-mock:';
 // Bei jeder Schema-Änderung an einem der State-Interfaces (neues Feld, geänderter Key-Typ, ...)
 // hochzählen — sonst laden Dev-Browser mit altem localStorage einen inkompatiblen State und
 // Handler crashen beim Zugriff auf ein Feld, das im alten Stand noch nicht existierte.
-const VERSION = 3;
+const VERSION = 4;
 
 interface Envelope<T> {
 	version: number;

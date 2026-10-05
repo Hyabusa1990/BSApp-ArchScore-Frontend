@@ -2,8 +2,7 @@ import { apiClient } from './client';
 
 /**
  * Geräteverwaltung, siehe FACHLICHKEIT.md "Bildschirm-Pairing". Seit Issue #15 gegen den
- * echten Fawkes-`DeviceManagementController` verdrahtet — Tablets pro einzelner Scheibe
- * (`TabletPairing`) bleiben ein eigener, unveränderter Mechanismus (kein Fawkes-Kontrakt dafür).
+ * echten Fawkes-`DeviceManagementController` verdrahtet.
  *
  * Wichtige Verhaltensänderung ggü. dem alten Mock-only-Modell: kein `pin`/`scheibe_a`/
  * `scheibe_b`/`mode`/`aktiv` mehr. Ein Gerät registriert sich selbst (`GET /Display/register`,
@@ -13,9 +12,21 @@ import { apiClient } from './client';
  * (`None`/`Match`/`LeagueTable`, Issue #18) + optional `matchNo` (nur bei `Match`) konfigurierbar.
  * Welche zwei Scheiben bei `Match` angezeigt werden, leitet das Backend selbst ab
  * (`GET /Display/data`) — keine manuelle Scheiben-Paar-Auswahl mehr.
+ *
+ * `displayTheme` (Spec-Sync 2026-09-04) kam nachträglich als required Feld dazu — der Admin
+ * legt das Theme jetzt pro Gerät fest, die Anzeigeseite übernimmt es aus `GET /Display/data`
+ * statt wie bisher aus dem URL-Segment (siehe `$lib/api/display.ts`, `routes/display/[[theme]]`).
+ *
+ * Ein frei vergebener Anzeigename (Wunsch Gero, 2026-09-04) ist bewusst NICHT Teil dieses
+ * Kontrakts — kein Fawkes-Feld dafür, und für den Anwendungsfall (Admin-UI lesbarer machen)
+ * genügt eine rein clientseitige Lösung ohne Server-Zustand, siehe `localStorage`-Cache in
+ * `routes/veranstaltungen/[id]/bildschirme/+page.svelte`.
  */
 
 export type DisplayType = 'None' | 'Match' | 'LeagueTable';
+
+/** `Fawkes.Api.Controllers.DeviceManagementController.DisplayTheme`. */
+export type DisplayTheme = 'Light' | 'Dark';
 
 /** `Fawkes.Api.Controllers.DeviceManagementController.GetDeviceResponse`. */
 export interface Device {
@@ -23,16 +34,26 @@ export interface Device {
 	displayType: DisplayType;
 	/** Nur relevant bei `displayType === 'Match'`. */
 	matchNo: number | null;
+	displayTheme: DisplayTheme;
 }
 
 export interface UpdateDeviceData {
 	displayType: DisplayType;
 	matchNo: number | null;
+	displayTheme: DisplayTheme;
 }
 
-export interface TabletPairing {
-	scheibennummer: number;
-	token: string;
+/**
+ * `GetDeviceResponse` des Einzel-Endpunkts `GET /fixtures/{fixtureId}/devices/{deviceId}` — liefert
+ * seit Image-Revision `8b9677e` (2026-09-28) zusätzlich den `deviceCode`, mit dem sich das Gerät
+ * registriert hat. Die Liste (`GET /fixtures/{fixtureId}/devices`, `DeviceBase`) enthält ihn NICHT,
+ * deshalb eigener Typ statt Erweiterung von `Device`. Grundlage für Issue #23 ("Displays aus
+ * anderer Veranstaltung übernehmen"): Code vor dem `unassign` an der Quelle holen, dann an der
+ * Ziel-Veranstaltung per `assign` neu zuordnen. Ersetzt die frühere Arbeitsannahme aus #24
+ * (`unassign` liefert den Code zurück) — `unassign` hat laut Spec weiterhin keinen Response-Body.
+ */
+export interface DeviceDetail extends Device {
+	deviceCode: string | null;
 }
 
 export const bildschirmeApi = {
@@ -40,7 +61,7 @@ export const bildschirmeApi = {
 		apiClient.get<Device[]>(`/fixtures/${fixtureId}/devices`, token),
 
 	get: (token: string, fixtureId: number, deviceId: number) =>
-		apiClient.get<Device>(`/fixtures/${fixtureId}/devices/${deviceId}`, token),
+		apiClient.get<DeviceDetail>(`/fixtures/${fixtureId}/devices/${deviceId}`, token),
 
 	// Setzt voraus, dass sich das Gerät bereits selbst registriert hat (deviceCode existiert).
 	assign: (token: string, fixtureId: number, deviceCode: string) =>
@@ -50,14 +71,5 @@ export const bildschirmeApi = {
 		apiClient.put<Device>(`/fixtures/${fixtureId}/devices/${deviceId}`, data, token),
 
 	unassign: (token: string, fixtureId: number, deviceId: number) =>
-		apiClient.put<void>(`/fixtures/${fixtureId}/devices/${deviceId}/unassign`, undefined, token),
-
-	// Tablet-Pairing bleibt eigener Mock-only-Mechanismus (kein Fawkes-Endpunkt für Scheiben-
-	// Enumeration) — veranstaltungId ist der Routen-String-Parameter, nicht die Fixture-ID.
-	generateTabletToken: (token: string, veranstaltungId: string, scheibennummer: number) =>
-		apiClient.post<TabletPairing>(
-			`/veranstaltungen/${encodeURIComponent(veranstaltungId)}/tablet-token`,
-			{ scheibennummer },
-			token
-		)
+		apiClient.put<void>(`/fixtures/${fixtureId}/devices/${deviceId}/unassign`, undefined, token)
 };

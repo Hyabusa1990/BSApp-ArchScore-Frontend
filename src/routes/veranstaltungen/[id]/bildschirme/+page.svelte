@@ -3,15 +3,24 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { bildschirmeApi, type Device, type DisplayType } from '$lib/api/bildschirme';
+	import {
+		bildschirmeApi,
+		type Device,
+		type DisplayType,
+		type DisplayTheme
+	} from '$lib/api/bildschirme';
+	import { veranstaltungApi, type Veranstaltung } from '$lib/api/veranstaltung';
 	import { APIError } from '$lib/api/client';
 	import QRCode from 'qrcode';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import {
 		Container,
 		Row,
 		Col,
 		Card,
+		CardHeader,
 		CardBody,
+		CardFooter,
 		Alert,
 		Button,
 		Spinner,
@@ -28,30 +37,182 @@
 	const fixtureId = $derived(Number(veranstaltungId));
 
 	let devices = $state<Device[]>([]);
+	// Nur für `veranstaltung.uniqueId` gebraucht — das Tablet-QR kodiert sie direkt (Issue #22),
+	// kein eigener Token-Endpunkt mehr nötig, siehe openTabletModal.
+	let veranstaltung = $state<Veranstaltung | null>(null);
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
 
-	// Lokaler Bearbeitungsentwurf pro Gerät (displayType/matchNo) — erst "Speichern" persistiert.
-	type Draft = { displayType: DisplayType; matchNo: number | null };
+	// Lokaler Bearbeitungsentwurf pro Gerät (displayType/matchNo/displayTheme) — erst "Speichern"
+	// persistiert.
+	type Draft = { displayType: DisplayType; matchNo: number | null; displayTheme: DisplayTheme };
 	let drafts = $state<Record<number, Draft>>({});
 	let savingId = $state<number | null>(null);
-	let unassigningId = $state<number | null>(null);
+	let unassignTarget = $state<Device | null>(null);
+	let unassigning = $state(false);
 	let saveError = $state<string | null>(null);
 
 	let newDeviceCode = $state('');
 	let assigning = $state(false);
 	let assignError = $state<string | null>(null);
 
+	// Issue #23 "Displays aus anderer Veranstaltung übernehmen" — Zugriff auf die Quelle ist
+	// dieselbe Sichtbarkeit wie überall (Owner ODER FixtureUser-Mitgliedschaft, kein Rollen-Gate),
+	// `veranstaltungApi.list()` liefert also von sich aus nur zugängliche Veranstaltungen.
+	let otherVeranstaltungen = $state<Veranstaltung[]>([]);
+	let otherVeranstaltungenLoading = $state(true);
+	let transferSourceId = $state<number | null>(null);
+	let transferDevices = $state<Device[]>([]);
+	let transferDevicesLoading = $state(false);
+	let transferDevicesError = $state<string | null>(null);
+	let transferSelected = $state<Record<number, boolean>>({});
+	const transferSelectedCount = $derived(Object.values(transferSelected).filter(Boolean).length);
+	let transferConfirmOpen = $state(false);
+	let transferring = $state(false);
+	type TransferResult = { deviceId: number; success: boolean; message: string };
+	let transferResults = $state<TransferResult[] | null>(null);
+
 	// Feste Scheiben-Paarung (FACHLICHKEIT.md: 1 gg. 2, 3 gg. 4, 5 gg. 6, 7 gg. 8) — kann seit
 	// #15 nicht mehr aus den Geräten abgeleitet werden (kein scheibe_a/scheibe_b im echten
-	// DeviceManagement-Modell mehr), Tablet-Pairing bleibt aber unverändert pro Scheibe.
+	// DeviceManagement-Modell mehr), Tablet-Pairing bleibt aber weiterhin pro einzelner Scheibe
+	// (nicht pro Paar), nur der Pairing-Mechanismus selbst wurde geändert (Issue #22).
 	const scheiben = [1, 2, 3, 4, 5, 6, 7, 8];
+
+	// `matchNo` (Fawkes-Feldname) ist bei `displayType === 'Match'` der 1-basierte Index der
+	// Begegnung innerhalb der aktuell freigegebenen Runde, NICHT die Match-/Rundennummer —
+	// klargestellt 2026-09-04 (Gero), siehe ausführlicher Kommentar in `mocks/displays.ts`.
+	// Reihenfolge deckungsgleich mit den `begegnungen`-Arrays in `mocks/veranstaltungen.ts`.
+	const begegnungScheiben: Record<number, string> = { 1: '1/2', 2: '3/4', 3: '5/6', 4: '7/8' };
+
+	// Backend kennt `matchNo` nur bei `displayType === 'Match'` (Fawkes-Validierung) — beim
+	// Umschalten auf LeagueTable/None wird es serverseitig auf `null` gesetzt und geht damit für
+	// den Draft verloren. Wunsch Gero (2026-09-04): in Spielpausen viele Displays kurz auf
+	// Tabelle stellen, danach zum nächsten Match wieder auf dieselbe Begegnung zurück, ohne sie
+	// sich merken zu müssen — rein client-seitiger Cache (localStorage, pro Fixture+Gerät,
+	// überlebt auch einen Reload) füllt `matchNo` beim Zurückschalten auf Match automatisch
+	// wieder ein. Reine Usability-Krücke, kein Server-Zustand.
+	function lastMatchNoKey(deviceId: number): string {
+		return `bildschirme:${fixtureId}:${deviceId}:lastMatchNo`;
+	}
+
+	function rememberMatchNo(deviceId: number, matchNo: number) {
+		try {
+			localStorage.setItem(lastMatchNoKey(deviceId), String(matchNo));
+		} catch {
+			// z. B. privater Modus ohne Storage-Zugriff — Cache ist dann einfach leer, kein Problem.
+		}
+	}
+
+	function recallMatchNo(deviceId: number): number | null {
+		try {
+			const raw = localStorage.getItem(lastMatchNoKey(deviceId));
+			return raw ? Number(raw) : null;
+		} catch {
+			return null;
+		}
+	}
+
+	/** Beim Zurückschalten auf "Match" die zuletzt gewählte Begegnung vorbelegen, falls noch
+	 * keine gesetzt ist (frischer Draft, `matchNo` kommt gerade erst von `null`). */
+	function restoreLastMatchNo(deviceId: number) {
+		const draft = drafts[deviceId];
+		if (!draft || draft.matchNo !== null) return;
+		const cached = recallMatchNo(deviceId);
+		if (cached !== null) draft.matchNo = cached;
+	}
+
+	/** Aus displayType/matchNo hergeleiteter Funktionsname ("Match - 1/2", "Tabelle", "Aus") —
+	 * Wunsch Gero (2026-09-04): Kartenname soll zeigen, WOFÜR ein Gerät gerade steht, nicht nur
+	 * seine ID. Ignoriert einen evtl. gesetzten eigenen Namen bewusst (dient auch als Vorschau-
+	 * Platzhalter im Namensfeld, siehe Template). */
+	function autoDeviceName(draft: Draft | undefined, deviceId: number): string {
+		if (!draft) return $_('bildschirme.device_label', { values: { id: deviceId } });
+		if (draft.displayType === 'Match') {
+			const scheiben = draft.matchNo !== null ? begegnungScheiben[draft.matchNo] : undefined;
+			return scheiben
+				? $_('bildschirme.name_match', { values: { scheiben } })
+				: $_('bildschirme.mode_match');
+		}
+		if (draft.displayType === 'LeagueTable') return $_('bildschirme.name_league_table');
+		return $_('bildschirme.mode_none');
+	}
+
+	/** Eigener Name hat Vorrang vor dem Funktionsnamen, sonst Fallback auf `autoDeviceName`. */
+	function deviceDisplayName(deviceId: number, draft: Draft | undefined): string {
+		const custom = customNames[deviceId]?.trim();
+		return custom ? custom : autoDeviceName(draft, deviceId);
+	}
+
+	// Eigener Anzeigename (Wunsch Gero, 2026-09-04) ist bewusst rein clientseitig — kein Fawkes-
+	// Feld dafür (siehe api/bildschirme.ts), reine Admin-UI-Usability. Gleicher Cache-Ansatz wie
+	// `lastMatchNo` oben: localStorage pro Fixture+Gerät, überlebt einen Reload.
+	let customNames = $state<Record<number, string>>({});
+	let editingNameId = $state<number | null>(null);
+	let nameDraft = $state('');
+	let nameInputEl = $state<HTMLInputElement | null>(null);
+
+	function customNameKey(deviceId: number): string {
+		return `bildschirme:${fixtureId}:${deviceId}:customName`;
+	}
+
+	function recallCustomName(deviceId: number): string {
+		try {
+			return localStorage.getItem(customNameKey(deviceId)) ?? '';
+		} catch {
+			return '';
+		}
+	}
+
+	function startEditName(deviceId: number) {
+		editingNameId = deviceId;
+		nameDraft = customNames[deviceId] ?? '';
+	}
+
+	function commitName(deviceId: number) {
+		if (editingNameId !== deviceId) return; // per Escape schon abgebrochen, siehe onNameKeydown
+		const trimmed = nameDraft.trim();
+		try {
+			if (trimmed) localStorage.setItem(customNameKey(deviceId), trimmed);
+			else localStorage.removeItem(customNameKey(deviceId));
+		} catch {
+			// z. B. privater Modus ohne Storage-Zugriff — Anzeige übernimmt den Wert trotzdem für
+			// den Rest der Session, geht nur beim Reload verloren.
+		}
+		customNames = { ...customNames, [deviceId]: trimmed };
+		editingNameId = null;
+	}
+
+	function onNameKeydown(e: KeyboardEvent, deviceId: number) {
+		if (e.key === 'Enter') {
+			e.preventDefault();
+			commitName(deviceId);
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			editingNameId = null; // Abbrechen, nameDraft wird verworfen
+		}
+	}
+
+	function onNameBlur(deviceId: number) {
+		// Nur noch aktiv, wenn nicht schon per Enter/Escape beendet (siehe onNameKeydown) — sonst
+		// würde ein durchs Ausblenden ausgelöster Blur den bereits verworfenen Draft erneut greifen.
+		if (editingNameId === deviceId) commitName(deviceId);
+	}
+
+	$effect(() => {
+		if (editingNameId !== null) nameInputEl?.focus();
+	});
 
 	let qrModalOpen = $state(false);
 	let qrLoading = $state(false);
 	let qrError = $state<string | null>(null);
 	let qrDataUrl = $state<string | null>(null);
 	let qrScheibennummer = $state<number | null>(null);
+	// Issue #26: Link im Klartext zum Kopieren, z. B. für ein Smartphone, das den QR-Code nicht
+	// scannen kann.
+	let qrUrl = $state<string | null>(null);
+	let qrUrlInputEl = $state<HTMLInputElement | null>(null);
+	let qrCopyState = $state<'idle' | 'copied' | 'manual'>('idle');
+	let qrCopyResetTimer: ReturnType<typeof setTimeout> | undefined;
 
 	$effect(() => {
 		if (auth.initialized && !auth.isAuthenticated) goto(resolve('/login'));
@@ -61,10 +222,22 @@
 		loading = true;
 		loadError = null;
 		try {
-			devices = await bildschirmeApi.list(auth.accessToken!, fixtureId);
+			[veranstaltung, devices] = await Promise.all([
+				veranstaltungApi.get(auth.accessToken!, fixtureId),
+				bildschirmeApi.list(auth.accessToken!, fixtureId)
+			]);
 			drafts = Object.fromEntries(
-				devices.map((d) => [d.id, { displayType: d.displayType, matchNo: d.matchNo }])
+				devices.map((d) => [
+					d.id,
+					{ displayType: d.displayType, matchNo: d.matchNo, displayTheme: d.displayTheme }
+				])
 			);
+			// Cache mit dem serverseitig bekannten Stand warmhalten, auch ohne dass der Admin die
+			// Begegnung in dieser Session schon mal angefasst hat (siehe restoreLastMatchNo oben).
+			for (const d of devices) {
+				if (d.matchNo !== null) rememberMatchNo(d.id, d.matchNo);
+			}
+			customNames = Object.fromEntries(devices.map((d) => [d.id, recallCustomName(d.id)]));
 		} catch {
 			loadError = $_('bildschirme.error_load');
 		} finally {
@@ -72,8 +245,124 @@
 		}
 	}
 
+	// Issue #23: separat von `load()`, damit ein Fehler hier nicht die Haupt-Geräteliste blockiert
+	// — Übernehmen ist ein Zusatz-Feature, kein Blocker für die reguläre Seite.
+	async function loadOtherVeranstaltungen() {
+		otherVeranstaltungenLoading = true;
+		try {
+			const all = await veranstaltungApi.list(auth.accessToken!);
+			otherVeranstaltungen = all.filter((v) => v.id !== fixtureId);
+		} catch {
+			otherVeranstaltungen = [];
+		} finally {
+			otherVeranstaltungenLoading = false;
+		}
+	}
+
+	async function onTransferSourceChange() {
+		transferSelected = {};
+		transferResults = null;
+		transferDevicesError = null;
+		if (transferSourceId === null) {
+			transferDevices = [];
+			return;
+		}
+		transferDevicesLoading = true;
+		try {
+			transferDevices = await bildschirmeApi.list(auth.accessToken!, transferSourceId);
+		} catch {
+			transferDevicesError = $_('bildschirme.transfer_devices_error_load');
+			transferDevices = [];
+		} finally {
+			transferDevicesLoading = false;
+		}
+	}
+
+	function toggleTransferDevice(deviceId: number) {
+		transferSelected = { ...transferSelected, [deviceId]: !transferSelected[deviceId] };
+	}
+
+	// Orchestriert get -> unassign -> assign -> update pro Gerät, sequenziell und bewusst NICHT
+	// alles-oder-nichts (siehe Issue #23) — ein Fehler bei einem Gerät bricht die restliche Charge
+	// nicht ab. Der `deviceCode` kommt aus dem Einzel-GET an der Quelle (`DeviceDetail`, nicht in
+	// der Liste enthalten) und wird VOR dem `unassign` geholt — fehlt er, wird das Gerät gar nicht
+	// erst gelöst. Die Konfiguration wird ebenfalls aus dieser frischen Antwort übernommen. `assignDevice` im Fake-Backend setzt bei jeder Zuweisung hart auf
+	// displayType=None/matchNo=null/displayTheme=Dark zurück (kein Übernehmen von sich aus), daher
+	// der Folge-`update()`-Call mit den ursprünglichen Werten. Schlägt ausgerechnet der `assign`-
+	// Schritt fehl, NACHDEM `unassign` schon erfolgreich war, ist der deviceCode "verwaist" (Gerät
+	// nirgends mehr zugeordnet) — dafür eigene Fehlermeldung mit dem Code, siehe
+	// transfer_result_error_orphaned.
+	async function confirmTransfer() {
+		if (transferSourceId === null) return;
+		const sourceId = transferSourceId;
+		const deviceIds = Object.entries(transferSelected)
+			.filter(([, checked]) => checked)
+			.map(([id]) => Number(id));
+		if (deviceIds.length === 0) return;
+
+		transferring = true;
+		const results: TransferResult[] = [];
+
+		for (const deviceId of deviceIds) {
+			if (!transferDevices.some((d) => d.id === deviceId)) continue;
+			try {
+				const original = await bildschirmeApi.get(auth.accessToken!, sourceId, deviceId);
+				const { deviceCode } = original;
+				if (!deviceCode) throw new Error('deviceCode missing');
+				await bildschirmeApi.unassign(auth.accessToken!, sourceId, deviceId);
+				try {
+					const created = await bildschirmeApi.assign(auth.accessToken!, fixtureId, deviceCode);
+					const updated = await bildschirmeApi.update(auth.accessToken!, fixtureId, created.id, {
+						displayType: original.displayType,
+						matchNo: original.matchNo,
+						displayTheme: original.displayTheme
+					});
+					devices = [...devices, updated];
+					drafts = {
+						...drafts,
+						[updated.id]: {
+							displayType: updated.displayType,
+							matchNo: updated.matchNo,
+							displayTheme: updated.displayTheme
+						}
+					};
+					if (updated.matchNo !== null) rememberMatchNo(updated.id, updated.matchNo);
+					customNames = { ...customNames, [updated.id]: recallCustomName(updated.id) };
+					transferDevices = transferDevices.filter((d) => d.id !== deviceId);
+					results.push({
+						deviceId,
+						success: true,
+						message: $_('bildschirme.transfer_result_success', { values: { id: deviceId } })
+					});
+				} catch {
+					results.push({
+						deviceId,
+						success: false,
+						message: $_('bildschirme.transfer_result_error_orphaned', {
+							values: { id: deviceId, code: deviceCode }
+						})
+					});
+				}
+			} catch {
+				results.push({
+					deviceId,
+					success: false,
+					message: $_('bildschirme.transfer_result_error', { values: { id: deviceId } })
+				});
+			}
+		}
+
+		transferSelected = {};
+		transferResults = results;
+		transferConfirmOpen = false;
+		transferring = false;
+	}
+
 	$effect(() => {
-		if (auth.isAuthenticated) load();
+		if (auth.isAuthenticated) {
+			load();
+			loadOtherVeranstaltungen();
+		}
 	});
 
 	async function saveDevice(d: Device) {
@@ -84,12 +373,17 @@
 		try {
 			const updated = await bildschirmeApi.update(auth.accessToken!, fixtureId, d.id, {
 				displayType: draft.displayType,
-				matchNo: draft.displayType === 'Match' ? draft.matchNo : null
+				matchNo: draft.displayType === 'Match' ? draft.matchNo : null,
+				displayTheme: draft.displayTheme
 			});
 			devices = devices.map((x) => (x.id === d.id ? updated : x));
 			drafts = {
 				...drafts,
-				[d.id]: { displayType: updated.displayType, matchNo: updated.matchNo }
+				[d.id]: {
+					displayType: updated.displayType,
+					matchNo: updated.matchNo,
+					displayTheme: updated.displayTheme
+				}
 			};
 		} catch {
 			saveError = $_('bildschirme.error_save');
@@ -98,17 +392,18 @@
 		}
 	}
 
-	async function unassign(d: Device) {
-		if (unassigningId) return;
-		unassigningId = d.id;
+	async function confirmUnassign() {
+		if (!unassignTarget) return;
+		unassigning = true;
 		saveError = null;
 		try {
-			await bildschirmeApi.unassign(auth.accessToken!, fixtureId, d.id);
-			devices = devices.filter((x) => x.id !== d.id);
+			await bildschirmeApi.unassign(auth.accessToken!, fixtureId, unassignTarget.id);
+			devices = devices.filter((x) => x.id !== unassignTarget!.id);
+			unassignTarget = null;
 		} catch {
 			saveError = $_('bildschirme.error_unassign');
 		} finally {
-			unassigningId = null;
+			unassigning = false;
 		}
 	}
 
@@ -120,7 +415,11 @@
 		try {
 			const d = await bildschirmeApi.assign(auth.accessToken!, fixtureId, newDeviceCode.trim());
 			devices = [...devices, d];
-			drafts = { ...drafts, [d.id]: { displayType: d.displayType, matchNo: d.matchNo } };
+			drafts = {
+				...drafts,
+				[d.id]: { displayType: d.displayType, matchNo: d.matchNo, displayTheme: d.displayTheme }
+			};
+			customNames = { ...customNames, [d.id]: recallCustomName(d.id) };
 			newDeviceCode = '';
 		} catch (err) {
 			assignError =
@@ -132,29 +431,76 @@
 		}
 	}
 
-	// Token wird erst beim Klick generiert (nicht vorab für alle Scheiben) — vermeidet
-	// unnötige Requests für Scheiben, deren QR-Code nie geöffnet wird.
+	// Kein Token-Request mehr nötig (Issue #22) — das QR kodiert direkt die `fixtureUniqueId` der
+	// Veranstaltung + Scheibennummer, genau das, was der Bearer-freie Spotter-Endpunkt laut
+	// Fawkes-Spec ohnehin schon erwartet (siehe binocular.ts).
 	async function openTabletModal(scheibennummer: number) {
 		qrScheibennummer = scheibennummer;
 		qrModalOpen = true;
 		qrLoading = true;
 		qrError = null;
 		qrDataUrl = null;
+		qrUrl = null;
+		resetQrCopyState();
 		try {
-			const pairing = await bildschirmeApi.generateTabletToken(
-				auth.accessToken!,
-				veranstaltungId,
-				scheibennummer
-			);
-			const url = `${window.location.origin}${resolve('/tablet/[token]/[scheibennummer]', {
-				token: pairing.token,
-				scheibennummer: String(pairing.scheibennummer)
-			})}`;
+			if (!veranstaltung) throw new Error('Veranstaltung noch nicht geladen');
+			const url = `${window.location.origin}${resolve(
+				'/tablet/[fixtureUniqueId]/[scheibennummer]',
+				{
+					fixtureUniqueId: veranstaltung.uniqueId,
+					scheibennummer: String(scheibennummer)
+				}
+			)}`;
 			qrDataUrl = await QRCode.toDataURL(url, { width: 280, margin: 1 });
+			qrUrl = url;
 		} catch {
 			qrError = $_('bildschirme.qr_error');
 		} finally {
 			qrLoading = false;
+		}
+	}
+
+	function closeQrModal() {
+		qrModalOpen = false;
+		resetQrCopyState();
+	}
+
+	function resetQrCopyState() {
+		clearTimeout(qrCopyResetTimer);
+		qrCopyState = 'idle';
+	}
+
+	// `navigator.clipboard` gibt es nur in Secure Contexts (HTTPS/`localhost`) — über die LAN-IP
+	// (`http://<ip>:5173`) fehlt es, siehe CLAUDE.md Fake-API-Abschnitt. Deshalb Fallback über das
+	// markierte Eingabefeld + `execCommand('copy')` (veraltet, aber genau für diesen Fall überall
+	// noch unterstützt); klappt auch das nicht, bleibt der Text zum manuellen Kopieren markiert.
+	async function copyQrUrl() {
+		if (!qrUrl) return;
+		clearTimeout(qrCopyResetTimer);
+		let copied = false;
+		if (navigator.clipboard?.writeText) {
+			try {
+				await navigator.clipboard.writeText(qrUrl);
+				copied = true;
+			} catch {
+				/* weiter mit Fallback */
+			}
+		}
+		if (!copied && qrUrlInputEl) {
+			qrUrlInputEl.focus();
+			qrUrlInputEl.select();
+			try {
+				copied = document.execCommand('copy');
+			} catch {
+				copied = false;
+			}
+		}
+		if (copied) {
+			qrCopyState = 'copied';
+			qrCopyResetTimer = setTimeout(() => (qrCopyState = 'idle'), 2000);
+		} else {
+			qrUrlInputEl?.select();
+			qrCopyState = 'manual';
 		}
 	}
 </script>
@@ -190,83 +536,207 @@
 				{@const draft = drafts[d.id]}
 				<Col md={4} sm={6} class="mb-3">
 					<Card class="shadow-sm h-100">
-						<CardBody class="p-3">
-							<div class="d-flex justify-content-between align-items-start mb-2">
-								<div class="fw-bold">
-									{$_('bildschirme.device_label', { values: { id: d.id } })}
-								</div>
-								<Badge
-									color={draft?.displayType === 'Match'
-										? 'success'
-										: draft?.displayType === 'LeagueTable'
-											? 'info'
-											: 'secondary'}
-								>
-									{draft?.displayType === 'Match'
-										? $_('bildschirme.mode_match')
-										: draft?.displayType === 'LeagueTable'
-											? $_('bildschirme.mode_league_table')
-											: $_('bildschirme.mode_none')}
-								</Badge>
+						<CardHeader class="d-flex justify-content-between align-items-center">
+							<div class="fw-bold flex-grow-1 me-2" style="min-width: 0;">
+								{#if editingNameId === d.id}
+									<input
+										bind:this={nameInputEl}
+										type="text"
+										class="form-control form-control-sm"
+										placeholder={autoDeviceName(draft, d.id)}
+										bind:value={nameDraft}
+										onkeydown={(e) => onNameKeydown(e, d.id)}
+										onblur={() => onNameBlur(d.id)}
+									/>
+								{:else}
+									<span class="d-inline-flex align-items-center gap-1 w-100">
+										<span class="text-truncate">{deviceDisplayName(d.id, draft)}</span>
+										<button
+											type="button"
+											class="btn btn-sm btn-link p-0 text-muted flex-shrink-0"
+											aria-label={$_('bildschirme.rename_btn')}
+											onclick={() => startEditName(d.id)}
+										>
+											<i class="bi bi-pencil-fill"></i>
+										</button>
+									</span>
+								{/if}
 							</div>
-
+							<Badge color="secondary" class="flex-shrink-0">
+								{$_('bildschirme.device_label', { values: { id: d.id } })}
+							</Badge>
+						</CardHeader>
+						<CardBody class="p-3">
 							{#if draft}
 								<div class="mb-2">
-									<label class="form-label small mb-1" for="display-type-{d.id}">
+									<div class="form-label small mb-1">
 										{$_('bildschirme.display_type_label')}
-									</label>
-									<select
-										id="display-type-{d.id}"
-										class="form-select form-select-sm"
-										bind:value={draft.displayType}
+									</div>
+									<div
+										class="btn-group w-100"
+										role="group"
+										aria-label={$_('bildschirme.display_type_label')}
 									>
-										<option value="None">{$_('bildschirme.mode_none')}</option>
-										<option value="Match">{$_('bildschirme.mode_match')}</option>
-										<option value="LeagueTable">{$_('bildschirme.mode_league_table')}</option>
-									</select>
+										<input
+											type="radio"
+											class="btn-check"
+											name="display-type-{d.id}"
+											id="display-type-{d.id}-none"
+											autocomplete="off"
+											bind:group={draft.displayType}
+											value="None"
+										/>
+										<label
+											class="btn btn-sm btn-outline-secondary flex-fill"
+											for="display-type-{d.id}-none"
+										>
+											<i class="bi bi-eye-slash"></i>
+											{$_('bildschirme.mode_none')}
+										</label>
+
+										<input
+											type="radio"
+											class="btn-check"
+											name="display-type-{d.id}"
+											id="display-type-{d.id}-match"
+											autocomplete="off"
+											bind:group={draft.displayType}
+											value="Match"
+											onchange={() => restoreLastMatchNo(d.id)}
+										/>
+										<label
+											class="btn btn-sm btn-outline-success flex-fill"
+											for="display-type-{d.id}-match"
+										>
+											<i class="bi bi-people-fill"></i>
+											{$_('bildschirme.mode_match')}
+										</label>
+
+										<input
+											type="radio"
+											class="btn-check"
+											name="display-type-{d.id}"
+											id="display-type-{d.id}-league"
+											autocomplete="off"
+											bind:group={draft.displayType}
+											value="LeagueTable"
+										/>
+										<label
+											class="btn btn-sm btn-outline-info flex-fill"
+											for="display-type-{d.id}-league"
+										>
+											<i class="bi bi-table"></i>
+											{$_('bildschirme.mode_league_table')}
+										</label>
+									</div>
+								</div>
+
+								<div class="mb-2">
+									<div class="form-label small mb-1">
+										{$_('bildschirme.display_theme_label')}
+									</div>
+									<div
+										class="btn-group w-100"
+										role="group"
+										aria-label={$_('bildschirme.display_theme_label')}
+									>
+										<input
+											type="radio"
+											class="btn-check"
+											name="display-theme-{d.id}"
+											id="display-theme-{d.id}-dark"
+											autocomplete="off"
+											bind:group={draft.displayTheme}
+											value="Dark"
+										/>
+										<label
+											class="btn btn-sm btn-outline-dark flex-fill"
+											for="display-theme-{d.id}-dark"
+										>
+											<i class="bi bi-moon-stars-fill"></i>
+											{$_('bildschirme.theme_dark')}
+										</label>
+
+										<input
+											type="radio"
+											class="btn-check"
+											name="display-theme-{d.id}"
+											id="display-theme-{d.id}-light"
+											autocomplete="off"
+											bind:group={draft.displayTheme}
+											value="Light"
+										/>
+										<label
+											class="btn btn-sm btn-outline-warning flex-fill"
+											for="display-theme-{d.id}-light"
+										>
+											<i class="bi bi-sun-fill"></i>
+											{$_('bildschirme.theme_light')}
+										</label>
+									</div>
 								</div>
 
 								{#if draft.displayType === 'Match'}
 									<div class="mb-3">
-										<label class="form-label small mb-1" for="match-no-{d.id}">
+										<div class="form-label small mb-1">
 											{$_('bildschirme.match_no_label')}
-										</label>
-										<input
-											id="match-no-{d.id}"
-											type="number"
-											min="1"
-											class="form-control form-control-sm"
-											value={draft.matchNo ?? ''}
-											oninput={(e) =>
-												(draft.matchNo = e.currentTarget.value
-													? Number(e.currentTarget.value)
-													: null)}
-										/>
+										</div>
+										<div
+											class="btn-group w-100"
+											role="group"
+											aria-label={$_('bildschirme.match_no_label')}
+										>
+											{#each [1, 2, 3, 4] as n (n)}
+												<input
+													type="radio"
+													class="btn-check"
+													name="match-no-{d.id}"
+													id="match-no-{d.id}-{n}"
+													autocomplete="off"
+													bind:group={draft.matchNo}
+													value={n}
+													onchange={() => rememberMatchNo(d.id, n)}
+												/>
+												<label
+													class="btn btn-sm btn-outline-primary flex-fill"
+													for="match-no-{d.id}-{n}"
+												>
+													{begegnungScheiben[n]}
+												</label>
+											{/each}
+										</div>
 									</div>
 								{/if}
-
-								<div class="d-flex gap-2">
-									<Button
-										size="sm"
-										color="success"
-										disabled={savingId === d.id}
-										onclick={() => saveDevice(d)}
-									>
-										{#if savingId === d.id}<Spinner size="sm" class="me-2" />{/if}
-										{$_('bildschirme.save_btn')}
-									</Button>
-									<Button
-										size="sm"
-										color="outline-danger"
-										disabled={unassigningId === d.id}
-										onclick={() => unassign(d)}
-									>
-										{#if unassigningId === d.id}<Spinner size="sm" class="me-2" />{/if}
-										{$_('bildschirme.unassign_btn')}
-									</Button>
-								</div>
 							{/if}
 						</CardBody>
+						{#if draft}
+							<CardFooter>
+								<Row class="g-2">
+									<Col xs={8}>
+										<Button
+											size="sm"
+											color="success"
+											class="w-100"
+											disabled={savingId === d.id}
+											onclick={() => saveDevice(d)}
+										>
+											{#if savingId === d.id}<Spinner size="sm" class="me-2" />{/if}
+											{$_('bildschirme.save_btn')}
+										</Button>
+									</Col>
+									<Col xs={4}>
+										<Button
+											size="sm"
+											color="outline-danger"
+											class="w-100"
+											onclick={() => (unassignTarget = d)}
+										>
+											{$_('bildschirme.unassign_btn')}
+										</Button>
+									</Col>
+								</Row>
+							</CardFooter>
+						{/if}
 					</Card>
 				</Col>
 			{/each}
@@ -303,6 +773,94 @@
 		</Row>
 
 		<h6 class="text-muted text-uppercase small fw-semibold mb-3 mt-4">
+			{$_('bildschirme.transfer_heading')}
+		</h6>
+
+		{#if transferResults}
+			<Alert color="info" class="d-flex justify-content-between align-items-start gap-3">
+				<ul class="mb-0 ps-3">
+					{#each transferResults as r (r.deviceId)}
+						<li class={r.success ? 'text-success' : 'text-danger'}>{r.message}</li>
+					{/each}
+				</ul>
+				<button
+					type="button"
+					class="btn btn-sm btn-link p-0 flex-shrink-0"
+					onclick={() => (transferResults = null)}
+				>
+					{$_('bildschirme.transfer_result_close_btn')}
+				</button>
+			</Alert>
+		{/if}
+
+		<Card class="shadow-sm mb-4">
+			<CardBody class="p-3">
+				{#if otherVeranstaltungenLoading}
+					<Spinner size="sm" />
+				{:else if otherVeranstaltungen.length === 0}
+					<p class="text-muted small mb-0">{$_('bildschirme.transfer_no_other_events')}</p>
+				{:else}
+					<div class="mb-3">
+						<label class="form-label small" for="transfer-source">
+							{$_('bildschirme.transfer_select_label')}
+						</label>
+						<select
+							id="transfer-source"
+							class="form-select form-select-sm"
+							value={transferSourceId ?? ''}
+							onchange={(e) => {
+								const v = e.currentTarget.value;
+								transferSourceId = v ? Number(v) : null;
+								onTransferSourceChange();
+							}}
+						>
+							<option value="">{$_('bildschirme.transfer_select_placeholder')}</option>
+							{#each otherVeranstaltungen as v (v.id)}
+								<option value={v.id}>{v.leagueName} – {v.fixtureName}</option>
+							{/each}
+						</select>
+					</div>
+
+					{#if transferDevicesLoading}
+						<div class="d-flex justify-content-center py-3"><Spinner size="sm" /></div>
+					{:else if transferDevicesError}
+						<Alert color="danger" class="py-1 px-2 small">{transferDevicesError}</Alert>
+					{:else if transferSourceId !== null}
+						{#if transferDevices.length === 0}
+							<p class="text-muted small mb-0">{$_('bildschirme.transfer_no_devices')}</p>
+						{:else}
+							<div class="mb-3">
+								{#each transferDevices as d (d.id)}
+									<div class="form-check">
+										<input
+											type="checkbox"
+											class="form-check-input"
+											id="transfer-device-{d.id}"
+											checked={!!transferSelected[d.id]}
+											onchange={() => toggleTransferDevice(d.id)}
+										/>
+										<label class="form-check-label small" for="transfer-device-{d.id}">
+											{$_('bildschirme.device_label', { values: { id: d.id } })} —
+											{autoDeviceName(d, d.id)}
+										</label>
+									</div>
+								{/each}
+							</div>
+							<Button
+								size="sm"
+								color="primary"
+								disabled={transferSelectedCount === 0}
+								onclick={() => (transferConfirmOpen = true)}
+							>
+								{$_('bildschirme.transfer_btn', { values: { n: transferSelectedCount } })}
+							</Button>
+						{/if}
+					{/if}
+				{/if}
+			</CardBody>
+		</Card>
+
+		<h6 class="text-muted text-uppercase small fw-semibold mb-3 mt-4">
 			{$_('bildschirme.tablets_heading')}
 		</h6>
 		<div class="d-flex flex-wrap gap-2">
@@ -315,8 +873,8 @@
 	{/if}
 </Container>
 
-<Modal isOpen={qrModalOpen} toggle={() => (qrModalOpen = false)}>
-	<ModalHeader toggle={() => (qrModalOpen = false)}>
+<Modal isOpen={qrModalOpen} toggle={closeQrModal}>
+	<ModalHeader toggle={closeQrModal}>
 		{$_('bildschirme.qr_title', { values: { n: qrScheibennummer } })}
 	</ModalHeader>
 	<ModalBody class="text-center">
@@ -327,9 +885,72 @@
 		{:else if qrDataUrl}
 			<img src={qrDataUrl} alt={$_('bildschirme.qr_title', { values: { n: qrScheibennummer } })} />
 			<p class="text-muted small mt-2 mb-0">{$_('bildschirme.qr_hint')}</p>
+			{#if qrUrl}
+				<div class="text-start mt-3">
+					<label class="form-label small mb-1" for="qr-url">
+						{$_('bildschirme.qr_link_label')}
+					</label>
+					<div class="input-group input-group-sm">
+						<input
+							id="qr-url"
+							type="text"
+							class="form-control font-monospace"
+							readonly
+							value={qrUrl}
+							bind:this={qrUrlInputEl}
+							onfocus={(e) => e.currentTarget.select()}
+							onclick={(e) => e.currentTarget.select()}
+						/>
+						<button
+							type="button"
+							class="btn {qrCopyState === 'copied' ? 'btn-success' : 'btn-outline-secondary'}"
+							onclick={copyQrUrl}
+						>
+							<i class="bi {qrCopyState === 'copied' ? 'bi-check2' : 'bi-clipboard'} me-1"></i>
+							{$_('bildschirme.qr_copy_btn')}
+						</button>
+					</div>
+					{#if qrCopyState === 'copied'}
+						<div class="small text-success mt-1">{$_('bildschirme.qr_copied')}</div>
+					{:else if qrCopyState === 'manual'}
+						<div class="small text-warning-emphasis mt-1">{$_('bildschirme.qr_copy_manual')}</div>
+					{/if}
+				</div>
+			{/if}
 		{/if}
 	</ModalBody>
 </Modal>
+
+<ConfirmModal
+	isOpen={unassignTarget !== null}
+	title={$_('bildschirme.unassign_confirm_title')}
+	message={unassignTarget
+		? $_('bildschirme.unassign_confirm', { values: { id: unassignTarget.id } })
+		: ''}
+	confirmLabel={$_('bildschirme.unassign_btn')}
+	cancelLabel={$_('bildschirme.cancel_btn')}
+	confirmColor="danger"
+	loading={unassigning}
+	onConfirm={confirmUnassign}
+	onCancel={() => (unassignTarget = null)}
+/>
+
+<ConfirmModal
+	isOpen={transferConfirmOpen}
+	title={$_('bildschirme.transfer_confirm_title')}
+	message={$_('bildschirme.transfer_confirm', {
+		values: {
+			n: transferSelectedCount,
+			quelle: otherVeranstaltungen.find((v) => v.id === transferSourceId)?.fixtureName ?? ''
+		}
+	})}
+	confirmLabel={$_('bildschirme.transfer_btn', { values: { n: transferSelectedCount } })}
+	cancelLabel={$_('bildschirme.cancel_btn')}
+	confirmColor="primary"
+	loading={transferring}
+	onConfirm={confirmTransfer}
+	onCancel={() => (transferConfirmOpen = false)}
+/>
 
 <style>
 	:global(.border-dashed) {
