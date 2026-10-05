@@ -24,8 +24,10 @@ async function request<T>(
 		const data = await res.json().catch(() => ({}));
 		throw new APIError(res.status, data);
 	}
-	if (res.status === 204) return undefined as T;
-	return res.json();
+	// Fawkes antwortet bei Aktionen ohne Response-Schema (z. B. POST .../matchplaychart, PUT .../score)
+	// mit bare 200 und leerem Body — `res.json()` würde darauf werfen.
+	const text = await res.text();
+	return (text ? JSON.parse(text) : undefined) as T;
 }
 
 export const apiClient = {

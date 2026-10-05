@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import { matchkontrolleApi } from './matchkontrolle';
 
 /**
  * Verwaltungsoberfläche — einziger Bereich mit echtem Benutzerkonto-Login (siehe
@@ -10,20 +11,10 @@ import { apiClient } from './client';
  * `GetFixtureResponse`. Name der Veranstaltung ist Liganame + Wettkampftag, kein einzelnes
  * `name`-Feld wie in einer früheren, unbestätigten Annahme dieses Moduls.
  *
- * Pfad-Sync 2026-09-28 (erster Docker-Release, `docs/Fawkes-OpenApi.json` neu gezogen): Fawkes
- * schreibt Controller-Routen jetzt klein/Plural (`/fixtures` statt `/Fixture`) — reiner
- * Pfad-Umbau, Feld-Shapes unverändert. `getMatchPlayChart`/`createMatchPlayChart` bewusst NICHT
- * mitgezogen: `GET /MatchPlayChart/{fixtureId}` existiert live gar nicht mehr (nur noch
- * `POST /fixtures/{fixtureId}/matchplaychart`, mit geänderten Team-Feldern —
- * `setPointsWon`/`setPointsLost`/`matchPointsWon`/`matchPointsLost` statt `setPoints`/
- * `matchPoints`), und `GET /fixtures/{fixtureId}/rounds/{roundNo}` wirft serverseitig
- * durchgängig `NotImplementedException` — offene Fragen beim Backend-Dev (Joplin), bevor hier was
- * umgebaut wird.
- *
- * Geklärt (Backend-Dev, 2026-09-28): Ein Lese-Endpunkt für den Spielplan kommt NICHT. Stattdessen
- * setzt der Client ihn aus `GET /fixtures/{fixtureId}/rounds/{roundNo}` zusammen: `roundNo` ab 1
- * hochzählen, bis keine Runde mehr kommt. Diese Endpunkte sind live aber noch nicht implementiert
- * (siehe oben) — `getMatchPlayChart` erst umbauen, wenn das Backend sie ausliefert.
+ * Spielplan (Stand 2026-10-05, Backend live): es gibt keinen Lese-Endpunkt. Angelegt wird er per
+ * `POST /fixtures/{fixtureId}/matchplaychart`, gelesen wird er zusammengesetzt aus
+ * `GET /fixtures/{fixtureId}/rounds/{roundNo}` (`matchkontrolleApi.loadRounds`). Die initialen
+ * Tabellenpunkte der Teams sind daher NICHT zurücklesbar — nur Mannschaftsnamen und Rundenzahl.
  */
 
 export interface LigaVerbindung {
@@ -49,7 +40,7 @@ export interface Veranstaltung {
 	 * echtes Backend zu `undefined`. `datenquelle`/`liga` bleiben bewusst reine
 	 * Verwaltungs-UI-Konzepte: Liga-Verbindung hat laut Issue #14 keinen Fawkes-Endpunkt (bleibt
 	 * vollständig Mock-only), "tabelle" ist hier nur eine Vorschau für die Übersichtsliste — die
-	 * eigentliche Quelle ist `GET /MatchPlayChart/{fixtureId}` (separat abgefragt, siehe unten).
+	 * eigentliche Quelle sind die Runden (`getMatchPlayChart`, siehe unten).
 	 */
 	datenquelle?: 'tabelle' | 'liga' | null;
 	liga?: LigaVerbindung;
@@ -78,16 +69,18 @@ export interface FixtureUser {
 /** `Fawkes.Api.Controllers.MatchPlayChartController.Team` — Werte VOR dieser Fixture. */
 export interface MatchPlayChartTeam {
 	name: string;
-	setPoints: number;
-	matchPoints: number;
+	setPointsWon: number;
+	setPointsLost: number;
+	matchPointsWon: number;
+	matchPointsLost: number;
 }
 
+/** Aus den Runden rekonstruierter Spielplan (kein eigener GET, siehe Modulkommentar). */
 export interface MatchPlayChart {
 	fixtureId: number;
-	teams: MatchPlayChartTeam[];
-	/** 1-indiziert pro Runde, 0 = leere Scheibe — hier bewusst nie gesetzt, siehe
-	 * `createMatchPlayChart`. */
-	targetAssignments?: number[][];
+	/** In Reihenfolge der Scheiben in Runde 1; leer = noch kein Spielplan angelegt. */
+	teamNames: string[];
+	roundCount: number;
 }
 
 export const veranstaltungApi = {
@@ -105,31 +98,33 @@ export const veranstaltungApi = {
 
 	remove: (token: string, id: number) => apiClient.delete<void>(`/fixtures/${id}`, token),
 
-	// ACHTUNG (Stand 2026-09-28): Pfad+Feld-Shape hier sind gegen die aktuelle Docker-Instanz
-	// NICHT mehr korrekt (`GET /MatchPlayChart/{fixtureId}` existiert live nicht mehr, siehe
-	// Kommentar oben am Modul) — bewusst unangetastet gelassen, bis die offenen Fragen beim
-	// Backend-Dev geklärt sind, statt auf Verdacht umzubauen. Läuft weiter nur gegen die Mocks.
-	// Ziel-Umbau, sobald `GET /fixtures/{fixtureId}/rounds/{roundNo}` live funktioniert: statt
-	// eines eigenen GETs Runden ab `roundNo` 1 laden, bis keine mehr kommt, und daraus den
-	// Spielplan zusammensetzen (siehe Kommentar oben am Modul).
-	getMatchPlayChart: (token: string, fixtureId: number) =>
-		apiClient.get<MatchPlayChart>(`/MatchPlayChart/${fixtureId}`, token),
+	// Kein GET-Endpunkt: Runden ab 1 laden, bis keine mehr kommt (siehe Modulkommentar).
+	getMatchPlayChart: async (token: string, fixtureId: number): Promise<MatchPlayChart> => {
+		const rounds = await matchkontrolleApi.loadRounds(token, fixtureId);
+		const firstRound = [...(rounds[0]?.targets ?? [])].sort((a, b) => a.targetNo - b.targetNo);
+		const teamNames = [
+			...new Set(firstRound.map((t) => t.teamName).filter((n): n is string => !!n))
+		];
+		return { fixtureId, teamNames, roundCount: rounds.length };
+	},
 
 	// "Spielplan anlegen": Tabelle eintragen -> Backend berechnet Begegnungen/Matches
 	// (targetAssignments bewusst weggelassen, siehe FACHLICHKEIT.md "keine eigenen Ergebnisse
-	// berechnen"). Ohne hardOverride schlägt der Request fehl, sobald für diese Fixture schon
-	// Daten existieren. hardOverride: true überschreibt trotzdem — löscht dabei alle bereits
+	// berechnen"). Antwort: bare 200 ohne Body. Ohne hardOverride schlägt der Request mit 400
+	// ("Match play chart already exists ...") fehl, sobald für diese Fixture schon Daten
+	// existieren. hardOverride: true überschreibt trotzdem — löscht dabei alle bereits
 	// erfassten Ergebnisse und erstellt den Spielplan neu (mit Backend-Entwickler bestätigt,
 	// UI muss also vor dem Aufruf warnen, siehe veranstaltungen/[id]/+page.svelte).
-	// ACHTUNG (Stand 2026-09-28): ebenfalls unangetastet trotz bekanntem Pfad-/Feld-Drift, siehe
-	// oben — hängt an derselben offenen Klärung wie getMatchPlayChart.
+	// Ohne `targetAssignments` kennt das Backend (2026-10-05) nur einen Standard-Spielplan für
+	// 7 oder 8 Mannschaften, sonst 400 "No default match play chart available for N teams." —
+	// Achtung: mit hardOverride ist der alte Spielplan dann bereits gelöscht.
 	createMatchPlayChart: (
 		token: string,
 		fixtureId: number,
 		teams: MatchPlayChartTeam[],
 		hardOverride = false
 	) =>
-		apiClient.post<MatchPlayChart>(`/MatchPlayChart/${fixtureId}`, { teams, hardOverride }, token),
+		apiClient.post<void>(`/fixtures/${fixtureId}/matchplaychart`, { teams, hardOverride }, token),
 
 	// Kein Fawkes-Endpunkt für Ligaverwaltungs-Verbindung (siehe Issue #14) — bleibt vollständig
 	// Mock-only, eigener Custom-Pfad.

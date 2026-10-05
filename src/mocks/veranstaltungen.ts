@@ -3,7 +3,6 @@ import type {
 	Veranstaltung,
 	CreateFixtureData,
 	FixtureUser,
-	MatchPlayChart,
 	MatchPlayChartTeam
 } from '$lib/api/veranstaltung';
 import type { LeagueTablePosition } from '$lib/api/display';
@@ -50,6 +49,12 @@ interface StoredDevice extends Device {
  * `currentRoundNo` (Fawkes-`roundNo`) abgeleitet, nicht mehr selbst persistiert. */
 type StoredMatch = Omit<Match, 'aktiv'>;
 
+/** Initiale Tabelle einer Fixture (Eingabe von `POST .../matchplaychart`, nicht zurücklesbar). */
+interface StoredChart {
+	fixtureId: number;
+	teams: MatchPlayChartTeam[];
+}
+
 interface State {
 	veranstaltungen: Veranstaltung[];
 	matches: StoredMatch[];
@@ -58,7 +63,7 @@ interface State {
 	/** Veranstaltungs-ID (String) -> Fixture-Mitglieder (Fawkes `GetUserResponse[]`, Issue #13). */
 	fixtureUsers: Record<string, FixtureUser[]>;
 	/** Veranstaltungs-ID (String) -> initiale Tabelle (`GetMatchPlayChartResponse`, Issue #14). */
-	matchPlayCharts: Record<string, MatchPlayChart>;
+	matchPlayCharts: Record<string, StoredChart>;
 	/** Veranstaltungs-ID (String) -> Ligatabelle, wie sie ein `LeagueTable`-Gerät anzeigt (Issue
 	 * #18) — eigene Datenquelle ggü. `matchPlayCharts` (andere Feldnamen, siehe `display.ts`),
 	 * bewusst nur für Veranstaltungen mit `datenquelle === 'liga'` gepflegt. */
@@ -336,14 +341,62 @@ function seedState(): State {
 			'1001': {
 				fixtureId: 1001,
 				teams: [
-					{ name: 'BSC Abendau', setPoints: 15, matchPoints: 14 },
-					{ name: 'SV Scharfhaus', setPoints: 7, matchPoints: 11 },
-					{ name: 'SGes Schützenschaft', setPoints: -5, matchPoints: 11 },
-					{ name: 'BS Hunshausen', setPoints: 12, matchPoints: 6 },
-					{ name: 'SV Vogelwiese', setPoints: 8, matchPoints: 8 },
-					{ name: 'BS Weiß-Blau München', setPoints: -10, matchPoints: 2 },
-					{ name: 'SGi Wuppenhausen', setPoints: -22, matchPoints: 2 },
-					{ name: 'BSC Rot-Rot Beerendorf', setPoints: -15, matchPoints: 0 }
+					{
+						name: 'BSC Abendau',
+						setPointsWon: 15,
+						setPointsLost: 0,
+						matchPointsWon: 14,
+						matchPointsLost: 0
+					},
+					{
+						name: 'SV Scharfhaus',
+						setPointsWon: 7,
+						setPointsLost: 0,
+						matchPointsWon: 11,
+						matchPointsLost: 0
+					},
+					{
+						name: 'SGes Schützenschaft',
+						setPointsWon: 0,
+						setPointsLost: 5,
+						matchPointsWon: 11,
+						matchPointsLost: 0
+					},
+					{
+						name: 'BS Hunshausen',
+						setPointsWon: 12,
+						setPointsLost: 0,
+						matchPointsWon: 6,
+						matchPointsLost: 0
+					},
+					{
+						name: 'SV Vogelwiese',
+						setPointsWon: 8,
+						setPointsLost: 0,
+						matchPointsWon: 8,
+						matchPointsLost: 0
+					},
+					{
+						name: 'BS Weiß-Blau München',
+						setPointsWon: 0,
+						setPointsLost: 10,
+						matchPointsWon: 2,
+						matchPointsLost: 0
+					},
+					{
+						name: 'SGi Wuppenhausen',
+						setPointsWon: 0,
+						setPointsLost: 22,
+						matchPointsWon: 2,
+						matchPointsLost: 0
+					},
+					{
+						name: 'BSC Rot-Rot Beerendorf',
+						setPointsWon: 0,
+						setPointsLost: 15,
+						matchPointsWon: 0,
+						matchPointsLost: 0
+					}
 				]
 			}
 		},
@@ -528,28 +581,26 @@ function ensureDemoMatch(state: State, v: Veranstaltung, teams: MatchPlayChartTe
 	state.currentRoundNo[id] = 1;
 }
 
-export function getMatchPlayChart(fixtureId: number): MatchPlayChart | undefined {
-	return load().matchPlayCharts[String(fixtureId)];
-}
-
 /**
- * Sortierung wie in einer echten Ligatabelle üblich: Matchpunkte absteigend, bei Gleichstand
- * Satzpunkte absteigend als Tiebreak. `MatchPlayChartTeam` kennt nur je eine Netto-Zahl (Admin
- * gibt keine Plus/Minus-Aufteilung ein, siehe `saveTabelle`), deshalb Plus/Minus hier synthetisch
- * aus dem Vorzeichen rekonstruiert (negativ -> komplett in Minus, sonst komplett in Plus) — reine
- * Mock-Annäherung, keine echte Sieg/Niederlage-Historie. `rankDifference` bleibt immer 0 — der
+ * Sortierung wie in einer echten Ligatabelle üblich: Matchpunkte (netto) absteigend, bei
+ * Gleichstand Satzpunkte (netto) absteigend als Tiebreak. `rankDifference` bleibt immer 0 — der
  * Mock kennt keine Platzierungshistorie eines vorigen Spieltags, aus der sich eine echte
  * Bewegung ableiten ließe.
  */
 function toLeagueTablePositions(teams: MatchPlayChartTeam[]): LeagueTablePosition[] {
+	const net = (won: number, lost: number) => won - lost;
 	return [...teams]
-		.sort((a, b) => b.matchPoints - a.matchPoints || b.setPoints - a.setPoints)
+		.sort(
+			(a, b) =>
+				net(b.matchPointsWon, b.matchPointsLost) - net(a.matchPointsWon, a.matchPointsLost) ||
+				net(b.setPointsWon, b.setPointsLost) - net(a.setPointsWon, a.setPointsLost)
+		)
 		.map((team, i) => ({
 			teamName: team.name,
-			setPointsWon: Math.max(team.setPoints, 0),
-			setPointsLost: Math.max(-team.setPoints, 0),
-			matchPointsWon: Math.max(team.matchPoints, 0),
-			matchPointsLost: Math.max(-team.matchPoints, 0),
+			setPointsWon: team.setPointsWon,
+			setPointsLost: team.setPointsLost,
+			matchPointsWon: team.matchPointsWon,
+			matchPointsLost: team.matchPointsLost,
 			rank: i + 1,
 			rankDifference: 0
 		}));
@@ -571,18 +622,23 @@ export function getLeagueTable(veranstaltungId: string): LeagueTablePosition[] {
 }
 
 /**
- * Entspricht `POST /MatchPlayChart/{fixtureId}` ohne `hardOverride` (Issue #14): schlägt fehl,
+ * Entspricht `POST /fixtures/{fixtureId}/matchplaychart` ohne `hardOverride` (Issue #14): schlägt fehl,
  * wenn für diese Fixture schon eine Tabelle existiert — kein Reset-/Lösch-Pfad hier, weil dafür
- * kein echter Endpunkt verifiziert ist (siehe `veranstaltung.ts`). `undefined` = Konflikt.
+ * kein echter Endpunkt verifiziert ist (siehe `veranstaltung.ts`). Rückgabe: `'exists'` =
+ * Konflikt, `'unsupported'` = keine Standard-Auslosung für diese Mannschaftszahl (Backend
+ * kennt 2026-10-05 nur 7/8), sonst `undefined` bei Erfolg.
  */
 export function createMatchPlayChart(
 	v: Veranstaltung,
 	teams: MatchPlayChartTeam[],
 	hardOverride = false
-): MatchPlayChart | undefined {
+): 'exists' | 'unsupported' | undefined {
 	const state = load();
 	const id = String(v.id);
-	if (state.matchPlayCharts[id] && !hardOverride) return undefined;
+	if (state.matchPlayCharts[id] && !hardOverride) return 'exists';
+	// Spiegelt das echte Backend: ohne `targetAssignments` gibt es nur den Standard-Spielplan für
+	// 7/8 Mannschaften. (Das echte Backend löscht den alten Spielplan davor schon — hier nicht.)
+	if (teams.length !== 7 && teams.length !== 8) return 'unsupported';
 
 	if (hardOverride) {
 		// Spiegelt das echte `hardOverride`-Verhalten (Rücksprache Gero, 2026-08-31): löscht
@@ -591,8 +647,7 @@ export function createMatchPlayChart(
 		delete state.currentRoundNo[id];
 	}
 
-	const chart: MatchPlayChart = { fixtureId: v.id, teams };
-	state.matchPlayCharts[id] = chart;
+	state.matchPlayCharts[id] = { fixtureId: v.id, teams };
 
 	const target = state.veranstaltungen.find((x) => x.id === v.id) ?? v;
 	target.datenquelle = 'tabelle';
@@ -600,7 +655,7 @@ export function createMatchPlayChart(
 	ensureDemoMatch(state, target, teams);
 
 	persist(state);
-	return chart;
+	return undefined;
 }
 
 export function connectLiga(
@@ -750,7 +805,7 @@ export function begegnungenForMatch(veranstaltungId: string, matchNo: number): B
 
 /**
  * Entspricht `GET /fixtures/{fixtureId}/rounds/{roundNo}` (Fawkes-`DosController`, Issue #22) —
- * `undefined` = Runde existiert nicht. Liefert die flache Scheiben-Liste, wie es die echte API
+ * leeres Array = Runde existiert nicht (wie das echte Backend: 200 mit `targets: []`, kein 404). Liefert die flache Scheiben-Liste, wie es die echte API
  * auch tut (keine Begegnungs-Paarung, die macht der Client, siehe `matchkontrolle.ts`).
  *
  * Satzpunkte kommen über `berechneMatchStand` (`shared-state.ts`) — bislang nur von
@@ -760,9 +815,9 @@ export function begegnungenForMatch(veranstaltungId: string, matchNo: number): B
  * der Client bekommt nur das fertige Ergebnis. Kein zirkulärer Import: `shared-state.ts`
  * importiert selbst nichts aus dieser Datei.
  */
-export function getRoundInfo(veranstaltungId: string, roundNo: number): RoundTarget[] | undefined {
+export function getRoundInfo(veranstaltungId: string, roundNo: number): RoundTarget[] {
 	const begegnungen = begegnungenForMatch(veranstaltungId, roundNo);
-	if (begegnungen.length === 0) return undefined;
+	if (begegnungen.length === 0) return [];
 
 	const targets: RoundTarget[] = [];
 	for (const b of begegnungen) {

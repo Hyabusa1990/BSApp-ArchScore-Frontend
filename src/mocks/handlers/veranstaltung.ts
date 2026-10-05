@@ -10,7 +10,6 @@ import {
 	createVeranstaltung,
 	findVeranstaltung,
 	getCurrentRoundNo,
-	getMatchPlayChart,
 	getRoundInfo,
 	isFixtureOwner,
 	removeFixtureUser,
@@ -31,9 +30,8 @@ import {
  * (Issue #14, Pfad-Sync 2026-09-28: Fawkes schreibt Controller-Routen jetzt klein/Plural).
  * `/veranstaltungen/{id}/...` bleiben eigene, nicht in der Spec vorhandene Sub-Ressourcen
  * (Matches/Bildschirme/Tablet-Pairing/Liga-Verbindung) — ihr `:id` ist seit #14 einfach die
- * stringifizierte Fixture-ID. `/MatchPlayChart/{fixtureId}` bewusst NICHT mitgezogen — siehe
- * ACHTUNG-Kommentare bei `veranstaltungApi.getMatchPlayChart`/`createMatchPlayChart`
- * (`$lib/api/veranstaltung.ts`), offene Backend-Klärung.
+ * stringifizierte Fixture-ID. `POST /fixtures/{id}/matchplaychart` und die Runden-Endpunkte
+ * folgen dem Backend-Stand vom 2026-10-05 (`$lib/api/veranstaltung.ts`).
  */
 
 function requireUser(request: Request): User | undefined {
@@ -110,21 +108,10 @@ export const veranstaltungHandlers = [
 		return new HttpResponse(null, { status: 204 });
 	}),
 
-	http.get(`${API_URL}/MatchPlayChart/:fixtureId`, ({ request, params }) => {
-		const user = requireUser(request);
-		if (!user) return unauthorized();
-		const v = findVeranstaltung(user, Number(params.fixtureId));
-		if (!v) return notFound();
-		const chart = getMatchPlayChart(v.id);
-		if (!chart)
-			return HttpResponse.json({ detail: 'Noch keine Tabelle angelegt' }, { status: 404 });
-		return HttpResponse.json(chart);
-	}),
-
-	// Ohne hardOverride -> 409, falls für diese Fixture schon eine Tabelle existiert
-	// (Standardverhalten laut Spec: Fehler statt Überschreiben). Mit hardOverride: true wird
-	// überschrieben und alle bisher erfassten Ergebnisse gelöscht, siehe createMatchPlayChart.
-	http.post(`${API_URL}/MatchPlayChart/:fixtureId`, async ({ request, params }) => {
+	// Ohne hardOverride -> 400, falls für diese Fixture schon eine Tabelle existiert (wie das
+	// echte Backend, kein 409). Mit hardOverride: true wird überschrieben und alle bisher erfassten
+	// Ergebnisse gelöscht, siehe createMatchPlayChart. Erfolg = bare 200 ohne Body.
+	http.post(`${API_URL}/fixtures/:fixtureId/matchplaychart`, async ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
 		const v = findVeranstaltung(user, Number(params.fixtureId));
@@ -136,14 +123,22 @@ export const veranstaltungHandlers = [
 		if (!Array.isArray(body.teams) || body.teams.length === 0) {
 			return HttpResponse.json({ detail: 'teams fehlt oder ist leer' }, { status: 422 });
 		}
-		const chart = createMatchPlayChart(v, body.teams, body.hardOverride === true);
-		if (!chart) {
+		const result = createMatchPlayChart(v, body.teams, body.hardOverride === true);
+		if (result === 'exists') {
 			return HttpResponse.json(
-				{ detail: 'Für diese Fixture existiert bereits eine Tabelle' },
-				{ status: 409 }
+				{
+					message: `Match play chart already exists for fixture ${v.id}. Use hardOverride to force creation.`
+				},
+				{ status: 400 }
 			);
 		}
-		return HttpResponse.json(chart);
+		if (result === 'unsupported') {
+			return HttpResponse.json(
+				{ message: `No default match play chart available for ${body.teams.length} teams.` },
+				{ status: 400 }
+			);
+		}
+		return new HttpResponse(null, { status: 200 });
 	}),
 
 	http.post(`${API_URL}/veranstaltungen/:id/liga`, async ({ request, params }) => {
@@ -164,8 +159,8 @@ export const veranstaltungHandlers = [
 		const v = findVeranstaltung(user, Number(params.fixtureId));
 		if (!v) return notFound();
 		const roundNo = Number(params.roundNo);
+		// Nicht existierende Runde: wie das echte Backend 200 mit leerem `targets` (kein 404).
 		const targets = getRoundInfo(String(v.id), roundNo);
-		if (!targets) return HttpResponse.json({ detail: 'Runde nicht gefunden' }, { status: 404 });
 		return HttpResponse.json({ fixtureId: v.id, roundNo, targets });
 	}),
 

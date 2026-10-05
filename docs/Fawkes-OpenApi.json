@@ -1879,7 +1879,8 @@
 						"type": "array",
 						"items": {
 							"type": "integer",
-							"format": "int32"
+							"format": "int32",
+							"nullable": true
 						},
 						"description": "The set scores for the team on this target.",
 						"nullable": true
@@ -1888,17 +1889,14 @@
 				"additionalProperties": false
 			},
 			"Fawkes.Api.Controllers.DosController.UpdateSetScoreRequest": {
-				"required": ["confirmed", "score"],
+				"required": ["score"],
 				"type": "object",
 				"properties": {
 					"score": {
 						"type": "integer",
 						"description": "The score to set for the specified set. This is the new score that will be recorded for the set.",
-						"format": "int32"
-					},
-					"confirmed": {
-						"type": "boolean",
-						"description": "Indicates whether the score has been confirmed. If true, set points will be awarded to the team based on the score. If false, the score is still provisional and may be subject to change."
+						"format": "int32",
+						"nullable": true
 					}
 				},
 				"additionalProperties": false
