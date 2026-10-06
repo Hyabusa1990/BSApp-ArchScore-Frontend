@@ -1,13 +1,6 @@
 <script lang="ts">
-	import {
-		Modal,
-		ModalHeader,
-		ModalBody,
-		ModalFooter,
-		Button,
-		Icon,
-		Spinner
-	} from '@sveltestrap/sveltestrap';
+	import { Button, Icon, Spinner } from '@sveltestrap/sveltestrap';
+	import AppModal from './AppModal.svelte';
 	import type { Snippet } from 'svelte';
 
 	/**
@@ -48,19 +41,17 @@
 	}: Props = $props();
 </script>
 
-<Modal {isOpen} toggle={onCancel} centered>
-	<ModalHeader toggle={onCancel}>
+<AppModal {isOpen} toggle={onCancel} centered>
+	{#snippet header()}
 		<Icon name={icon} class="text-{confirmColor} me-2" />
 		{title}
-	</ModalHeader>
-	<ModalBody>
-		{#if children}
-			{@render children()}
-		{:else}
-			<p class="mb-0">{message}</p>
-		{/if}
-	</ModalBody>
-	<ModalFooter>
+	{/snippet}
+	{#if children}
+		{@render children()}
+	{:else}
+		<p class="mb-0">{message}</p>
+	{/if}
+	{#snippet footer()}
 		<Button color="outline-secondary" disabled={loading} onclick={onCancel}>
 			{cancelLabel}
 		</Button>
@@ -68,5 +59,5 @@
 			{#if loading}<Spinner size="sm" class="me-2" />{/if}
 			{confirmLabel}
 		</Button>
-	</ModalFooter>
-</Modal>
+	{/snippet}
+</AppModal>

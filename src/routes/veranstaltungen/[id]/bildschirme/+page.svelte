@@ -13,6 +13,7 @@
 	import { APIError } from '$lib/api/client';
 	import QRCode from 'qrcode';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import AppModal from '$lib/components/AppModal.svelte';
 	import {
 		Container,
 		Row,
@@ -24,10 +25,7 @@
 		Alert,
 		Button,
 		Spinner,
-		Badge,
-		Modal,
-		ModalHeader,
-		ModalBody
+		Badge
 	} from '@sveltestrap/sveltestrap';
 
 	let { data } = $props<{ data: { id: string } }>();
@@ -873,53 +871,51 @@
 	{/if}
 </Container>
 
-<Modal isOpen={qrModalOpen} toggle={closeQrModal}>
-	<ModalHeader toggle={closeQrModal}>
+<AppModal isOpen={qrModalOpen} toggle={closeQrModal} bodyClass="text-center">
+	{#snippet header()}
 		{$_('bildschirme.qr_title', { values: { n: qrScheibennummer } })}
-	</ModalHeader>
-	<ModalBody class="text-center">
-		{#if qrLoading}
-			<Spinner />
-		{:else if qrError}
-			<Alert color="danger">{qrError}</Alert>
-		{:else if qrDataUrl}
-			<img src={qrDataUrl} alt={$_('bildschirme.qr_title', { values: { n: qrScheibennummer } })} />
-			<p class="text-muted small mt-2 mb-0">{$_('bildschirme.qr_hint')}</p>
-			{#if qrUrl}
-				<div class="text-start mt-3">
-					<label class="form-label small mb-1" for="qr-url">
-						{$_('bildschirme.qr_link_label')}
-					</label>
-					<div class="input-group input-group-sm">
-						<input
-							id="qr-url"
-							type="text"
-							class="form-control font-monospace"
-							readonly
-							value={qrUrl}
-							bind:this={qrUrlInputEl}
-							onfocus={(e) => e.currentTarget.select()}
-							onclick={(e) => e.currentTarget.select()}
-						/>
-						<button
-							type="button"
-							class="btn {qrCopyState === 'copied' ? 'btn-success' : 'btn-outline-secondary'}"
-							onclick={copyQrUrl}
-						>
-							<i class="bi {qrCopyState === 'copied' ? 'bi-check2' : 'bi-clipboard'} me-1"></i>
-							{$_('bildschirme.qr_copy_btn')}
-						</button>
-					</div>
-					{#if qrCopyState === 'copied'}
-						<div class="small text-success mt-1">{$_('bildschirme.qr_copied')}</div>
-					{:else if qrCopyState === 'manual'}
-						<div class="small text-warning-emphasis mt-1">{$_('bildschirme.qr_copy_manual')}</div>
-					{/if}
+	{/snippet}
+	{#if qrLoading}
+		<Spinner />
+	{:else if qrError}
+		<Alert color="danger">{qrError}</Alert>
+	{:else if qrDataUrl}
+		<img src={qrDataUrl} alt={$_('bildschirme.qr_title', { values: { n: qrScheibennummer } })} />
+		<p class="text-muted small mt-2 mb-0">{$_('bildschirme.qr_hint')}</p>
+		{#if qrUrl}
+			<div class="text-start mt-3">
+				<label class="form-label small mb-1" for="qr-url">
+					{$_('bildschirme.qr_link_label')}
+				</label>
+				<div class="input-group input-group-sm">
+					<input
+						id="qr-url"
+						type="text"
+						class="form-control font-monospace"
+						readonly
+						value={qrUrl}
+						bind:this={qrUrlInputEl}
+						onfocus={(e) => e.currentTarget.select()}
+						onclick={(e) => e.currentTarget.select()}
+					/>
+					<button
+						type="button"
+						class="btn {qrCopyState === 'copied' ? 'btn-success' : 'btn-outline-secondary'}"
+						onclick={copyQrUrl}
+					>
+						<i class="bi {qrCopyState === 'copied' ? 'bi-check2' : 'bi-clipboard'} me-1"></i>
+						{$_('bildschirme.qr_copy_btn')}
+					</button>
 				</div>
-			{/if}
+				{#if qrCopyState === 'copied'}
+					<div class="small text-success mt-1">{$_('bildschirme.qr_copied')}</div>
+				{:else if qrCopyState === 'manual'}
+					<div class="small text-warning-emphasis mt-1">{$_('bildschirme.qr_copy_manual')}</div>
+				{/if}
+			</div>
 		{/if}
-	</ModalBody>
-</Modal>
+	{/if}
+</AppModal>
 
 <ConfirmModal
 	isOpen={unassignTarget !== null}

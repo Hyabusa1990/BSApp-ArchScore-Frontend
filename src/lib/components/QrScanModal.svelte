@@ -2,7 +2,8 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { _ } from 'svelte-i18n';
-	import { Modal, ModalHeader, ModalBody, Alert, Button } from '@sveltestrap/sveltestrap';
+	import { Alert, Button } from '@sveltestrap/sveltestrap';
+	import AppModal from './AppModal.svelte';
 	import QrScanner from 'qr-scanner';
 
 	/**
@@ -92,32 +93,30 @@
 	}
 </script>
 
-<Modal {isOpen} toggle={onClose}>
-	<ModalHeader toggle={onClose}>{$_('qr_scan.title')}</ModalHeader>
-	<ModalBody>
-		{#if scanState === 'confirm'}
-			<div class="text-center py-3">
-				<i class="bi bi-qr-code-scan fs-1 d-block mb-3"></i>
-				<p class="mb-3">{$_('qr_scan.confirm_message')}</p>
-				<div class="d-flex gap-2 justify-content-center">
-					<Button color="outline-secondary" onclick={onClose}>
-						{$_('qr_scan.confirm_cancel')}
-					</Button>
-					<Button color="primary" onclick={confirmSwitch}>
-						{$_('qr_scan.confirm_switch')}
-					</Button>
-				</div>
+<AppModal {isOpen} toggle={onClose}>
+	{#snippet header()}{$_('qr_scan.title')}{/snippet}
+	{#if scanState === 'confirm'}
+		<div class="text-center py-3">
+			<i class="bi bi-qr-code-scan fs-1 d-block mb-3"></i>
+			<p class="mb-3">{$_('qr_scan.confirm_message')}</p>
+			<div class="d-flex gap-2 justify-content-center">
+				<Button color="outline-secondary" onclick={onClose}>
+					{$_('qr_scan.confirm_cancel')}
+				</Button>
+				<Button color="primary" onclick={confirmSwitch}>
+					{$_('qr_scan.confirm_switch')}
+				</Button>
 			</div>
-		{:else}
-			<div class="qr-video-wrap ratio ratio-1x1">
-				<video bind:this={videoEl} class="w-100 h-100" muted playsinline></video>
-			</div>
-			{#if errorMsg}
-				<Alert color="danger" class="mt-3 mb-0">{errorMsg}</Alert>
-			{/if}
+		</div>
+	{:else}
+		<div class="qr-video-wrap ratio ratio-1x1">
+			<video bind:this={videoEl} class="w-100 h-100" muted playsinline></video>
+		</div>
+		{#if errorMsg}
+			<Alert color="danger" class="mt-3 mb-0">{errorMsg}</Alert>
 		{/if}
-	</ModalBody>
-</Modal>
+	{/if}
+</AppModal>
 
 <style>
 	.qr-video-wrap {
