@@ -98,6 +98,7 @@
 	"display": {
 		"page_title": "Spectator Monitor",
 		"load_error": "Connection to the server failed.",
+		"auth_error": "Display authentication failed — retrying shortly.",
 		"pairing_hint": "Assign this code in the device management",
 		"pairing_waiting": "Waiting for assignment…",
 		"idle_hint": "No match assigned",

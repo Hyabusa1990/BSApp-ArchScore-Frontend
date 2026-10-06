@@ -99,6 +99,7 @@
 	"display": {
 		"page_title": "Zuschauer-Monitor",
 		"load_error": "Verbindung zum Server fehlgeschlagen.",
+		"auth_error": "Authentifizierung des Bildschirms fehlgeschlagen — neuer Versuch folgt.",
 		"pairing_hint": "Diesen Code in der Geräteverwaltung zuordnen",
 		"pairing_waiting": "Warte auf Zuordnung…",
 		"idle_hint": "Kein Match zugewiesen",

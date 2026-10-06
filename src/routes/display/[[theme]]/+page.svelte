@@ -19,6 +19,7 @@
 
 	const ACCESS_TOKEN_KEY = 'display_access_token';
 	const REFRESH_TOKEN_KEY = 'display_refresh_token';
+	const AUTH_RETRY_MS = 30_000;
 	const DEVICE_CODE_KEY = 'display_device_code';
 
 	type ViewState = 'LOADING' | 'PAIRING' | 'IDLE' | 'CONTENT' | 'LEAGUE_TABLE';
@@ -78,6 +79,12 @@
 	$effect(() => {
 		if (!browser) return;
 		let active = true;
+		// Token wurde in diesem Seitenaufruf frisch registriert und hat noch nie funktioniert.
+		// Ein 401 darauf ist kein "abgelaufen", sondern ein Konfigurationsproblem (z. B. Backend
+		// akzeptiert Display-Tokens nicht) — dann NICHT sofort neu registrieren (jede Runde
+		// legt sonst ein neues Gerät an), sondern mit Pause erneut mit demselben Token probieren.
+		let freshUnverified = false;
+		let retryAfter = 0;
 
 		function persistTokens(accessToken: string, refreshToken: string) {
 			localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
@@ -94,6 +101,7 @@
 			const existing = localStorage.getItem(ACCESS_TOKEN_KEY);
 			if (existing) return existing;
 			const created = await displayApi.register();
+			freshUnverified = true;
 			persistTokens(created.accessToken, created.refreshToken);
 			localStorage.setItem(DEVICE_CODE_KEY, created.deviceCode);
 			return created.accessToken;
@@ -114,10 +122,12 @@
 		}
 
 		async function tick() {
+			if (Date.now() < retryAfter) return;
 			try {
 				const accessToken = await ensureAccessToken();
 				const data = await displayApi.getData(accessToken);
 				if (!active) return;
+				freshUnverified = false;
 				loadError = null;
 				// Server hat geantwortet -> Verbindung steht (Issue #20).
 				connectivity.reportSuccess();
@@ -143,6 +153,12 @@
 				}
 			} catch (err) {
 				if (!active) return;
+				if (err instanceof APIError && err.status === 401 && freshUnverified) {
+					loadError = $_('display.auth_error');
+					connectivity.reportFailure();
+					retryAfter = Date.now() + AUTH_RETRY_MS;
+					return;
+				}
 				if (err instanceof APIError && err.status === 401) {
 					// Normale Token-Rotation, kein Verbindungsproblem (siehe Kommentar oben) — #20s
 					// Banner reagiert bewusst nicht darauf, sonst würde jede Ablauf-bedingte Refresh-
