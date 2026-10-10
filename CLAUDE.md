@@ -30,9 +30,12 @@ npm run check          # svelte-kit sync + svelte-check (type checking)
 npm run check:watch    # same, watch mode
 npm run lint           # prettier --check . && eslint .
 npm run format          # prettier --write .
+npm test               # Node-Testrunner via tsx (src/**/*.test.ts), kein Browser nötig
 ```
 
-No test runner is configured in `package.json` — there are no unit/e2e tests to run.
+Tests laufen mit dem eingebauten Node-Testrunner über `tsx` (`npm test`, Dateien `src/**/*.test.ts`, `$lib`/`$env` über `scripts/tsconfig.test-api.json` aufgelöst) — bewusst ohne zusätzliche Abhängigkeit. Es gibt nur wenige Tests (Regression für aufgefüllte `shots`-Strings, siehe unten); keine UI-/e2e-Tests.
+
+**`shots` von Fawkes ist aufgefüllt**: Fawkes liefert den `shots`-String beim Lesen mit Leerzeichen auf Satzlänge 6 (`"+     "`). Leerzeichen sind "nicht geschossen", nie ein Pfeil (sonst Anzeige als "M" und der Spotter hängt den nächsten Pfeil hinter die Füllzeichen, Fawkes schneidet ihn ab). `$lib/shots.ts` (`normalizeShots`) bereinigt das an der API-Grenze (`binocularApi`, `displayApi.getData`); die Mocks (`padShots`) füllen wie Fawkes auf.
 
 Setup: `cp .env.example .env` before first run. Backend development happens in a **separate repository** by another developer, independent of this frontend — this repo does not need a live backend to run in dev (see Fake-API below). `PUBLIC_USE_MOCKS=false` in `.env` switches to a real backend reachable at the proxied URL.
 

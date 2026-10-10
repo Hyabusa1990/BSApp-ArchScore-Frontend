@@ -12,6 +12,7 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
+		"test": "tsx --test --tsconfig scripts/tsconfig.test-api.json \"src/**/*.test.ts\"",
 		"test-api": "tsx --tsconfig scripts/tsconfig.test-api.json scripts/test-api-server.ts"
 	},
 	"devDependencies": {

@@ -1,3 +1,4 @@
+import { normalizeShotsOrNull } from '$lib/shots';
 import { apiClient } from './client';
 
 /**
@@ -135,8 +136,15 @@ export interface RefreshedDeviceToken {
 export const displayApi = {
 	register: () => apiClient.get<DeviceTokenResponse>('/displays/register'),
 
-	getData: (accessToken: string) =>
-		apiClient.get<DisplayDataResponse>('/displays/data', accessToken),
+	// `shots` kommt von Fawkes mit Leerzeichen aufgefüllt (siehe `$lib/shots.ts`) — sonst gälte
+	// jeder Satz mit gespeichertem Stand als "läuft" und die Füllzeichen würden als "M" angezeigt.
+	getData: async (accessToken: string) => {
+		const data = await apiClient.get<DisplayDataResponse>('/displays/data', accessToken);
+		return {
+			...data,
+			targets: (data.targets ?? []).map((t) => ({ ...t, shots: normalizeShotsOrNull(t.shots) }))
+		};
+	},
 
 	refresh: (refreshToken: string) =>
 		apiClient.post<RefreshedDeviceToken>('/Auth/refresh', { refreshToken })
