@@ -89,7 +89,7 @@ function buildMatch(scheibennummer: number, { found, scoring }: Resolved): Binoc
 		teamName: mannschaft,
 		currentSetNo: scoring.aktueller_satz,
 		currentSetScore: shots ? ringSumme(scoring.vorlaeufige_passen, scoring.aktueller_satz) : null,
-		shots,
+		shots: padShots(shots),
 		// Bewusst nicht nur "aktueller Satz schon bestätigt": ist das Match auf dieser Scheibe
 		// komplett entschieden (stand.beendet), kommt nie wieder ein neuer Satz, den man
 		// bestätigen könnte — ohne diese Ergänzung bliebe isConfirmed für immer `false`, obwohl
@@ -114,17 +114,27 @@ export function getScheibe(token: string, scheibennummer: number): ResolveResult
 	return { kind: 'ok', match: buildMatch(scheibennummer, outcome.resolved) };
 }
 
+const SHOTS_PRO_SATZ = 6;
+
+/** Fawkes liefert `shots` beim Lesen mit Leerzeichen auf Satzlänge aufgefüllt (`PadRight`) —
+ * die Mocks bilden das nach, damit der Client die Füllzeichen wirklich behandeln muss. */
+export function padShots(shots: string): string {
+	return shots ? shots.padEnd(SHOTS_PRO_SATZ, ' ') : shots;
+}
+
 /** Fawkes-shots-String -> Passen des aktuellen Satzes (Gegenrichtung zu encodeShots). */
 function decodeShots(shots: string, lfdNr: number): VorlaeufigePasse[] {
 	const passen: VorlaeufigePasse[] = [];
-	for (let i = 0; i < shots.length; i++) {
+	// Wie Fawkes: nur die ersten 6 Zeichen zählen (Satzlänge), Leerzeichen = nicht geschossen.
+	const zeichen = shots.slice(0, SHOTS_PRO_SATZ).trimEnd();
+	for (let i = 0; i < zeichen.length; i++) {
 		const position = Math.floor(i / 2) + 1;
 		let passe = passen.find((p) => p.position === position);
 		if (!passe) {
 			passe = { position, lfd_nr: lfdNr, ringzahl_pfeil1: null, ringzahl_pfeil2: null };
 			passen.push(passe);
 		}
-		const ringzahl = decodeShot(shots[i]);
+		const ringzahl = decodeShot(zeichen[i]);
 		if (i % 2 === 0) passe.ringzahl_pfeil1 = ringzahl;
 		else passe.ringzahl_pfeil2 = ringzahl;
 	}

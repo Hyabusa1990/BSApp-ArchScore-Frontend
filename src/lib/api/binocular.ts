@@ -1,3 +1,4 @@
+import { normalizeShots, normalizeShotsOrNull } from '$lib/shots';
 import { apiClient } from './client';
 
 /**
@@ -59,32 +60,48 @@ function spotterPath(token: string, scheibennummer: number): string {
 	return `/fixtures/${encodeURIComponent(token)}/targets/${scheibennummer}/spotter`;
 }
 
+// Fawkes liefert `shots` mit Leerzeichen auf Satzlänge aufgefüllt (siehe `$lib/shots.ts`) —
+// jede Antwort wird hier bereinigt, damit weder der nächste Pfeil hinter die Füllzeichen
+// angehängt noch ein Leerzeichen als Miss ("M") angezeigt wird.
+function clean(match: BinocularMatch): BinocularMatch {
+	return { ...match, shots: normalizeShotsOrNull(match.shots) };
+}
+
 async function currentShots(token: string, scheibennummer: number): Promise<string> {
 	const info = await apiClient.get<Pick<BinocularMatch, 'shots'>>(
 		`${spotterPath(token, scheibennummer)}/info`
 	);
-	return info.shots ?? '';
+	return normalizeShots(info.shots);
 }
 
 export const binocularApi = {
-	getScheibe: (token: string, scheibennummer: number) =>
-		apiClient.get<BinocularMatch>(`${spotterPath(token, scheibennummer)}/info`),
+	getScheibe: async (token: string, scheibennummer: number) =>
+		clean(await apiClient.get<BinocularMatch>(`${spotterPath(token, scheibennummer)}/info`)),
 
 	// PUT überschreibt bei jedem Aufruf den kompletten shots-String des aktuellen Satzes
 	// (kein Einzelpfeil-Endpunkt) — daher hier erst den aktuellen Stand per GET holen, das
 	// neue Zeichen anhängen und den vollen String senden.
 	postPfeil: async (token: string, scheibennummer: number, ringzahl: number) => {
 		const shots = (await currentShots(token, scheibennummer)) + encodeShot(ringzahl);
-		return apiClient.put<BinocularMatch>(`${spotterPath(token, scheibennummer)}/shots`, { shots });
+		return clean(
+			await apiClient.put<BinocularMatch>(`${spotterPath(token, scheibennummer)}/shots`, { shots })
+		);
 	},
 
 	// Kein serverseitiger Undo-Call mehr: letztes Zeichen vom aktuellen shots-String
 	// entfernen, verkürzten String per PUT senden.
 	postUndo: async (token: string, scheibennummer: number) => {
 		const shots = (await currentShots(token, scheibennummer)).slice(0, -1);
-		return apiClient.put<BinocularMatch>(`${spotterPath(token, scheibennummer)}/shots`, { shots });
+		return clean(
+			await apiClient.put<BinocularMatch>(`${spotterPath(token, scheibennummer)}/shots`, { shots })
+		);
 	},
 
-	postBestaetigeSatz: (token: string, scheibennummer: number) =>
-		apiClient.put<BinocularMatch>(`${spotterPath(token, scheibennummer)}/shots/confirm`, undefined)
+	postBestaetigeSatz: async (token: string, scheibennummer: number) =>
+		clean(
+			await apiClient.put<BinocularMatch>(
+				`${spotterPath(token, scheibennummer)}/shots/confirm`,
+				undefined
+			)
+		)
 };

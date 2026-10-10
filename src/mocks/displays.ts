@@ -9,7 +9,7 @@ import {
 	registerDeviceCode
 } from './veranstaltungen';
 import { berechneMatchStand, peekScoringState, ringSumme } from './shared-state';
-import { encodeShots } from './binoculars';
+import { encodeShots, padShots } from './binoculars';
 import { loadState, saveState } from './persist';
 import { randomUUID } from './uuid';
 
@@ -137,7 +137,7 @@ function buildSeiteForScheibe(scheibennummer: number | null): DisplaySeite {
 	return {
 		targetNo: scheibennummer,
 		teamName: mannschaft,
-		shots: shotsAktuellerSatz || null,
+		shots: padShots(shotsAktuellerSatz) || null,
 		setScores: setScores.length > 0 ? setScores : null,
 		currentSetScore: shotsAktuellerSatz ? ringSumme(scoringOwn.vorlaeufige_passen, lfdNr) : null,
 		setPoints: eigeneSatzpunkte
