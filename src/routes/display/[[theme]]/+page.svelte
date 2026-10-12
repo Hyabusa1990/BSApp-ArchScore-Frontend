@@ -256,6 +256,7 @@
 		--monitor-row-border: rgba(255, 255, 255, 0.08);
 		--monitor-row-even: rgba(255, 255, 255, 0.04);
 		--monitor-ring-empty-bg: rgba(255, 255, 255, 0.06);
+		--monitor-slot-bg: rgba(255, 255, 255, 0.14);
 		--monitor-ring-empty-fg: #6c757d;
 		--monitor-compare-equal-bg: #ced4da;
 		--monitor-compare-equal-fg: #212529;
@@ -285,6 +286,7 @@
 		--monitor-row-border: rgba(0, 0, 0, 0.08);
 		--monitor-row-even: rgba(0, 0, 0, 0.03);
 		--monitor-ring-empty-bg: rgba(0, 0, 0, 0.05);
+		--monitor-slot-bg: rgba(0, 0, 0, 0.12);
 		--monitor-ring-empty-fg: #8891a0;
 		--monitor-compare-equal-bg: #b9c0c8;
 		--monitor-compare-equal-fg: #1b1f24;
