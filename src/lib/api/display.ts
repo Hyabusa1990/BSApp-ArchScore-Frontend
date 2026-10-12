@@ -107,7 +107,9 @@ export function deriveMonitorStatus(seite: DisplaySeite | null): MonitorStatus {
  * zum Pfad-Sync 2026-09-28 anders und ist jetzt `rank`, `rankDifference` ist neu dazugekommen. */
 export interface LeagueTablePosition {
 	rank: number;
-	/** Platzierungsänderung seit dem letzten Spieltag (+/-), 0 = unverändert. */
+	/** Aktueller Rang minus Rang zu Tabellenbeginn (Fawkes `StandardLeagueRuleSet`): negativ =
+	 * verbessert (Rang-Zahl kleiner), positiv = verschlechtert, 0 = unverändert bzw. noch kein
+	 * Matchpunkt vergeben. */
 	rankDifference: number;
 	teamName: string;
 	setPointsWon: number;

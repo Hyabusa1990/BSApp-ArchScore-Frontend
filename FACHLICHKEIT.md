@@ -89,7 +89,7 @@ Für den „Tabelle"-Anzeigemodus (Pause-Anzeige/Beamer) gibt es bereits ein gut
 
 - Dort helles Theme (weißer Hintergrund, blauer Akzent) — für ArchScore **bewusst nicht übernehmen**: die Tabellenansicht läuft auf denselben Displays wie die Trefferanzeige, deshalb einheitlich das **dunkle Theme** der bestehenden Trefferanzeige (`#10151c` u. Ä.) verwenden. Nur Layout/Berechnung (Spalten, dynamische Schriftgröße) aus diesem Referenzprojekt übernehmen, die Farben nicht.
 - Schriftgröße wird **dynamisch aus der gemessenen Container-Höhe berechnet** (`ResizeObserver`, `fontSize = (Höhe / (Zeilenzahl + 1.5)) × 0.58`), nicht rein über CSS `clamp()`/`vh` — damit füllt die Tabelle immer die verfügbare Höhe unabhängig von der Anzahl Mannschaften.
-- Spalten: Platz, Mannschaft, Matchpunkte (mit Delta in Klammern, z. B. „14 (14:8)"), Satzpunkte-Netto (farbig: grün bei positiv, rot bei negativ).
+- Spalten: Platz, Rang-Badge (▲ grün/▼ rot + Anzahl Plätze aus `rankDifference`, „–" bei 0; `rankDifference` = aktueller Rang − Rang zu Tabellenbeginn, also negativ = verbessert), Mannschaft, Satzpunkte-Netto (farbig: grün bei positiv, rot bei negativ), Matchpunkte (nur der Wert, ohne Klammer — Entscheidung Gero, 2026-10-12).
 - Kopfzeile mit Liga-Name + Uhrzeit (Uhrzeit aktualisiert minütlich), Tabelle selbst pollt/lädt sekündlich.
 - Zebra-Streifen bei den Zeilen, `table-layout: fixed` mit festen Prozent-Breiten je Spalte.
 

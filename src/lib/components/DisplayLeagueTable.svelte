@@ -37,9 +37,10 @@
 			<thead>
 				<tr>
 					<th class="col-pos">{$_('display.tabelle_pos')}</th>
+					<th class="col-trend"></th>
 					<th class="col-mannschaft">{$_('display.tabelle_mannschaft')}</th>
-					<th class="col-mp">{$_('display.tabelle_mp')}</th>
 					<th class="col-sp">{$_('display.tabelle_sp')}</th>
+					<th class="col-mp">{$_('display.tabelle_mp')}</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -47,14 +48,22 @@
 					{@const spNetto = eintrag.setPointsWon - eintrag.setPointsLost}
 					<tr class:even={i % 2 === 1}>
 						<td class="col-pos">{eintrag.rank}</td>
-						<td class="col-mannschaft">{eintrag.teamName}</td>
-						<td class="col-mp">
-							<span class="mp-value">{eintrag.matchPointsWon}</span>
-							<span class="mp-detail">({eintrag.matchPointsWon}:{eintrag.matchPointsLost})</span>
+						<td class="col-trend">
+							<!-- rankDifference = aktueller Rang − Rang zu Tabellenbeginn (Fawkes
+							     StandardLeagueRuleSet): negativ = nach oben gerutscht = verbessert. -->
+							{#if eintrag.rankDifference < 0}
+								<span class="trend trend-up">▲ {-eintrag.rankDifference}</span>
+							{:else if eintrag.rankDifference > 0}
+								<span class="trend trend-down">▼ {eintrag.rankDifference}</span>
+							{:else}
+								<span class="trend trend-same">–</span>
+							{/if}
 						</td>
+						<td class="col-mannschaft">{eintrag.teamName}</td>
 						<td class="col-sp" class:positive={spNetto >= 0} class:negative={spNetto < 0}>
 							{spNetto >= 0 ? '+' : ''}{spNetto}
 						</td>
+						<td class="col-mp">{eintrag.matchPointsWon}</td>
 					</tr>
 				{/each}
 			</tbody>
@@ -123,6 +132,32 @@
 		font-weight: 700;
 		color: var(--monitor-muted);
 	}
+	.col-trend {
+		width: 11%;
+		text-align: center;
+	}
+	.trend {
+		display: inline-block;
+		min-width: 3.2em;
+		padding: 0.05em 0.45em;
+		border-radius: 0.5em;
+		font-size: 0.7em;
+		font-weight: 700;
+		line-height: 1.3;
+		white-space: nowrap;
+	}
+	/* Wie die Satzpunkt-Ampel: in beiden Themes gleich. */
+	.trend-up {
+		background: #2f9e4f;
+		color: #fff;
+	}
+	.trend-down {
+		background: #c8304a;
+		color: #fff;
+	}
+	.trend-same {
+		color: var(--monitor-muted);
+	}
 	.col-mannschaft {
 		text-align: left;
 		font-weight: 600;
@@ -130,20 +165,12 @@
 	.col-mp {
 		width: 20%;
 		text-align: right;
+		font-weight: 700;
 	}
 	.col-sp {
 		width: 12%;
 		text-align: right;
 		font-weight: 700;
-	}
-
-	.mp-value {
-		font-weight: 700;
-	}
-	.mp-detail {
-		font-size: 0.65em;
-		color: var(--monitor-muted);
-		margin-left: 0.3rem;
 	}
 
 	/* Bleiben in beiden Themes gleich — Ampelfarben lesen auf hell wie dunkel. */
