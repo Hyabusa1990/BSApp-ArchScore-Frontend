@@ -1792,6 +1792,10 @@
 						"format": "int32",
 						"nullable": true
 					},
+					"currentSetConfirmed": {
+						"type": "boolean",
+						"description": "Indicates whether the current set score has been confirmed by the team. If true, the current set score is considered final and cannot be changed. If false, the current set score can still be modified."
+					},
 					"setPoints": {
 						"type": "integer",
 						"description": "The total set points obtained by the team in the match. This is the total number of set points obtained by the team in the match so far.",

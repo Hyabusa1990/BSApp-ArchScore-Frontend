@@ -93,3 +93,24 @@ test('Anzeige: aufgefüllter leerer Satz gilt nicht als laufend, Füllzeichen si
 	const empty = await displayApi.getData('token');
 	assert.equal(deriveMonitorStatus(empty.targets[0] as DisplaySeite), 'VOR_DEM_MATCH');
 });
+
+test('Anzeige: offener Satz in setScores erscheint nicht', async () => {
+	const orig = globalThis.fetch;
+	const antwort = (shots: string, setScores: (number | null)[]) =>
+		(async () =>
+			new Response(
+				JSON.stringify({
+					displayType: 'Match',
+					displayTheme: 'Light',
+					targets: [{ targetNo: 1, teamName: 'A', shots, setScores }],
+					leagueTablePositions: null,
+					deviceCode: null
+				})
+			)) as typeof fetch;
+
+	globalThis.fetch = antwort('      ', [56, 56, null]);
+	const zwischen = (await displayApi.getData('t')).targets[0] as DisplaySeite;
+	assert.deepEqual(zwischen.setScores, [56, 56]);
+	assert.equal(deriveMonitorStatus(zwischen), 'ZWISCHEN_SAETZEN');
+	globalThis.fetch = orig;
+});

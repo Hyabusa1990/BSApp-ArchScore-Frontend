@@ -85,6 +85,7 @@ function leereSeite(targetNo: number | null): DisplaySeite {
 		shots: null,
 		setScores: null,
 		currentSetScore: null,
+		currentSetConfirmed: false,
 		setPoints: null
 	};
 }
@@ -110,6 +111,7 @@ function buildSeiteForScheibe(scheibennummer: number | null): DisplaySeite {
 			shots: null,
 			setScores: null,
 			currentSetScore: null,
+			currentSetConfirmed: false,
 			setPoints: null,
 			shooters: ['Schütze 1', 'Schütze 2', 'Schütze 3']
 		};
@@ -130,7 +132,9 @@ function buildSeiteForScheibe(scheibennummer: number | null): DisplaySeite {
 	// ob die Gegenseite auch schon fertig ist (Fortschritt bleibt pro Spotter unabhängig,
 	// siehe FACHLICHKEIT.md). Kein eigener "Match fertig"-Zustand mehr (#16): die letzten
 	// setScores bleiben nach Matchende einfach stehen.
-	const setScores = Array.from({ length: lfdNr - 1 }, (_, i) =>
+	const currentSetConfirmed = scoringOwn.schuetze_bestaetigte_saetze.includes(lfdNr);
+	// Bestätigter aktueller Satz zählt (wie bei Fawkes) schon als abgeschlossen mit.
+	const setScores = Array.from({ length: currentSetConfirmed ? lfdNr : lfdNr - 1 }, (_, i) =>
 		ringSumme(scoringOwn.vorlaeufige_passen, i + 1)
 	);
 
@@ -140,6 +144,7 @@ function buildSeiteForScheibe(scheibennummer: number | null): DisplaySeite {
 		shots: padShots(shotsAktuellerSatz) || null,
 		setScores: setScores.length > 0 ? setScores : null,
 		currentSetScore: shotsAktuellerSatz ? ringSumme(scoringOwn.vorlaeufige_passen, lfdNr) : null,
+		currentSetConfirmed,
 		setPoints: eigeneSatzpunkte
 	};
 }
