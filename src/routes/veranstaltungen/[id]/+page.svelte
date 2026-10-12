@@ -56,8 +56,19 @@
 	let rowsBeforeEdit = $state<TabelleRow[]>([]);
 	const tabelleEditable = $derived(!chartCreated || editingTabelle);
 
-	type TabelleRow = { mannschaft_name: string; satzpunkte: number; matchpunkte: number };
+	// Gewonnen/verloren getrennt, genau wie Fawkes sie speichert (`MatchPlayChartController.Team`) —
+	// eine Netto-Zahl pro Spalte ginge verloren (Matchpunkte sind z. B. 14:8, nie negativ).
+	type TabelleRow = {
+		mannschaft_name: string;
+		satzpunkte_gewonnen: number;
+		satzpunkte_verloren: number;
+		matchpunkte_gewonnen: number;
+		matchpunkte_verloren: number;
+	};
 	let rows = $state<TabelleRow[]>([]);
+	// `true` = Zeilen stammen aus der zuletzt hier gespeicherten Tabelle (Reihenfolge = Platz),
+	// `false` = nur Namen aus dem Spielplan (Setzlisten-Reihenfolge, Punkte unbekannt).
+	let tabelleAusSpeicher = $state(false);
 
 	// Ligagröße: 7 oder 8 Mannschaften — das Backend kennt (Stand 2026-10-05) nur für diese beiden
 	// einen Standard-Spielplan (ohne `targetAssignments`, sonst 400). Start-Tabelle deshalb direkt mit
@@ -65,7 +76,43 @@
 	const MIN_MANNSCHAFTEN = 7;
 	const MAX_MANNSCHAFTEN = 8;
 	function leereRow(): TabelleRow {
-		return { mannschaft_name: '', satzpunkte: 0, matchpunkte: 0 };
+		return {
+			mannschaft_name: '',
+			satzpunkte_gewonnen: 0,
+			satzpunkte_verloren: 0,
+			matchpunkte_gewonnen: 0,
+			matchpunkte_verloren: 0
+		};
+	}
+
+	// Fawkes liefert die eingetragene Ausgangstabelle nicht zurück (siehe Modulkommentar in
+	// `$lib/api/veranstaltung.ts`) — die Namen kämen beim Bearbeiten nur in Setzlisten-Reihenfolge
+	// aus dem Spielplan, Platz und Punkte gingen verloren. Deshalb merkt sich dieser Browser die
+	// zuletzt gespeicherte Tabelle pro Veranstaltung und befüllt das Formular daraus.
+	const tabelleStorageKey = (id: number) => `veranstaltung_tabelle_${id}`;
+
+	function loadStoredRows(names: string[]): TabelleRow[] | null {
+		try {
+			const raw = localStorage.getItem(tabelleStorageKey(fixtureId));
+			if (!raw) return null;
+			const stored = JSON.parse(raw) as TabelleRow[];
+			// Nur übernehmen, wenn es dieselben Mannschaften sind wie im Spielplan — sonst veraltet.
+			const gleich =
+				stored.length === names.length &&
+				stored.every((r) => names.includes(r.mannschaft_name)) &&
+				new Set(stored.map((r) => r.mannschaft_name)).size === names.length;
+			return gleich ? stored : null;
+		} catch {
+			return null;
+		}
+	}
+
+	function storeRows(saved: TabelleRow[]) {
+		try {
+			localStorage.setItem(tabelleStorageKey(fixtureId), JSON.stringify(saved));
+		} catch {
+			// Nur Komfort — ohne Speicher bleibt das Formular beim Bearbeiten eben leer.
+		}
 	}
 
 	let ligaApp = $state('BSApp Liga');
@@ -111,11 +158,9 @@
 					? null
 					: await veranstaltungApi.getMatchPlayChart(auth.accessToken!, fixtureId);
 			if (chart && chart.teamNames.length > 0) {
-				rows = chart.teamNames.map((name) => ({
-					mannschaft_name: name,
-					satzpunkte: 0,
-					matchpunkte: 0
-				}));
+				const stored = loadStoredRows(chart.teamNames);
+				tabelleAusSpeicher = stored !== null;
+				rows = stored ?? chart.teamNames.map((name) => ({ ...leereRow(), mannschaft_name: name }));
 				chosenSource = 'tabelle';
 				chartCreated = true;
 			} else {
@@ -203,13 +248,15 @@
 		saveError = null;
 		const teams = rows
 			.filter((r) => r.mannschaft_name.trim())
-			.map((r) => ({
+			.map((r, i) => ({
 				name: r.mannschaft_name.trim(),
+				// Platz = Zeilenposition in der Tabelle (Spalte "Platz" im Formular).
+				rank: i + 1,
 				// Eingabe bleibt je eine Netto-Zahl pro Spalte, das Backend will Plus/Minus getrennt.
-				setPointsWon: Math.max(r.satzpunkte, 0),
-				setPointsLost: Math.max(-r.satzpunkte, 0),
-				matchPointsWon: Math.max(r.matchpunkte, 0),
-				matchPointsLost: Math.max(-r.matchpunkte, 0)
+				setPointsWon: Math.max(0, r.satzpunkte_gewonnen || 0),
+				setPointsLost: Math.max(0, r.satzpunkte_verloren || 0),
+				matchPointsWon: Math.max(0, r.matchpunkte_gewonnen || 0),
+				matchPointsLost: Math.max(0, r.matchpunkte_verloren || 0)
 			}));
 		// Leere Zeilen werden oben rausgefiltert statt gelöscht (Löschen bleibt hart auf
 		// MIN_MANNSCHAFTEN begrenzt) — deshalb hier nochmal prüfen, bevor gespeichert wird.
@@ -225,6 +272,12 @@
 				teams,
 				hardOverride
 			);
+			storeRows(
+				rows
+					.filter((r) => r.mannschaft_name.trim())
+					.map((r) => ({ ...r, mannschaft_name: r.mannschaft_name.trim() }))
+			);
+			tabelleAusSpeicher = true;
 			if (veranstaltung) veranstaltung = { ...veranstaltung, datenquelle: 'tabelle' };
 			chartCreated = true;
 			editingTabelle = false;
@@ -442,9 +495,11 @@
 								<tr>
 									<th style="width: 3rem;">{$_('veranstaltungen.tabelle_platz')}</th>
 									<th>{$_('veranstaltungen.tabelle_mannschaft')}</th>
-									{#if tabelleEditable}
-										<th style="width: 8rem;">{$_('veranstaltungen.tabelle_satzpunkte')}</th>
-										<th style="width: 8rem;">{$_('veranstaltungen.tabelle_matchpunkte')}</th>
+									{#if tabelleEditable || tabelleAusSpeicher}
+										<th style="width: 6rem;">{$_('veranstaltungen.tabelle_satz_gewonnen')}</th>
+										<th style="width: 6rem;">{$_('veranstaltungen.tabelle_satz_verloren')}</th>
+										<th style="width: 6rem;">{$_('veranstaltungen.tabelle_match_gewonnen')}</th>
+										<th style="width: 6rem;">{$_('veranstaltungen.tabelle_match_verloren')}</th>
 									{/if}
 									{#if tabelleEditable}<th style="width: 3rem;"></th>{/if}
 								</tr>
@@ -455,6 +510,12 @@
 										<td class="fw-bold text-muted">{i + 1}</td>
 										{#if !tabelleEditable}
 											<td>{row.mannschaft_name}</td>
+											{#if tabelleAusSpeicher}
+												<td>{row.satzpunkte_gewonnen}</td>
+												<td>{row.satzpunkte_verloren}</td>
+												<td>{row.matchpunkte_gewonnen}</td>
+												<td>{row.matchpunkte_verloren}</td>
+											{/if}
 										{:else}
 											<td>
 												<input
@@ -465,15 +526,33 @@
 											<td>
 												<input
 													type="number"
+													min="0"
 													class="form-control form-control-sm"
-													bind:value={row.satzpunkte}
+													bind:value={row.satzpunkte_gewonnen}
 												/>
 											</td>
 											<td>
 												<input
 													type="number"
+													min="0"
 													class="form-control form-control-sm"
-													bind:value={row.matchpunkte}
+													bind:value={row.satzpunkte_verloren}
+												/>
+											</td>
+											<td>
+												<input
+													type="number"
+													min="0"
+													class="form-control form-control-sm"
+													bind:value={row.matchpunkte_gewonnen}
+												/>
+											</td>
+											<td>
+												<input
+													type="number"
+													min="0"
+													class="form-control form-control-sm"
+													bind:value={row.matchpunkte_verloren}
 												/>
 											</td>
 											<td>
@@ -502,6 +581,12 @@
 						>
 							+ {$_('veranstaltungen.tabelle_add_row')}
 						</button>
+
+						{#if editingTabelle && !tabelleAusSpeicher}
+							<Alert color="info" class="py-2">
+								{$_('veranstaltungen.tabelle_order_hint')}
+							</Alert>
+						{/if}
 
 						{#if editingTabelle}
 							<Alert color="warning" class="py-2">
