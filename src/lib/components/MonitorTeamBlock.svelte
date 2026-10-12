@@ -9,7 +9,8 @@
 		rechtsOrientiert = false,
 		satzpunkteFuehrt = false,
 		satzpunkteZurueck = false,
-		gegnerSetScores = null
+		gegnerSetScores = null,
+		verbleibendeSaetze = 0
 	} = $props<{
 		seite: DisplaySeite;
 		rechtsOrientiert?: boolean;
@@ -18,6 +19,9 @@
 		/** setScores der gegnerischen Seite, für den Positionsvergleich in ZWISCHEN_SAETZEN
 		 * (siehe Issue #16) — von +page.svelte durchgereicht. */
 		gegnerSetScores?: number[] | null;
+		/** Anzahl noch möglicher weiterer Sätze (0 wenn das Match entschieden ist) — wird in
+		 * ZWISCHEN_SAETZEN als graue Platzhalter hinter den Satz-Kästchen gezeigt. */
+		verbleibendeSaetze?: number;
 	}>();
 
 	const status = $derived(deriveMonitorStatus(seite));
@@ -77,11 +81,16 @@
 		status === 'SATZ_LAEUFT' ? shotsWerte : status === 'ZWISCHEN_SAETZEN' ? setScoreWerte : []
 	);
 
-	// Pro Satz sind immer 6 Pfeilfelder reserviert, damit sich die Feldgröße beim Eintragen neuer
-	// Pfeile nicht ändert — noch nicht geschossene Pfeile erscheinen als leere graue Kästchen.
+	// SATZ_LAEUFT: immer 6 Pfeilfelder reserviert, damit sich die Feldgröße beim Eintragen neuer
+	// Pfeile nicht ändert. ZWISCHEN_SAETZEN: je ein Platzhalter pro noch möglichem Satz. Noch
+	// nicht Belegtes erscheint als leeres graues Kästchen.
 	const PFEIL_SLOTS = 6;
 	const leereSlots = $derived(
-		status === 'SATZ_LAEUFT' ? Math.max(0, PFEIL_SLOTS - boxWerte.length) : 0
+		status === 'SATZ_LAEUFT'
+			? Math.max(0, PFEIL_SLOTS - boxWerte.length)
+			: status === 'ZWISCHEN_SAETZEN'
+				? Math.max(0, verbleibendeSaetze)
+				: 0
 	);
 
 	const satzpunkteBoxClass = $derived(

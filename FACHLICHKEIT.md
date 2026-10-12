@@ -48,7 +48,7 @@ Wichtig: Schütze/Spotter/Zuschauer authentifizieren sich **nie** über ein Benu
 - **Pairing statt Login**: Bildschirm ruft beim ersten Start eine Registrierungs-URL auf, bekommt einen 6-stelligen Pairing-Code angezeigt (wie Chromecast/Smart-TV-Pairing) und pollt, bis ein Admin ihn im Verwaltungsbereich einer Begegnung/zwei Scheibennummern zuordnet.
 - Einmal gepaired, zeigt der Bildschirm **automatisch über alle Runden hinweg**, was gerade auf seinen zwei fest zugeordneten Scheibennummern läuft — kein erneutes Pairing pro Runde nötig.
 - Zeigt beide Mannschaften nebeneinander (jede zu "ihrer" Scheibe hin orientiert), pro Seite ein Status: `WARTET` → `SCHUETZEN_GEMELDET` → `SATZ_LAEUFT` ⇄ `SATZ_FERTIG` (pro Satz wiederholt) → `MATCH_FERTIG`.
-- Zeigt die Pfeile des **aktuell offenen Satzes** (wächst von links nach rechts, keine Platzhalter für noch nicht geschossene Pfeile — bewusst reduziert für Lesbarkeit aus der Distanz), plus Ringsumme des Satzes und, sobald ein Satz fertig ist, die Satzpunkte farblich (führt/liegt zurück).
+- Zeigt die Pfeile des **aktuell offenen Satzes** (wächst von links nach rechts; immer 6 Felder reserviert, noch nicht geschossene Pfeile als leere graue Kästchen, damit sich die Feldgröße nicht ändert — Entscheidung Gero, 2026-10-12), plus Ringsumme des Satzes und, sobald ein Satz bestätigt ist (`currentSetConfirmed`), die Satzergebnisse und Satzpunkte farblich (führt/liegt zurück). In diesem Zwischenstand zeigt ein graues Kästchen je noch möglichen weiteren Satz (frühestmöglicher Abschluss: Felder gesamt = gespielte Sätze + aufgerundet (6 − Satzpunkte des Führenden) / 2, max. 5; z. B. 0:0 → 3, 2:0 → 3, 2:2 → 4, 4:2 → 4, 4:4 → 5, 5:3 → 5).
 - **Bewusste Erweiterung ggü. dem Referenzprojekt** (Entscheidung Auftraggeber, 2026-09-28, Issue #27): Neue Pfeile rasten animiert ein (~400 ms; mehrere Pfeile aus einer Abfrage nacheinander, ~150 ms versetzt), Ringsumme und Satzpunkte pulsieren kurz bei Änderung — damit Zuschauer die Änderung aus der Distanz wahrnehmen. Keine Animation beim ersten Laden, bei Undo/Korrektur, zwischen den Sätzen und bei aktivierter Einstellung „Bewegung reduzieren".
 
 ## Veranstaltungs-Setup und Admin-Workflow
@@ -56,6 +56,7 @@ Wichtig: Schütze/Spotter/Zuschauer authentifizieren sich **nie** über ein Benu
 > Quelle: Nutzerbeschreibung + Mockups/Ablauf-Skizzen in `/home/gero/Downloads/Spotter-Bildschirm/` (siehe Referenzen unten). Das dortige `Ablauf.md` ist explizit als „ENTWURF – noch nicht abgestimmt" markiert — anders als die Binocular-/Display-UI im Referenzprojekt (siehe Migrations-Prinzip oben) ist dieser Teil **kein** fertig abgestimmtes Verhalten, sondern Diskussionsstand. Als Design-Richtung/Ausgangspunkt behandeln, nicht als fixe Vorgabe.
 
 **Account-Rollen** (`User.role`, siehe `src/lib/api/auth.ts`) — genau zwei, keine weiteren:
+
 - **`user`**: normaler registrierter Account, verwaltet **nur eigene** Veranstaltungen (Ownership-Scoping — ein `user` sieht/ändert nie Veranstaltungen eines anderen `user`, analog zum `owner`-Feld im `scoring`-Referenzprojekt).
 - **`admin`**: verwaltet zusätzlich **alle** Benutzer und **alle** Veranstaltungen, nicht nur eigene.
 
@@ -80,7 +81,7 @@ Diese Achse ist unabhängig von den Wettkampf-Rollen (Schütze/Spotter/Zuschauer
 
 - Anders als beim Display: Tablet-Pairing läuft über **QR-Code**, nicht über einen einzutippenden Code.
 - Pro Scheibe (nicht pro Scheiben-Paar!) gibt es im Verwaltungs-UI einen Button („Tablet Scheibe N"), der ein Modal mit einem QR-Code öffnet.
-- Der QR-Code kodiert eine Auth-URL nach dem Muster `/tablet/<UUID4>/<scheibennummer>` — die UUID4 dient gleichzeitig als Zuordnung *und* als Auth-Token. Tablet scannt, landet direkt auf der authentifizierten Spotter-Seite für genau diese Scheibe, keine manuelle Code-Eingabe nötig.
+- Der QR-Code kodiert eine Auth-URL nach dem Muster `/tablet/<UUID4>/<scheibennummer>` — die UUID4 dient gleichzeitig als Zuordnung _und_ als Auth-Token. Tablet scannt, landet direkt auf der authentifizierten Spotter-Seite für genau diese Scheibe, keine manuelle Code-Eingabe nötig.
 
 ## Tabellenansicht (Referenz-Design)
 
