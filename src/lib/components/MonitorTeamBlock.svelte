@@ -9,7 +9,8 @@
 		rechtsOrientiert = false,
 		satzpunkteFuehrt = false,
 		satzpunkteZurueck = false,
-		gegnerSetScores = null
+		gegnerSetScores = null,
+		verbleibendeSaetze = 0
 	} = $props<{
 		seite: DisplaySeite;
 		rechtsOrientiert?: boolean;
@@ -18,6 +19,9 @@
 		/** setScores der gegnerischen Seite, für den Positionsvergleich in ZWISCHEN_SAETZEN
 		 * (siehe Issue #16) — von +page.svelte durchgereicht. */
 		gegnerSetScores?: number[] | null;
+		/** Anzahl noch möglicher weiterer Sätze (0 wenn das Match entschieden ist) — wird in
+		 * ZWISCHEN_SAETZEN als graue Platzhalter hinter den Satz-Kästchen gezeigt. */
+		verbleibendeSaetze?: number;
 	}>();
 
 	const status = $derived(deriveMonitorStatus(seite));
@@ -77,6 +81,18 @@
 		status === 'SATZ_LAEUFT' ? shotsWerte : status === 'ZWISCHEN_SAETZEN' ? setScoreWerte : []
 	);
 
+	// SATZ_LAEUFT: immer 6 Pfeilfelder reserviert, damit sich die Feldgröße beim Eintragen neuer
+	// Pfeile nicht ändert. ZWISCHEN_SAETZEN: je ein Platzhalter pro noch möglichem Satz. Noch
+	// nicht Belegtes erscheint als leeres graues Kästchen.
+	const PFEIL_SLOTS = 6;
+	const leereSlots = $derived(
+		status === 'SATZ_LAEUFT'
+			? Math.max(0, PFEIL_SLOTS - boxWerte.length)
+			: status === 'ZWISCHEN_SAETZEN'
+				? Math.max(0, verbleibendeSaetze)
+				: 0
+	);
+
 	const satzpunkteBoxClass = $derived(
 		satzpunkteFuehrt ? 'punkte-fuehrend' : satzpunkteZurueck ? 'punkte-rueckstand' : ''
 	);
@@ -93,7 +109,7 @@
 	let arrowsHeight = $state(0);
 	const ARROW_GAP_PX = 8;
 	const arrowSizePx = $derived.by(() => {
-		const n = boxWerte.length;
+		const n = boxWerte.length + leereSlots;
 		if (n === 0 || arrowsWidth <= 0 || arrowsHeight <= 0) return 0;
 		const breitePerPfeil = (arrowsWidth - ARROW_GAP_PX * (n - 1)) / n;
 		return Math.max(0, Math.min(arrowsHeight, breitePerPfeil));
@@ -197,6 +213,13 @@
 					>
 						{wert.label}
 					</div>
+				{/each}
+				{#each { length: leereSlots } as _unused, i (`leer-${i}`)}
+					<div
+						class="monitor-arrow monitor-arrow-leer"
+						style:width="{arrowSizePx}px"
+						style:height="{arrowSizePx}px"
+					></div>
 				{/each}
 			</div>
 			<div class="monitor-boxes">
@@ -398,6 +421,10 @@
 	.punkte-gleich {
 		background: var(--monitor-compare-equal-bg);
 		color: var(--monitor-compare-equal-fg);
+	}
+
+	.monitor-arrow-leer {
+		background: var(--monitor-slot-bg);
 	}
 
 	.ring-leer {

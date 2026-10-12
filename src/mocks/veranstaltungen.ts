@@ -343,6 +343,7 @@ function seedState(): State {
 				teams: [
 					{
 						name: 'BSC Abendau',
+						rank: 1,
 						setPointsWon: 15,
 						setPointsLost: 0,
 						matchPointsWon: 14,
@@ -350,6 +351,7 @@ function seedState(): State {
 					},
 					{
 						name: 'SV Scharfhaus',
+						rank: 2,
 						setPointsWon: 7,
 						setPointsLost: 0,
 						matchPointsWon: 11,
@@ -357,6 +359,7 @@ function seedState(): State {
 					},
 					{
 						name: 'SGes Schützenschaft',
+						rank: 3,
 						setPointsWon: 0,
 						setPointsLost: 5,
 						matchPointsWon: 11,
@@ -364,6 +367,7 @@ function seedState(): State {
 					},
 					{
 						name: 'BS Hunshausen',
+						rank: 4,
 						setPointsWon: 12,
 						setPointsLost: 0,
 						matchPointsWon: 6,
@@ -371,6 +375,7 @@ function seedState(): State {
 					},
 					{
 						name: 'SV Vogelwiese',
+						rank: 5,
 						setPointsWon: 8,
 						setPointsLost: 0,
 						matchPointsWon: 8,
@@ -378,6 +383,7 @@ function seedState(): State {
 					},
 					{
 						name: 'BS Weiß-Blau München',
+						rank: 6,
 						setPointsWon: 0,
 						setPointsLost: 10,
 						matchPointsWon: 2,
@@ -385,6 +391,7 @@ function seedState(): State {
 					},
 					{
 						name: 'SGi Wuppenhausen',
+						rank: 7,
 						setPointsWon: 0,
 						setPointsLost: 22,
 						matchPointsWon: 2,
@@ -392,6 +399,7 @@ function seedState(): State {
 					},
 					{
 						name: 'BSC Rot-Rot Beerendorf',
+						rank: 8,
 						setPointsWon: 0,
 						setPointsLost: 15,
 						matchPointsWon: 0,

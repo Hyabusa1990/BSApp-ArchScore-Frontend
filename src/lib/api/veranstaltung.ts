@@ -69,6 +69,10 @@ export interface FixtureUser {
 /** `Fawkes.Api.Controllers.MatchPlayChartController.Team` — Werte VOR dieser Fixture. */
 export interface MatchPlayChartTeam {
 	name: string;
+	/** Ausgangsplatz (1-basiert) laut eingetragener Tabelle. Fehlt er, speichert Fawkes 0 und
+	 * `rankDifference` der Ligatabelle wird dadurch gleich dem aktuellen Rang (aktueller Rang −
+	 * Ausgangsrang) — die Differenz ist dann wertlos. */
+	rank: number;
 	setPointsWon: number;
 	setPointsLost: number;
 	matchPointsWon: number;

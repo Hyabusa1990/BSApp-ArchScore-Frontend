@@ -68,6 +68,10 @@ export interface DisplaySeite {
 	setScores: number[] | null;
 	/** Live-Ringsumme des aktuell laufenden Satzes. */
 	currentSetScore: number | null;
+	/** Spec-Sync 2026-10-12: `true` = der aktuelle Satz ist vom Team bestätigt und damit final
+	 * (nicht mehr änderbar). Ab dann zeigt das Display Satzpunkte statt der Pfeile, siehe
+	 * `deriveMonitorStatus`. Fehlt/`false` = Satz noch offen. */
+	currentSetConfirmed?: boolean;
 	setPoints: number | null;
 	/**
 	 * Noch nicht Teil der aktuellen Fawkes-Spec (kommt evtl. später) — defensiv/optional
@@ -81,12 +85,18 @@ export type MonitorStatus = 'VOR_DEM_MATCH' | 'SATZ_LAEUFT' | 'ZWISCHEN_SAETZEN'
 /**
  * Ersetzt das serverseitige `monitor_status`-Feld des alten Modells (Fawkes liefert keins) —
  * genau drei Status, rein aus den Rohfeldern hergeleitet (Klärung mit Gero, 2026-08-18):
+ * - `currentSetConfirmed` (Satz bestätigt = final) -> zwischen zwei Sätzen, auch wenn `shots`
+ *   noch gefüllt ist (Fawkes leert sie erst mit dem nächsten Satz). Ohne dieses Feld war nicht
+ *   erkennbar, wann ein Satz abgeschlossen ist, und das Display blieb auf den Pfeilen hängen.
  * - `shots` nicht leer -> ein Satz läuft gerade.
  * - sonst `setScores` gefüllt -> zwischen zwei Sätzen (oder Match fertig, dafür gibt es
  *   bewusst keinen eigenen Zustand mehr — die letzten `setScores` bleiben einfach stehen).
  * - sonst -> vor dem eigentlichen Matchstart.
  */
 export function deriveMonitorStatus(seite: DisplaySeite | null): MonitorStatus {
+	if (seite?.currentSetConfirmed && seite.setScores && seite.setScores.length > 0) {
+		return 'ZWISCHEN_SAETZEN';
+	}
 	if (seite?.shots) return 'SATZ_LAEUFT';
 	if (seite?.setScores && seite.setScores.length > 0) return 'ZWISCHEN_SAETZEN';
 	return 'VOR_DEM_MATCH';
@@ -97,7 +107,9 @@ export function deriveMonitorStatus(seite: DisplaySeite | null): MonitorStatus {
  * zum Pfad-Sync 2026-09-28 anders und ist jetzt `rank`, `rankDifference` ist neu dazugekommen. */
 export interface LeagueTablePosition {
 	rank: number;
-	/** Platzierungsänderung seit dem letzten Spieltag (+/-), 0 = unverändert. */
+	/** Aktueller Rang minus Rang zu Tabellenbeginn (Fawkes `StandardLeagueRuleSet`): negativ =
+	 * verbessert (Rang-Zahl kleiner), positiv = verschlechtert, 0 = unverändert bzw. noch kein
+	 * Matchpunkt vergeben. */
 	rankDifference: number;
 	teamName: string;
 	setPointsWon: number;
@@ -133,6 +145,28 @@ export interface RefreshedDeviceToken {
 	expiresIn: number;
 }
 
+/** Fawkes hängt an `setScores` einen Eintrag für den gerade laufenden, noch nicht
+ * abgeschlossenen Satz an (`null` bis der erste Pfeil fällt) — der wäre als "null" im
+ * Zwischenstand sichtbar. Nur abgeschlossene Sätze durchlassen. */
+function stripOpenSet(scores: (number | null)[] | null): number[] | null {
+	if (!scores) return scores;
+	const end = scores.findLastIndex((v) => v !== null) + 1;
+	return scores.slice(0, end) as number[];
+}
+
+/** Bestätigter Satz gehört in `setScores`, auch wenn Fawkes den Eintrag (noch) als `null` lässt —
+ * dann aus `currentSetScore` nachtragen, sonst fehlte der Satz im Zwischenstand. */
+function withConfirmedSet(
+	scores: number[] | null,
+	t: { currentSetConfirmed?: boolean; currentSetScore: number | null }
+): number[] | null {
+	if (!t.currentSetConfirmed || t.currentSetScore === null) return scores;
+	const bisher = scores ?? [];
+	// Hat Fawkes den bestätigten Satz schon in setScores, steht er nach stripOpenSet drin;
+	// die Anzahl abgeschlossener Sätze ist dann unbekannt, daher nur bei leerem Array ergänzen.
+	return bisher.length === 0 ? [t.currentSetScore] : bisher;
+}
+
 export const displayApi = {
 	register: () => apiClient.get<DeviceTokenResponse>('/displays/register'),
 
@@ -142,7 +176,11 @@ export const displayApi = {
 		const data = await apiClient.get<DisplayDataResponse>('/displays/data', accessToken);
 		return {
 			...data,
-			targets: (data.targets ?? []).map((t) => ({ ...t, shots: normalizeShotsOrNull(t.shots) }))
+			targets: (data.targets ?? []).map((t) => ({
+				...t,
+				shots: normalizeShotsOrNull(t.shots),
+				setScores: withConfirmedSet(stripOpenSet(t.setScores), t)
+			}))
 		};
 	},
 

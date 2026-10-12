@@ -51,6 +51,22 @@
 		satzpunkteVergleichbar && scheibeB!.setPoints! > scheibeA!.setPoints!
 	);
 
+	// Platzhalter für die noch zu schießenden Sätze (keine eigene Ergebnisberechnung): ein Match
+	// geht über höchstens 5 Sätze, wer 6 Satzpunkte erreicht, hat gewonnen (FACHLICHKEIT.md), pro
+	// Satz gibt es höchstens 2 Satzpunkte. Gezeigt wird der frühestmögliche Abschluss — der
+	// Führende braucht noch aufgerundet (6 − Satzpunkte) / 2 Sätze. Gesamtfelder = gespielt +
+	// verbleibend: 0:0 -> 3, 2:0 -> 3, 2:2 -> 4, 4:2 -> 4, 4:4 -> 5, 5:3 -> 5, 6:0 -> 3. Gespielt =
+	// der weitere der beiden Spotter-Stände, Obergrenze 5 Sätze insgesamt.
+	const MAX_SAETZE = 5;
+	const SIEG_SATZPUNKTE = 6;
+	const SATZPUNKTE_PRO_SATZ = 2;
+	const verbleibendeSaetze = $derived.by(() => {
+		const gespielt = Math.max(scheibeA?.setScores?.length ?? 0, scheibeB?.setScores?.length ?? 0);
+		const fuehrend = Math.max(scheibeA?.setPoints ?? 0, scheibeB?.setPoints ?? 0);
+		const bisZumSieg = Math.ceil(Math.max(0, SIEG_SATZPUNKTE - fuehrend) / SATZPUNKTE_PRO_SATZ);
+		return Math.max(0, Math.min(MAX_SAETZE - gespielt, bisZumSieg));
+	});
+
 	// `.monitor-page` deckt die Fläche zwar sofort themengerecht ab, aber `<body>` bleibt beim
 	// Overscroll-Bounce auf Touch-Geräten sichtbar (iOS Safari o.ä.) — ohne das hier bliebe der
 	// Rand dort immer dunkel, auch im Light-Theme.
@@ -216,6 +232,7 @@
 				satzpunkteFuehrt={aSatzpunkteFuehrt}
 				satzpunkteZurueck={bSatzpunkteFuehrt}
 				gegnerSetScores={scheibeB.setScores ?? null}
+				{verbleibendeSaetze}
 			/>
 			<div class="monitor-divider"><span>VS</span></div>
 			<MonitorTeamBlock
@@ -224,6 +241,7 @@
 				satzpunkteFuehrt={bSatzpunkteFuehrt}
 				satzpunkteZurueck={aSatzpunkteFuehrt}
 				gegnerSetScores={scheibeA.setScores ?? null}
+				{verbleibendeSaetze}
 			/>
 		</div>
 	{/if}
@@ -256,6 +274,7 @@
 		--monitor-row-border: rgba(255, 255, 255, 0.08);
 		--monitor-row-even: rgba(255, 255, 255, 0.04);
 		--monitor-ring-empty-bg: rgba(255, 255, 255, 0.06);
+		--monitor-slot-bg: rgba(255, 255, 255, 0.14);
 		--monitor-ring-empty-fg: #6c757d;
 		--monitor-compare-equal-bg: #ced4da;
 		--monitor-compare-equal-fg: #212529;
@@ -285,6 +304,7 @@
 		--monitor-row-border: rgba(0, 0, 0, 0.08);
 		--monitor-row-even: rgba(0, 0, 0, 0.03);
 		--monitor-ring-empty-bg: rgba(0, 0, 0, 0.05);
+		--monitor-slot-bg: rgba(0, 0, 0, 0.12);
 		--monitor-ring-empty-fg: #8891a0;
 		--monitor-compare-equal-bg: #b9c0c8;
 		--monitor-compare-equal-fg: #1b1f24;

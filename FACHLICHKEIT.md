@@ -48,7 +48,7 @@ Wichtig: Schütze/Spotter/Zuschauer authentifizieren sich **nie** über ein Benu
 - **Pairing statt Login**: Bildschirm ruft beim ersten Start eine Registrierungs-URL auf, bekommt einen 6-stelligen Pairing-Code angezeigt (wie Chromecast/Smart-TV-Pairing) und pollt, bis ein Admin ihn im Verwaltungsbereich einer Begegnung/zwei Scheibennummern zuordnet.
 - Einmal gepaired, zeigt der Bildschirm **automatisch über alle Runden hinweg**, was gerade auf seinen zwei fest zugeordneten Scheibennummern läuft — kein erneutes Pairing pro Runde nötig.
 - Zeigt beide Mannschaften nebeneinander (jede zu "ihrer" Scheibe hin orientiert), pro Seite ein Status: `WARTET` → `SCHUETZEN_GEMELDET` → `SATZ_LAEUFT` ⇄ `SATZ_FERTIG` (pro Satz wiederholt) → `MATCH_FERTIG`.
-- Zeigt die Pfeile des **aktuell offenen Satzes** (wächst von links nach rechts, keine Platzhalter für noch nicht geschossene Pfeile — bewusst reduziert für Lesbarkeit aus der Distanz), plus Ringsumme des Satzes und, sobald ein Satz fertig ist, die Satzpunkte farblich (führt/liegt zurück).
+- Zeigt die Pfeile des **aktuell offenen Satzes** (wächst von links nach rechts; immer 6 Felder reserviert, noch nicht geschossene Pfeile als leere graue Kästchen, damit sich die Feldgröße nicht ändert — Entscheidung Gero, 2026-10-12), plus Ringsumme des Satzes und, sobald ein Satz bestätigt ist (`currentSetConfirmed`), die Satzergebnisse und Satzpunkte farblich (führt/liegt zurück). In diesem Zwischenstand zeigt ein graues Kästchen je noch möglichen weiteren Satz (frühestmöglicher Abschluss: Felder gesamt = gespielte Sätze + aufgerundet (6 − Satzpunkte des Führenden) / 2, max. 5; z. B. 0:0 → 3, 2:0 → 3, 2:2 → 4, 4:2 → 4, 4:4 → 5, 5:3 → 5).
 - **Bewusste Erweiterung ggü. dem Referenzprojekt** (Entscheidung Auftraggeber, 2026-09-28, Issue #27): Neue Pfeile rasten animiert ein (~400 ms; mehrere Pfeile aus einer Abfrage nacheinander, ~150 ms versetzt), Ringsumme und Satzpunkte pulsieren kurz bei Änderung — damit Zuschauer die Änderung aus der Distanz wahrnehmen. Keine Animation beim ersten Laden, bei Undo/Korrektur, zwischen den Sätzen und bei aktivierter Einstellung „Bewegung reduzieren".
 
 ## Veranstaltungs-Setup und Admin-Workflow
@@ -56,6 +56,7 @@ Wichtig: Schütze/Spotter/Zuschauer authentifizieren sich **nie** über ein Benu
 > Quelle: Nutzerbeschreibung + Mockups/Ablauf-Skizzen in `/home/gero/Downloads/Spotter-Bildschirm/` (siehe Referenzen unten). Das dortige `Ablauf.md` ist explizit als „ENTWURF – noch nicht abgestimmt" markiert — anders als die Binocular-/Display-UI im Referenzprojekt (siehe Migrations-Prinzip oben) ist dieser Teil **kein** fertig abgestimmtes Verhalten, sondern Diskussionsstand. Als Design-Richtung/Ausgangspunkt behandeln, nicht als fixe Vorgabe.
 
 **Account-Rollen** (`User.role`, siehe `src/lib/api/auth.ts`) — genau zwei, keine weiteren:
+
 - **`user`**: normaler registrierter Account, verwaltet **nur eigene** Veranstaltungen (Ownership-Scoping — ein `user` sieht/ändert nie Veranstaltungen eines anderen `user`, analog zum `owner`-Feld im `scoring`-Referenzprojekt).
 - **`admin`**: verwaltet zusätzlich **alle** Benutzer und **alle** Veranstaltungen, nicht nur eigene.
 
@@ -63,7 +64,7 @@ Diese Achse ist unabhängig von den Wettkampf-Rollen (Schütze/Spotter/Zuschauer
 
 1. **Veranstaltung anlegen**: ein `user` (oder `admin`) legt eine Veranstaltung an — gehört danach diesem Account (Ownership).
 2. **Datenquelle für Begegnungen** — zwei Wege, im Verwaltungs-UI nur als Auswahl sichtbar:
-   - **Initiale Tabelle**: der Veranstalter trägt die Ausgangstabelle (Platz, Mannschaft, Satzpunkte, Matchpunkte) direkt ein → Backend berechnet daraus den Spielplan/die Begegnungen.
+   - **Initiale Tabelle**: der Veranstalter trägt die Ausgangstabelle (Platz, Mannschaft, Satzpunkte, Matchpunkte) direkt ein (je Mannschaft Satzpunkte + − und Matchpunkte + −, Platz = Zeilenposition → Fawkes `rank`) → Backend berechnet daraus den Spielplan/die Begegnungen. Die Tabelle ist nicht zurücklesbar, das Formular merkt sich die zuletzt gespeicherte pro Veranstaltung im Browser (localStorage).
    - **Ligaverwaltung verbinden**: der Veranstalter verbindet die Veranstaltung stattdessen mit einer externen Liga-App (z. B. „BSApp Liga") über URL + Login-PIN; zusätzlich wird angegeben, ob dort ein **digitaler Schusszettel** eingesetzt wird (Ja/Nein) — das entspricht den drei Ablauf-Varianten in `Ablauf.md` (ohne externes System / mit Liga-App / mit Liga-App + separater Schusszettel-App).
    - **Für das Frontend später identisch**: Das Backend bereitet in beiden Fällen dieselben aufbereiteten Begegnungs-Daten auf — das Frontend selbst unterscheidet nach der Einrichtung nicht mehr, woher die Daten kommen. Im Verwaltungs-UI ist nur die Einrichtung selbst (Tabelle vs. Verbindung) unterschiedlich.
 3. **Matchkontrolle**: sobald Begegnungen existieren, gibt es pro **„Match"** (= Terminologie hier für das, was im Referenzprojekt „Runde" heißt: 4 gleichzeitige Begegnungen, 8 Scheiben parallel im Einsatz) eine Karte mit Aktiv/Inaktiv-Status und einem Freigabe-Button. Genau **ein Match/eine Runde ist immer aktiv** — erst dieses „Freigeben" sagt allen Tablets und Displays der 4 enthaltenen Begegnungen, dass ihre jeweiligen Sätze (bis zu 5 pro Begegnungsseite) jetzt laufen. Deckungsgleich mit der `LOCKED → ACTIVE → COMPLETED`-Zustandsmaschine des Referenzprojekts, nur andere Bezeichnung („Match" statt „Runde") — kein Widerspruch.
@@ -80,7 +81,7 @@ Diese Achse ist unabhängig von den Wettkampf-Rollen (Schütze/Spotter/Zuschauer
 
 - Anders als beim Display: Tablet-Pairing läuft über **QR-Code**, nicht über einen einzutippenden Code.
 - Pro Scheibe (nicht pro Scheiben-Paar!) gibt es im Verwaltungs-UI einen Button („Tablet Scheibe N"), der ein Modal mit einem QR-Code öffnet.
-- Der QR-Code kodiert eine Auth-URL nach dem Muster `/tablet/<UUID4>/<scheibennummer>` — die UUID4 dient gleichzeitig als Zuordnung *und* als Auth-Token. Tablet scannt, landet direkt auf der authentifizierten Spotter-Seite für genau diese Scheibe, keine manuelle Code-Eingabe nötig.
+- Der QR-Code kodiert eine Auth-URL nach dem Muster `/tablet/<UUID4>/<scheibennummer>` — die UUID4 dient gleichzeitig als Zuordnung _und_ als Auth-Token. Tablet scannt, landet direkt auf der authentifizierten Spotter-Seite für genau diese Scheibe, keine manuelle Code-Eingabe nötig.
 
 ## Tabellenansicht (Referenz-Design)
 
@@ -88,7 +89,7 @@ Für den „Tabelle"-Anzeigemodus (Pause-Anzeige/Beamer) gibt es bereits ein gut
 
 - Dort helles Theme (weißer Hintergrund, blauer Akzent) — für ArchScore **bewusst nicht übernehmen**: die Tabellenansicht läuft auf denselben Displays wie die Trefferanzeige, deshalb einheitlich das **dunkle Theme** der bestehenden Trefferanzeige (`#10151c` u. Ä.) verwenden. Nur Layout/Berechnung (Spalten, dynamische Schriftgröße) aus diesem Referenzprojekt übernehmen, die Farben nicht.
 - Schriftgröße wird **dynamisch aus der gemessenen Container-Höhe berechnet** (`ResizeObserver`, `fontSize = (Höhe / (Zeilenzahl + 1.5)) × 0.58`), nicht rein über CSS `clamp()`/`vh` — damit füllt die Tabelle immer die verfügbare Höhe unabhängig von der Anzahl Mannschaften.
-- Spalten: Platz, Mannschaft, Matchpunkte (mit Delta in Klammern, z. B. „14 (14:8)"), Satzpunkte-Netto (farbig: grün bei positiv, rot bei negativ).
+- Spalten: Platz, Rang-Badge (▲ grün/▼ rot + Anzahl Plätze aus `rankDifference`, „–" bei 0; `rankDifference` = aktueller Rang − Rang zu Tabellenbeginn, also negativ = verbessert), Mannschaft, Satzpunkte-Netto (farbig: grün bei positiv, rot bei negativ), Matchpunkte (nur der Wert, ohne Klammer — Entscheidung Gero, 2026-10-12).
 - Kopfzeile mit Liga-Name + Uhrzeit (Uhrzeit aktualisiert minütlich), Tabelle selbst pollt/lädt sekündlich.
 - Zebra-Streifen bei den Zeilen, `table-layout: fixed` mit festen Prozent-Breiten je Spalte.
 
