@@ -118,6 +118,7 @@
 		"waiting_release_hint": "This lane has no released match right now. Recording will start automatically once the round is released.",
 		"confirm_title": "All 6 arrows recorded",
 		"confirm_btn": "Confirm",
+		"match_complete": "Match complete",
 		"confirmed_waiting": "Confirmed — waiting for the tournament management",
 		"toggle_show_low": "Show more values (1–5)",
 		"toggle_hide_low": "Hide more values",

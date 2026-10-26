@@ -56,6 +56,8 @@
 	// Vom Spotter final bestätigt -> Eingabe gesperrt, bis die Turnierleitung den
 	// nächsten Satz freigibt (erkennbar am nächsten Poll: leerer shots-Stand).
 	const locked = $derived(matchData?.isConfirmed === true);
+	// Match auf dieser Scheibe entschieden -> kein weiterer Satz, nichts mehr zu erfassen.
+	const matchComplete = $derived(matchData?.matchComplete === true);
 
 	function uebernehmeMatchDaten(md: BinocularMatch) {
 		matchData = md;
@@ -367,9 +369,8 @@
 			<!-- Satzweise Anzeige: alle 6 Pfeile des aktuellen Satzes. Bereits erfasste Pfeile
 			     sind antippbar, um sie nachträglich zu korrigieren (solange nicht
 			     bestätigt/gesperrt). `locked` deckt sowohl "nächster Satz noch nicht freigegeben"
-			     als auch "Match auf dieser Scheibe komplett entschieden" ab — die echte Fawkes-API
-			     unterscheidet das nicht (kein eigenes Match-Ende-Feld, nur `isConfirmed`), aus
-			     Spotter-Sicht ist beides ohnehin "nichts zu tun, auf die Turnierleitung warten". -->
+			     als auch "Match komplett entschieden" ab; `matchComplete` unterscheidet nur den
+			     Hinweistext. -->
 			<div class="satz-grid">
 				{#each [0, 1, 2] as posIdx (posIdx)}
 					<div
@@ -424,7 +425,7 @@
 			{:else if locked}
 				<Alert color="info" class="text-center mt-3 mb-0 w-100 py-3">
 					<i class="bi bi-check2-circle fs-2 d-block mb-2"></i>
-					{$_('binocular.confirmed_waiting')}
+					{matchComplete ? $_('binocular.match_complete') : $_('binocular.confirmed_waiting')}
 				</Alert>
 			{/if}
 		</div>

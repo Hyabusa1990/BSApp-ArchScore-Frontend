@@ -119,6 +119,7 @@
 		"waiting_release_hint": "Diese Scheibe hat aktuell keine freigegebene Begegnung. Sobald die Runde freigegeben wird, startet die Erfassung automatisch.",
 		"confirm_title": "Alle 6 Pfeile erfasst",
 		"confirm_btn": "Bestätigen",
+		"match_complete": "Match beendet",
 		"confirmed_waiting": "Bestätigt — warte auf die Turnierleitung",
 		"toggle_show_low": "Weitere Werte (1–5) einblenden",
 		"toggle_hide_low": "Weitere Werte ausblenden",
