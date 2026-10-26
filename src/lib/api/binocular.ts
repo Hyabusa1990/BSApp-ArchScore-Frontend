@@ -38,6 +38,9 @@ export interface BinocularMatch {
 	 * bleibt auch `true`, wenn das Match auf dieser Scheibe komplett entschieden ist (kein
 	 * weiterer Satz kommt mehr), siehe `mocks/binoculars.ts`. */
 	isConfirmed: boolean;
+	/** Ob das Match auf dieser Scheibe abgeschlossen ist (kein weiterer Satz kommt mehr).
+	 * Seit Docker-Release 2026-10-26 (`GetSpotterTargetInfo.matchComplete`). */
+	matchComplete: boolean;
 }
 
 /** Ringzahl (0 = Miss/"M", 10, sonst 1-9) -> Fawkes-Zeichen. */

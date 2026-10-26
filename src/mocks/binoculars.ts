@@ -97,6 +97,7 @@ function buildMatch(scheibennummer: number, { found, scoring }: Resolved): Binoc
 		// auf "ausstehend"). `status`/`stand.beendet` selbst bleibt rein Mock-intern, die echte
 		// Fawkes-API kennt dafür kein eigenes Feld — reduziert sich für den Client auf dieses
 		// eine echte Boolean.
+		matchComplete: stand.beendet,
 		isConfirmed:
 			stand.beendet || scoring.schuetze_bestaetigte_saetze.includes(scoring.aktueller_satz)
 	};

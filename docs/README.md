@@ -19,6 +19,11 @@ C#-Backend „Fawkes".
   `TargetInformation.setScores` ist `int?[]`. Die Datei ist mit Tab-Einrückung aus dem
   Swagger-JSON neu serialisiert (gleiches Format wie vorher, kleiner Diff).
 
+- **Stand 2026-10-26:** wieder vom Docker-Release übernommen (Image-Revision
+  `6760332441891de5afae29c1f2e95722d12294bf`, gegen `GET /swagger/v1/swagger.json`, per Prettier
+  auf das Repo-Format gebracht); `main`-Commit der Spec weiterhin `d7b5696f`. Änderung ggü.
+  2026-10-05: `GetSpotterTargetInfo.matchComplete` (bool) neu — Match auf der Scheibe abgeschlossen.
+
 Das frühere `ArchScore-SpecsAndDocu`-Submodule (separates Repo mit `openapi.yaml`) ist entfernt —
 diese Datei existiert im Backend-Repo nicht mehr, `Fawkes-OpenApi.json` ist die einzige verbleibende
 Spec-Quelle.

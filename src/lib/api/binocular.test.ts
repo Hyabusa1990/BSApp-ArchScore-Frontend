@@ -32,6 +32,7 @@ beforeEach(() => {
 				currentSetNo: 1,
 				currentSetScore: null,
 				isConfirmed: false,
+				matchComplete: false,
 				shots
 			});
 		if (url.endsWith('/spotter/shots') && method === 'PUT') {
