@@ -33,6 +33,12 @@
 	// mehr, sondern zeigt nur noch matchData.shots des aktuell laufenden Satzes.
 	let arrows = $state<(number | null)[]>(emptyArrows());
 	let satzSaving = $state(false);
+	// Nach erfolgreichem Bestätigen: Satznummer, auf deren Wechsel gewartet wird. Solange gesetzt,
+	// deckt ein Ladefenster die Seite ab, damit der Tap nicht wie "nicht angekommen" wirkt.
+	let wartetAufSatz = $state<number | null>(null);
+	// Ohne Wechsel (z. B. weil erst die Turnierleitung freigeben muss) nach dieser Zeit
+	// aufgeben und den normalen "Bestätigt — warte"-Hinweis zeigen.
+	const NAECHSTER_SATZ_TIMEOUT_MS = 15000;
 	let zeigeNiedrigeWerte = $state(false);
 	// Index (0-5) eines bereits erfassten Pfeils, der gerade korrigiert wird —
 	// null = normaler Modus (Tap füllt den nächsten freien Pfeil).
@@ -142,6 +148,31 @@
 			}
 		}, 3000);
 		return () => clearInterval(interval);
+	});
+
+	// Ladefenster nach dem Bestätigen: schneller pollen (1 s) und beenden, sobald der nächste Satz
+	// da ist (neue Satznummer, Match komplett oder wieder entsperrt) oder die Wartezeit um ist.
+	$effect(() => {
+		if (wartetAufSatz === null) return;
+		const vorherig = wartetAufSatz;
+		const timeout = setTimeout(() => (wartetAufSatz = null), NAECHSTER_SATZ_TIMEOUT_MS);
+		const interval = setInterval(async () => {
+			try {
+				const md = await binocularApi.getScheibe(token, scheibennummer);
+				connectivity.reportSuccess();
+				matchData = md;
+				arrows = arrowsFromShots(md.shots);
+				if (md.currentSetNo !== vorherig || md.matchComplete || !md.isConfirmed) {
+					wartetAufSatz = null;
+				}
+			} catch {
+				connectivity.reportFailure();
+			}
+		}, 1000);
+		return () => {
+			clearTimeout(timeout);
+			clearInterval(interval);
+		};
 	});
 
 	// ── Keypad ────────────────────────────────────────────────────────────────
@@ -277,9 +308,17 @@
 		satzSaving = true;
 		actionError = null;
 		try {
+			const vorherigerSatz = matchData?.currentSetNo ?? null;
 			matchData = await binocularApi.postBestaetigeSatz(token, scheibennummer);
 			arrows = arrowsFromShots(matchData.shots);
 			korrekturIndex = null;
+			if (
+				vorherigerSatz !== null &&
+				matchData.currentSetNo === vorherigerSatz &&
+				!matchData.matchComplete
+			) {
+				wartetAufSatz = vorherigerSatz;
+			}
 		} catch (err) {
 			const detail = err instanceof APIError ? (err.data as { detail?: string })?.detail : null;
 			actionError = detail ?? $_('binocular.satz_speichern_error');
@@ -358,6 +397,17 @@
 	</div>
 {:else if view === 'READY' && matchData}
 	<div class="binocular-page">
+		{#if wartetAufSatz !== null}
+			<div
+				class="position-fixed top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-white bg-opacity-75"
+				style="z-index: 2000;"
+				role="status"
+				aria-live="polite"
+			>
+				<Spinner color="primary" style="width: 4rem; height: 4rem;" />
+				<div class="fw-bold fs-5 mt-3">{$_('binocular.next_set_loading')}</div>
+			</div>
+		{/if}
 		<div class="binocular-header border-bottom px-3 py-2">
 			<span class="small text-muted"
 				>{$_('binocular.lane_label', { values: { lane: scheibennummer } })}</span
