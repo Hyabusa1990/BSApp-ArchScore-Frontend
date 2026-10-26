@@ -830,20 +830,68 @@ export function getRoundInfo(veranstaltungId: string, roundNo: number): RoundTar
 	const targets: RoundTarget[] = [];
 	for (const b of begegnungen) {
 		const stand = berechneMatchStand(b.scheibe_a, b.scheibe_b);
+		const scoresFor = (scheibe: number, ringe: (e: (typeof stand.ergebnisse)[number]) => number) =>
+			Array.from({ length: SAETZE_PRO_MATCH }, (_, i) => {
+				const override = scoreOverrides.get(overrideKey(veranstaltungId, roundNo, scheibe, i + 1));
+				if (override !== undefined) return override;
+				const e = stand.ergebnisse[i];
+				return e ? ringe(e) : null;
+			});
+		const scoresA = scoresFor(b.scheibe_a, (e) => e.ringeA);
+		const scoresB = scoresFor(b.scheibe_b, (e) => e.ringeB);
+
+		// Satzpunkte wie das Backend aus den (ggf. korrigierten) Satzsummen neu berechnen.
+		let punkteA = 0;
+		let punkteB = 0;
+		for (let i = 0; i < SAETZE_PRO_MATCH; i++) {
+			const a = scoresA[i];
+			const bb = scoresB[i];
+			if (a === null || bb === null) continue;
+			if (a > bb) punkteA += 2;
+			else if (bb > a) punkteB += 2;
+			else {
+				punkteA += 1;
+				punkteB += 1;
+			}
+		}
 		targets.push({
 			targetNo: b.scheibe_a,
 			teamName: b.mannschaft_a,
-			totalSetPoints: stand.satzpunkteA,
-			setScores: stand.ergebnisse.map((e) => e.ringeA)
+			totalSetPoints: punkteA,
+			setScores: scoresA
 		});
 		targets.push({
 			targetNo: b.scheibe_b,
 			teamName: b.mannschaft_b,
-			totalSetPoints: stand.satzpunkteB,
-			setScores: stand.ergebnisse.map((e) => e.ringeB)
+			totalSetPoints: punkteB,
+			setScores: scoresB
 		});
 	}
 	return targets;
+}
+
+const SAETZE_PRO_MATCH = 5;
+
+// Korrigierte Satzsummen (`PUT .../sets/{setNo}/score`) — nur im Speicher, überschreiben die
+// aus den Spotter-Passen berechneten Ringe. `null` = Summe zurückgesetzt (Satz zählt nicht).
+const scoreOverrides = new Map<string, number | null>();
+
+function overrideKey(veranstaltungId: string, roundNo: number, targetNo: number, setNo: number) {
+	return `${veranstaltungId}:${roundNo}:${targetNo}:${setNo}`;
+}
+
+/** Entspricht `PUT /fixtures/{fixtureId}/rounds/{roundNo}/targets/{targetNo}/sets/{setNo}/score`. */
+export function setSetScore(
+	veranstaltungId: string,
+	roundNo: number,
+	targetNo: number,
+	setNo: number,
+	score: number | null
+): boolean {
+	const target = getRoundInfo(veranstaltungId, roundNo).find((t) => t.targetNo === targetNo);
+	if (!target || setNo < 1 || setNo > SAETZE_PRO_MATCH) return false;
+	scoreOverrides.set(overrideKey(veranstaltungId, roundNo, targetNo, setNo), score);
+	return true;
 }
 
 /**

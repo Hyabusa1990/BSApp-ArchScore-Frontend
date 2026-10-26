@@ -11,6 +11,7 @@ import {
 	findVeranstaltung,
 	getCurrentRoundNo,
 	getRoundInfo,
+	setSetScore,
 	isFixtureOwner,
 	removeFixtureUser,
 	removeVeranstaltung,
@@ -163,6 +164,28 @@ export const veranstaltungHandlers = [
 		const targets = getRoundInfo(String(v.id), roundNo);
 		return HttpResponse.json({ fixtureId: v.id, roundNo, targets });
 	}),
+
+	http.put(
+		`${API_URL}/fixtures/:fixtureId/rounds/:roundNo/targets/:targetNo/sets/:setNo/score`,
+		async ({ request, params }) => {
+			const user = requireUser(request);
+			if (!user) return unauthorized();
+			const v = findVeranstaltung(user, Number(params.fixtureId));
+			if (!v) return notFound();
+			const body = (await request.json()) as { score?: number | null };
+			if (body.score !== null && typeof body.score !== 'number') {
+				return HttpResponse.json({ detail: 'score fehlt oder ungültig' }, { status: 422 });
+			}
+			const ok = setSetScore(
+				String(v.id),
+				Number(params.roundNo),
+				Number(params.targetNo),
+				Number(params.setNo),
+				body.score
+			);
+			return ok ? new HttpResponse(null, { status: 200 }) : notFound();
+		}
+	),
 
 	// Fawkes-`DosController`-Kontrakt (siehe Issue #10, korrigiert #5/#7/#8): fixtureId statt
 	// Veranstaltungs-UUID im Pfad, nur roundNo — kein setNo mehr.
