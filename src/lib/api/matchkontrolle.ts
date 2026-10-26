@@ -17,9 +17,8 @@ import { binocularApi } from './binocular';
  * pro Aufruf, als flache Scheiben-Liste (`TargetInformation[]`), keine gepaarten Begegnungen,
  * und keinen Endpunkt, der die Gesamtzahl der Runden nennt. Geklärt mit Gero (2026-09-04):
  * Satzpunkte werden serverseitig berechnet (nicht mehr
- * client-seitig aus Spotter-Rohdaten nachzurechnen), und der einzige weitere ungenutzte
- * `DosController`-Endpunkt (`PUT .../sets/{setNo}/score`) gehört zur bewusst nicht gebauten
- * Kampfrichter-Rolle (FACHLICHKEIT.md) — für dieses Frontend irrelevant.
+ * client-seitig aus Spotter-Rohdaten nachzurechnen). `PUT .../sets/{setNo}/score` wird seit
+ * 2026-10-26 für die Satzsummen-Korrektur der Turnierleitung genutzt (`setSetScore`).
  *
  * Seit 2026-10-05 (Backend-Commit `19abb9ea`) liefern beide `DosController`-Rundenendpunkte
  * echte Daten: `GET .../rounds/{roundNo}` und `PUT .../sets/{setNo}/score` (Body nur noch
@@ -118,6 +117,22 @@ export const matchkontrolleApi = {
 			begegnungen: roundInfoToBegegnungen(round.targets ?? [])
 		}));
 	},
+
+	// Korrigiert die Satzsumme einer Scheibe (Kampfrichter-Korrektur nach falscher Spotter-
+	// Bestätigung); `null` setzt die Summe zurück. Bare 200 ohne Body. `setNo` ab 1.
+	setSetScore: (
+		token: string,
+		fixtureId: number,
+		roundNo: number,
+		targetNo: number,
+		setNo: number,
+		score: number | null
+	) =>
+		apiClient.put<void>(
+			`/fixtures/${fixtureId}/rounds/${roundNo}/targets/${targetNo}/sets/${setNo}/score`,
+			{ score },
+			token
+		),
 
 	getPhase: (token: string, fixtureId: number) =>
 		apiClient.get<Phase>(`/fixtures/${fixtureId}/phase`, token),

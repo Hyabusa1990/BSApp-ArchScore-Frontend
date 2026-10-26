@@ -150,8 +150,19 @@
 								</div>
 							{/if}
 						</CardBody>
-						{#if !match.aktiv}
-							<CardFooter>
+						<CardFooter class="d-flex flex-column gap-2">
+							<Button
+								color="secondary"
+								outline
+								size="sm"
+								href={resolve('/veranstaltungen/[id]/matchkontrolle/[roundNo]', {
+									id: veranstaltungId,
+									roundNo: String(match.nummer)
+								})}
+							>
+								<i class="bi bi-pencil-square me-2"></i>{$_('matchkontrolle.korrigieren_btn')}
+							</Button>
+							{#if !match.aktiv}
 								<Button
 									color="success"
 									class="w-100"
@@ -165,8 +176,8 @@
 									{/if}
 									{$_('matchkontrolle.freigeben_btn')}
 								</Button>
-							</CardFooter>
-						{/if}
+							{/if}
+						</CardFooter>
 					</Card>
 				</Col>
 			{/each}
