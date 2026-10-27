@@ -245,7 +245,8 @@
 		"aktiv": "ACTIVE",
 		"inaktiv": "INACTIVE",
 		"freigeben_btn": "Release",
-		"scheibe_label": "Target {n}",
+		"scheiben_label": "Target {a} & {b}",
+		"satz_abweichung": "Error: set {a} / {b}",
 		"abgeschlossen": "Completed",
 		"laeuft": "Running ({satz})"
 	},

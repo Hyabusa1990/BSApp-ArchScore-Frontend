@@ -246,7 +246,8 @@
 		"aktiv": "AKTIV",
 		"inaktiv": "INAKTIV",
 		"freigeben_btn": "Freigeben",
-		"scheibe_label": "Scheibe {n}",
+		"scheiben_label": "Scheibe {a} & {b}",
+		"satz_abweichung": "Fehler: Satz {a} / {b}",
 		"abgeschlossen": "Abgeschlossen",
 		"laeuft": "Läuft ({satz})"
 	},
