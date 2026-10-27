@@ -4,7 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { veranstaltungApi, type Veranstaltung } from '$lib/api/veranstaltung';
-	import { matchkontrolleApi, type Match, type ConfirmStatus } from '$lib/api/matchkontrolle';
+	import { matchkontrolleApi, type Match, type ScheibenStatusMap } from '$lib/api/matchkontrolle';
 	import {
 		Container,
 		Card,
@@ -24,7 +24,7 @@
 
 	let veranstaltung = $state<Veranstaltung | null>(null);
 	let matches = $state<Match[]>([]);
-	let confirmStatus = $state<ConfirmStatus>({});
+	let scheibenStatus = $state<ScheibenStatusMap>({});
 	let loading = $state(true);
 	let loadError = $state<string | null>(null);
 	// Match-ID, deren Freigabe-Anfrage gerade läuft — verhindert Doppelklicks/Parallel-Freigaben.
@@ -41,11 +41,14 @@
 	// Confirm-Status kommt aus keinem eigenen Matchkontrolle-Endpunkt (Fawkes kennt keinen),
 	// sondern pro Scheibe des aktiven Matches über denselben Spotter-Info-Call wie die
 	// Binocular-Seite selbst — siehe matchkontrolle.ts.
-	async function ladeConfirmStatus() {
+	async function ladeScheibenStatus() {
 		if (!veranstaltung) return;
 		const aktivesMatch = matches.find((m) => m.aktiv);
-		confirmStatus = aktivesMatch
-			? await matchkontrolleApi.getConfirmStatus(veranstaltung.uniqueId, scheibenFuer(aktivesMatch))
+		scheibenStatus = aktivesMatch
+			? await matchkontrolleApi.getScheibenStatus(
+					veranstaltung.uniqueId,
+					scheibenFuer(aktivesMatch)
+				)
 			: {};
 	}
 
@@ -60,7 +63,7 @@
 				matchkontrolleApi.getPhase(auth.accessToken!, v.id)
 			]);
 			matches = ms.map((m) => ({ ...m, aktiv: m.nummer === phase.roundNo }));
-			await ladeConfirmStatus();
+			await ladeScheibenStatus();
 		} catch {
 			loadError = $_('matchkontrolle.error_load');
 		} finally {
@@ -76,7 +79,7 @@
 	// selbst neu zu laden (gleiche Poll-Kadenz wie die Binocular-Seite, siehe #4).
 	$effect(() => {
 		if (loading || loadError) return;
-		const interval = setInterval(ladeConfirmStatus, 3000);
+		const interval = setInterval(ladeScheibenStatus, 3000);
 		return () => clearInterval(interval);
 	});
 
@@ -90,7 +93,7 @@
 
 		try {
 			await matchkontrolleApi.setPhase(auth.accessToken!, veranstaltung.id, match.nummer);
-			await ladeConfirmStatus();
+			await ladeScheibenStatus();
 		} catch {
 			loadError = $_('matchkontrolle.error_freigeben');
 			matches = vorherigeMatches; // Optimistischen Stand verwerfen
@@ -137,14 +140,19 @@
 							{#if match.aktiv}
 								<div class="d-flex flex-wrap justify-content-center gap-2 mt-1">
 									{#each scheibenFuer(match) as scheibe (scheibe)}
+										{@const status = scheibenStatus[scheibe]}
 										<Badge
-											color={confirmStatus[scheibe] ? 'success' : 'secondary'}
+											color={status?.matchComplete ? 'success' : status ? 'primary' : 'secondary'}
 											class="fw-normal"
 										>
 											{$_('matchkontrolle.scheibe_label', { values: { n: scheibe } })}:
-											{confirmStatus[scheibe]
-												? $_('matchkontrolle.bestaetigt')
-												: $_('matchkontrolle.ausstehend')}
+											{#if status?.matchComplete}
+												{$_('matchkontrolle.abgeschlossen')}
+											{:else if status}
+												{$_('matchkontrolle.laeuft', { values: { satz: status.currentSetNo } })}
+											{:else}
+												–
+											{/if}
 										</Badge>
 									{/each}
 								</div>

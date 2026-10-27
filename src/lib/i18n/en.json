@@ -246,8 +246,8 @@
 		"inaktiv": "INACTIVE",
 		"freigeben_btn": "Release",
 		"scheibe_label": "Target {n}",
-		"bestaetigt": "confirmed",
-		"ausstehend": "pending"
+		"abgeschlossen": "Completed",
+		"laeuft": "Running ({satz})"
 	},
 	"bildschirme": {
 		"title": "Screen and Tablet Management",
