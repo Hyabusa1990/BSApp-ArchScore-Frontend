@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { LeagueTablePosition } from '$lib/api/display';
+	import { orderLeagueTable } from '$lib/leagueTable';
 	import { _ } from 'svelte-i18n';
 
 	let { eintraege } = $props<{ eintraege: LeagueTablePosition[] }>();
@@ -10,10 +11,11 @@
 	let mainEl = $state<HTMLElement | null>(null);
 	let fontSize = $state('1.5rem');
 
-	// Server liefert `rank` explizit (nicht mehr aus der Array-Reihenfolge abgeleitet, siehe
-	// Issue #18, Feldname seit Pfad-Sync 2026-09-28 `rank` statt `position`) — defensiv sortieren
-	// statt Server-Reihenfolge blind zu vertrauen.
-	const sortiert = $derived([...eintraege].sort((a, b) => a.rank - b.rank));
+	// Server liefert `rank` explizit. Sind die Ränge unbrauchbar (alle 0 vor der ersten Berechnung
+	// oder doppelt vergeben), gilt die Reihenfolge der API-Antwort ohne Rang-/Trendanzeige.
+	const tabelle = $derived(orderLeagueTable(eintraege));
+	const sortiert = $derived(tabelle.rows);
+	const hatRang = $derived(tabelle.ranked);
 
 	$effect(() => {
 		if (!mainEl || sortiert.length === 0) return;
@@ -44,14 +46,16 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each sortiert as eintrag, i (eintrag.rank)}
+				{#each sortiert as eintrag, i (eintrag.teamName)}
 					{@const spNetto = eintrag.setPointsWon - eintrag.setPointsLost}
 					<tr class:even={i % 2 === 1}>
-						<td class="col-pos">{eintrag.rank}</td>
+						<td class="col-pos">{hatRang ? eintrag.rank : ''}</td>
 						<td class="col-trend">
 							<!-- rankDifference = aktueller Rang − Rang zu Tabellenbeginn (Fawkes
 							     StandardLeagueRuleSet): negativ = nach oben gerutscht = verbessert. -->
-							{#if eintrag.rankDifference < 0}
+							{#if !hatRang}
+								<span class="trend trend-same"></span>
+							{:else if eintrag.rankDifference < 0}
 								<span class="trend trend-up">▲ {-eintrag.rankDifference}</span>
 							{:else if eintrag.rankDifference > 0}
 								<span class="trend trend-down">▼ {eintrag.rankDifference}</span>
