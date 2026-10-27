@@ -11,8 +11,8 @@
 	let mainEl = $state<HTMLElement | null>(null);
 	let fontSize = $state('1.5rem');
 
-	// Server liefert `rank` explizit. Sind die Ränge unbrauchbar (alle 0 vor der ersten Berechnung
-	// oder doppelt vergeben), gilt die Reihenfolge der API-Antwort ohne Rang-/Trendanzeige.
+	// Server liefert `rank` explizit (Gleichstand = gleicher Platz). Haben alle Mannschaften denselben
+	// Rang (initiale Tabelle), gilt die API-Reihenfolge mit aufsteigenden Plätzen, ohne Trendanzeige.
 	const tabelle = $derived(orderLeagueTable(eintraege));
 	const sortiert = $derived(tabelle.rows);
 	const hatRang = $derived(tabelle.ranked);
@@ -49,7 +49,7 @@
 				{#each sortiert as eintrag, i (eintrag.teamName)}
 					{@const spNetto = eintrag.setPointsWon - eintrag.setPointsLost}
 					<tr class:even={i % 2 === 1}>
-						<td class="col-pos">{hatRang ? eintrag.rank : ''}</td>
+						<td class="col-pos">{eintrag.position}</td>
 						<td class="col-trend">
 							<!-- rankDifference = aktueller Rang − Rang zu Tabellenbeginn (Fawkes
 							     StandardLeagueRuleSet): negativ = nach oben gerutscht = verbessert. -->
