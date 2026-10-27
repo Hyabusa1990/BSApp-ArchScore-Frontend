@@ -1,4 +1,4 @@
-import { apiClient } from './client';
+import { apiClient, APIError } from './client';
 import { binocularApi } from './binocular';
 
 /**
@@ -44,6 +44,8 @@ export interface Match {
 export interface Phase {
 	roundNo: number;
 	fixtureId: number;
+	/** Rundenzahl des Spielplans (0 solange keiner existiert). Seit Backend `e5cef653`. */
+	roundCount: number;
 }
 
 /** `Fawkes.Api.Controllers.DosController.TargetInformation`. */
@@ -59,14 +61,15 @@ export interface RoundTarget {
 export interface RoundInfo {
 	fixtureId: number;
 	roundNo: number;
+	/** Rundenzahl des Spielplans, gültig sind `roundNo` 1..roundCount. Seit Backend `e5cef653`. */
+	roundCount: number;
 	targets: RoundTarget[] | null;
 }
 
 /** scheibennummer -> ob der Spotter dieser Scheibe den aktuellen Satz bereits bestätigt hat. */
 export type ConfirmStatus = Record<number, boolean>;
 
-/** Sicherheitsnetz für `loadRounds`, falls das Backend nie eine leere Runde liefert (8 Mannschaften
- * = 7 Runden, größere Ligen gibt es in dieser App nicht). */
+/** Obergrenze für `loadRounds` (8 Mannschaften = 7 Runden, größere Ligen gibt es nicht). */
 const MAX_ROUNDS = 20;
 
 /** Sortiert die flache Scheiben-Liste einer Runde nach `targetNo` und paart sie gemäß der
@@ -90,19 +93,26 @@ export const matchkontrolleApi = {
 	getRound: (token: string, fixtureId: number, roundNo: number) =>
 		apiClient.get<RoundInfo>(`/fixtures/${fixtureId}/rounds/${roundNo}`, token),
 
-	// Es gibt keinen Endpunkt für die Rundenzahl und keinen Lese-Endpunkt für den Spielplan
-	// (Backend-Dev, 2026-09-28): ab `roundNo` 1 hochzählen, bis eine Runde ohne Scheiben kommt.
-	// Live bestätigt (2026-10-05): Fawkes antwortet auf eine nicht existierende Runde mit 200 und
-	// `targets: []`, nicht mit 404. Sequenziell statt parallel, weil das Ende erst bekannt ist,
-	// wenn die erste leere Runde da ist.
+	// Kein Lese-Endpunkt für den Spielplan: ab `roundNo` 1 laden, `roundCount` der ersten Runde
+	// nennt das Ende. Seit Backend `e5cef653` (2026-10-27) antwortet Fawkes außerhalb des
+	// Spielplans mit 404 `ROUND_NOT_FOUND` statt 200 mit leerem `targets` — Runde 1 mit 404
+	// heißt daher "noch kein Spielplan".
 	loadRounds: async (token: string, fixtureId: number): Promise<RoundInfo[]> => {
-		const rounds: RoundInfo[] = [];
-		for (let roundNo = 1; roundNo <= MAX_ROUNDS; roundNo++) {
-			const round = await matchkontrolleApi.getRound(token, fixtureId, roundNo);
-			if (!round.targets?.length) break;
-			rounds.push(round);
+		let first: RoundInfo;
+		try {
+			first = await matchkontrolleApi.getRound(token, fixtureId, 1);
+		} catch (err) {
+			if (err instanceof APIError && err.status === 404) return [];
+			throw err;
 		}
-		return rounds;
+		if (!first.targets?.length) return [];
+		const count = Math.min(first.roundCount || 1, MAX_ROUNDS);
+		const rest = await Promise.all(
+			Array.from({ length: count - 1 }, (_, i) =>
+				matchkontrolleApi.getRound(token, fixtureId, i + 2)
+			)
+		);
+		return [first, ...rest];
 	},
 
 	// `aktiv` bleibt hier immer `false`, der Aufrufer mergt es separat über `getPhase` ein

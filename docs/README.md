@@ -24,6 +24,15 @@ C#-Backend „Fawkes".
   auf das Repo-Format gebracht); `main`-Commit der Spec weiterhin `d7b5696f`. Änderung ggü.
   2026-10-05: `GetSpotterTargetInfo.matchComplete` (bool) neu — Match auf der Scheibe abgeschlossen.
 
+- **Stand 2026-10-27:** Docker-Release, Image-Revision `e5cef653ec6f8c5883a1d3891681a7d0b2b1e15d`
+  (Spec-Commit auf `main` weiter `d7b5696f`). Spec-Änderung: `roundCount` in `GetPhaseResponse`
+  und `GetRoundResponse`. Verhalten (nicht in der Spec): `GET rounds/{n}` außerhalb des
+  Spielplans = 404 `ROUND_NOT_FOUND` (vorher 200 mit leerem `targets`); Fehler sind
+  ProblemDetails (`detail` + `code`, kein `message` mehr); 409 statt 400 für Zustandskonflikte
+  (`MATCH_PLAY_CHART_EXISTS`, `ROUND_NOT_STARTED`, `EMAIL_EXISTS`), 403 für fehlende Rechte /
+  unbestätigte E-Mail; 201/204 als Erfolgscodes; neue Validierungen (`INVALID_ROUND_NO`,
+  `INVALID_MATCH_NO`, `MATCH_NO_REQUIRED`, `INVALID_SCORE`, `USER_NOT_FOUND`).
+
 Das frühere `ArchScore-SpecsAndDocu`-Submodule (separates Repo mit `openapi.yaml`) ist entfernt —
 diese Datei existiert im Backend-Repo nicht mehr, `Fawkes-OpenApi.json` ist die einzige verbleibende
 Spec-Quelle.

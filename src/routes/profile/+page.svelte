@@ -50,7 +50,7 @@
 			confirmPassword = '';
 		} catch (err) {
 			pwErrorKey =
-				err instanceof APIError && err.status === 401
+				err instanceof APIError && err.status === 400
 					? 'profile.error_wrong_password'
 					: 'profile.error_failed';
 		} finally {

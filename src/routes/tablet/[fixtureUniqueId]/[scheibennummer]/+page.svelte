@@ -1,11 +1,22 @@
 <script lang="ts">
 	import { binocularApi, decodeShot, type BinocularMatch } from '$lib/api/binocular';
 	import { APIError } from '$lib/api/client';
+
 	import { _ } from 'svelte-i18n';
 	import { Alert, Spinner } from '@sveltestrap/sveltestrap';
 	import QrScanModal from '$lib/components/QrScanModal.svelte';
 	import ConnectivityBanner from '$lib/components/ConnectivityBanner.svelte';
 	import { connectivity } from '$lib/stores/connectivity.svelte';
+
+	// Noch keine Runde gestartet (409 ROUND_NOT_STARTED, seit Backend `e5cef653`) oder keine Scheibe
+	// in der aktuellen Runde (404) — beides: warten auf Freigabe.
+	function isWaiting(err: unknown): boolean {
+		return (
+			err instanceof APIError &&
+			(err.status === 404 ||
+				(err.status === 409 && (err.data as { code?: string })?.code === 'ROUND_NOT_STARTED'))
+		);
+	}
 
 	let { data } = $props<{ data: { fixtureUniqueId: string; scheibennummer: number } }>();
 	// Lokal weiterhin `token` genannt (matcht `binocularApi`s Parameternamen, siehe binocular.ts)
@@ -87,7 +98,7 @@
 				view = 'READY';
 			} catch (err) {
 				if (!active) return;
-				if (err instanceof APIError && err.status === 404) {
+				if (isWaiting(err)) {
 					view = 'WARTET';
 				} else if (err instanceof APIError && err.status === 440) {
 					view = 'EXPIRED';
@@ -129,7 +140,7 @@
 					arrows = arrowsFromShots(md.shots);
 				}
 			} catch (err) {
-				if (err instanceof APIError && err.status === 404) {
+				if (isWaiting(err)) {
 					// Bekannter, erwartbarer Zwischenstand ("warte auf Freigabe") — der Server ist
 					// erreichbar, das zählt für #20 als Erfolg, nicht als Verbindungsproblem.
 					connectivity.reportSuccess();

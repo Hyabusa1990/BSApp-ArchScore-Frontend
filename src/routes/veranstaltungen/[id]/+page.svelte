@@ -207,7 +207,9 @@
 			usersError =
 				err instanceof APIError && err.status === 403
 					? $_('veranstaltungen.mitglieder_forbidden')
-					: $_('veranstaltungen.mitglieder_error_add');
+					: err instanceof APIError && err.status === 404
+						? $_('veranstaltungen.mitglieder_unknown_user')
+						: $_('veranstaltungen.mitglieder_error_add');
 		} finally {
 			addingUser = false;
 		}
@@ -224,7 +226,9 @@
 			usersError =
 				err instanceof APIError && err.status === 403
 					? $_('veranstaltungen.mitglieder_forbidden')
-					: $_('veranstaltungen.mitglieder_error_remove');
+					: err instanceof APIError && err.status === 409
+						? $_('veranstaltungen.mitglieder_owner_self')
+						: $_('veranstaltungen.mitglieder_error_remove');
 		} finally {
 			removingUserName = null;
 		}
@@ -282,16 +286,14 @@
 			chartCreated = true;
 			editingTabelle = false;
 		} catch (err) {
-			// Fehlerkennung nur über den Text (400 für beide Fälle, kein eigener Code).
-			const message =
-				err instanceof APIError && err.status === 400
-					? String((err.data as { message?: string })?.message ?? '')
-					: '';
-			saveError = message.includes('already exists')
-				? $_('veranstaltungen.error_tabelle_exists')
-				: message.includes('No default match play chart')
-					? $_('veranstaltungen.error_tabelle_unsupported')
-					: $_('veranstaltungen.error_save');
+			const code =
+				err instanceof APIError ? String((err.data as { code?: string })?.code ?? '') : '';
+			saveError =
+				code === 'MATCH_PLAY_CHART_EXISTS'
+					? $_('veranstaltungen.error_tabelle_exists')
+					: code === 'NO_DEFAULT_MATCH_PLAY_CHART'
+						? $_('veranstaltungen.error_tabelle_unsupported')
+						: $_('veranstaltungen.error_save');
 		} finally {
 			saving = false;
 		}
