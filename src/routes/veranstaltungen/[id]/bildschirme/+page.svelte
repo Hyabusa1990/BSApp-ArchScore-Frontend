@@ -423,7 +423,9 @@
 			assignError =
 				err instanceof APIError && err.status === 404
 					? $_('bildschirme.error_unknown_code')
-					: $_('bildschirme.error_assign');
+					: err instanceof APIError && err.status === 409
+						? $_('bildschirme.error_assigned_elsewhere')
+						: $_('bildschirme.error_assign');
 		} finally {
 			assigning = false;
 		}

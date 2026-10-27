@@ -1807,7 +1807,7 @@
 				"description": "Contains data relating to a target being displayed on the device, including the target number, team name, set scores, shots, current set score, and total set points."
 			},
 			"Fawkes.Api.Controllers.DosController.GetPhaseResponse": {
-				"required": ["fixtureId", "roundNo"],
+				"required": ["fixtureId", "roundCount", "roundNo"],
 				"type": "object",
 				"properties": {
 					"roundNo": {
@@ -1819,12 +1819,17 @@
 						"type": "integer",
 						"description": "The id of the fixture.",
 						"format": "int32"
+					},
+					"roundCount": {
+						"type": "integer",
+						"description": "The number of rounds in the match play chart (0 while no chart exists). Valid round numbers are 1 to RoundCount.",
+						"format": "int32"
 					}
 				},
 				"additionalProperties": false
 			},
 			"Fawkes.Api.Controllers.DosController.GetRoundResponse": {
-				"required": ["fixtureId", "roundNo", "targets"],
+				"required": ["fixtureId", "roundCount", "roundNo", "targets"],
 				"type": "object",
 				"properties": {
 					"fixtureId": {
@@ -1835,6 +1840,11 @@
 					"roundNo": {
 						"type": "integer",
 						"description": "The number of the round. This identifies which round's details are being retrieved.",
+						"format": "int32"
+					},
+					"roundCount": {
+						"type": "integer",
+						"description": "The number of rounds in the match play chart. Valid round numbers are 1 to RoundCount.",
 						"format": "int32"
 					},
 					"targets": {

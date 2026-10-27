@@ -57,6 +57,12 @@ function forbidden() {
 	);
 }
 
+function countRounds(fixtureId: string): number {
+	let n = 0;
+	while (getRoundInfo(fixtureId, n + 1).length) n++;
+	return n;
+}
+
 export const veranstaltungHandlers = [
 	http.get(`${API_URL}/fixtures`, ({ request }) => {
 		const user = requireUser(request);
@@ -109,9 +115,9 @@ export const veranstaltungHandlers = [
 		return new HttpResponse(null, { status: 204 });
 	}),
 
-	// Ohne hardOverride -> 400, falls für diese Fixture schon eine Tabelle existiert (wie das
-	// echte Backend, kein 409). Mit hardOverride: true wird überschrieben und alle bisher erfassten
-	// Ergebnisse gelöscht, siehe createMatchPlayChart. Erfolg = bare 200 ohne Body.
+	// Ohne hardOverride -> 409 MATCH_PLAY_CHART_EXISTS, falls schon eine Tabelle existiert (seit
+	// Backend `e5cef653`, vorher 400). Mit hardOverride: true wird überschrieben und alle bisher erfassten
+	// Ergebnisse gelöscht, siehe createMatchPlayChart. Erfolg = 201 ohne Body.
 	http.post(`${API_URL}/fixtures/:fixtureId/matchplaychart`, async ({ request, params }) => {
 		const user = requireUser(request);
 		if (!user) return unauthorized();
@@ -128,18 +134,24 @@ export const veranstaltungHandlers = [
 		if (result === 'exists') {
 			return HttpResponse.json(
 				{
-					message: `Match play chart already exists for fixture ${v.id}. Use hardOverride to force creation.`
+					status: 409,
+					detail: `Match play chart already exists for fixture ${v.id}. Use hardOverride to force creation.`,
+					code: 'MATCH_PLAY_CHART_EXISTS'
 				},
-				{ status: 400 }
+				{ status: 409 }
 			);
 		}
 		if (result === 'unsupported') {
 			return HttpResponse.json(
-				{ message: `No default match play chart available for ${body.teams.length} teams.` },
+				{
+					status: 400,
+					detail: `No default match play chart available for ${body.teams.length} teams.`,
+					code: 'NO_DEFAULT_MATCH_PLAY_CHART'
+				},
 				{ status: 400 }
 			);
 		}
-		return new HttpResponse(null, { status: 200 });
+		return new HttpResponse(null, { status: 201 });
 	}),
 
 	http.post(`${API_URL}/veranstaltungen/:id/liga`, async ({ request, params }) => {
@@ -160,9 +172,20 @@ export const veranstaltungHandlers = [
 		const v = findVeranstaltung(user, Number(params.fixtureId));
 		if (!v) return notFound();
 		const roundNo = Number(params.roundNo);
-		// Nicht existierende Runde: wie das echte Backend 200 mit leerem `targets` (kein 404).
+		// Seit Backend `e5cef653`: Runde außerhalb des Spielplans = 404 ROUND_NOT_FOUND.
 		const targets = getRoundInfo(String(v.id), roundNo);
-		return HttpResponse.json({ fixtureId: v.id, roundNo, targets });
+		if (!targets.length) {
+			return HttpResponse.json(
+				{ status: 404, detail: `Round ${roundNo} not found`, code: 'ROUND_NOT_FOUND' },
+				{ status: 404 }
+			);
+		}
+		return HttpResponse.json({
+			fixtureId: v.id,
+			roundNo,
+			roundCount: countRounds(String(v.id)),
+			targets
+		});
 	}),
 
 	http.put(
@@ -196,7 +219,7 @@ export const veranstaltungHandlers = [
 		const v = findVeranstaltung(user, fixtureId);
 		if (!v) return notFound();
 		const roundNo = getCurrentRoundNo(String(v.id)) ?? 1;
-		return HttpResponse.json({ roundNo, fixtureId });
+		return HttpResponse.json({ roundNo, fixtureId, roundCount: countRounds(String(v.id)) });
 	}),
 
 	http.put(`${API_URL}/fixtures/:fixtureId/phase`, async ({ request, params }) => {
@@ -209,8 +232,19 @@ export const veranstaltungHandlers = [
 		if (typeof body.roundNo !== 'number') {
 			return HttpResponse.json({ detail: 'roundNo fehlt oder ungültig' }, { status: 422 });
 		}
+		const roundCount = countRounds(String(v.id));
+		if (body.roundNo < 0 || body.roundNo > roundCount) {
+			return HttpResponse.json(
+				{
+					status: 400,
+					detail: `Round ${body.roundNo} is not in the chart`,
+					code: 'INVALID_ROUND_NO'
+				},
+				{ status: 400 }
+			);
+		}
 		setCurrentRoundNo(String(v.id), body.roundNo);
-		return HttpResponse.json({ roundNo: body.roundNo, fixtureId });
+		return HttpResponse.json({ roundNo: body.roundNo, fixtureId, roundCount });
 	}),
 
 	// Alte `/veranstaltungen/:id/bildschirme...`-CRUD-Endpunkte (Mock-only) sind seit #15 durch

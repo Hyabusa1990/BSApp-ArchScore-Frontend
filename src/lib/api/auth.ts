@@ -48,5 +48,12 @@ export const authApi = {
 			token
 		),
 
-	logout: (token: string) => apiClient.post<void>('/Auth/logout', undefined, token)
+	// Fawkes widerruft das Refresh-Token nur, wenn es als `X-Refresh-Token`-Header mitkommt.
+	logout: (token: string, refreshToken?: string | null) =>
+		apiClient.post<void>(
+			'/Auth/logout',
+			undefined,
+			token,
+			refreshToken ? { 'X-Refresh-Token': refreshToken } : undefined
+		)
 };

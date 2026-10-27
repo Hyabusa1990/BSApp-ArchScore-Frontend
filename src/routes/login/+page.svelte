@@ -23,9 +23,11 @@
 			errorKey =
 				err instanceof APIError && err.status === 401
 					? 'login.error_invalid'
-					: err instanceof APIError
-						? 'login.error_failed'
-						: 'login.error_unexpected';
+					: err instanceof APIError && err.status === 403
+						? 'login.error_unconfirmed'
+						: err instanceof APIError
+							? 'login.error_failed'
+							: 'login.error_unexpected';
 		}
 	}
 </script>
