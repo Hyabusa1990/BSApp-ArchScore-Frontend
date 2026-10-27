@@ -66,8 +66,14 @@ export interface RoundInfo {
 	targets: RoundTarget[] | null;
 }
 
-/** scheibennummer -> ob der Spotter dieser Scheibe den aktuellen Satz bereits bestätigt hat. */
-export type ConfirmStatus = Record<number, boolean>;
+/** Stand einer Scheibe laut Spotter-Info. */
+export interface ScheibenStatus {
+	currentSetNo: number;
+	matchComplete: boolean;
+}
+
+/** scheibennummer -> Stand der Scheibe; `null` = keine Spotter-Info (z. B. noch WARTET). */
+export type ScheibenStatusMap = Record<number, ScheibenStatus | null>;
 
 /** Obergrenze für `loadRounds` (8 Mannschaften = 7 Runden, größere Ligen gibt es nicht). */
 const MAX_ROUNDS = 20;
@@ -151,22 +157,25 @@ export const matchkontrolleApi = {
 	setPhase: (token: string, fixtureId: number, roundNo: number) =>
 		apiClient.put<Phase>(`/fixtures/${fixtureId}/phase`, { roundNo }, token),
 
-	// Kein eigener Matchkontrolle-Endpunkt für Confirm-Status in Fawkes — liest ihn pro
+	// Kein eigener Matchkontrolle-Endpunkt für den Scheibenstand in Fawkes — liest ihn pro
 	// Scheibe über denselben (Bearer-freien) Spotter-Info-Call wie die Binocular-Seite selbst
-	// (`GetTargetResponse.isConfirmed`), adressiert über die fixtureUniqueId der Veranstaltung.
-	getConfirmStatus: async (
+	// (`GetTargetResponse.currentSetNo`/`matchComplete`), adressiert über die fixtureUniqueId.
+	getScheibenStatus: async (
 		fixtureUniqueId: string,
 		scheibennummern: number[]
-	): Promise<ConfirmStatus> => {
+	): Promise<ScheibenStatusMap> => {
 		const entries = await Promise.all(
 			scheibennummern.map(async (nummer) => {
 				try {
 					const md = await binocularApi.getScheibe(fixtureUniqueId, nummer);
-					return [nummer, md.isConfirmed] as const;
+					return [
+						nummer,
+						{ currentSetNo: md.currentSetNo, matchComplete: md.matchComplete }
+					] as const;
 				} catch {
-					// Scheibe hat aktuell keine Spotter-Info (z. B. noch WARTET) — als
-					// unbestätigt behandeln statt die ganze Übersicht abzubrechen.
-					return [nummer, false] as const;
+					// Scheibe hat aktuell keine Spotter-Info — statt die ganze Übersicht abzubrechen
+					// ohne Stand anzeigen.
+					return [nummer, null] as const;
 				}
 			})
 		);

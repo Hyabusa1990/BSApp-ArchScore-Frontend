@@ -68,13 +68,17 @@
 	const aktivePosition = $derived(Math.min(Math.floor(gefuellteAnzahl / 2), 2));
 	// Alle 6 Pfeile erfasst, aber noch nicht bestätigt -> Bestätigen-Button zeigen.
 	const confirming = $derived(
-		matchData !== null && !matchData.isConfirmed && gefuellteAnzahl === 6
+		matchData !== null &&
+			!matchData.isConfirmed &&
+			!matchData.matchComplete &&
+			gefuellteAnzahl === 6
 	);
 	// Vom Spotter final bestätigt -> Eingabe gesperrt, bis die Turnierleitung den
 	// nächsten Satz freigibt (erkennbar am nächsten Poll: leerer shots-Stand).
-	const locked = $derived(matchData?.isConfirmed === true);
-	// Match auf dieser Scheibe entschieden -> kein weiterer Satz, nichts mehr zu erfassen.
+	// Ist das Match entschieden (matchComplete), bleibt die Eingabe unabhängig von
+	// isConfirmed gesperrt.
 	const matchComplete = $derived(matchData?.matchComplete === true);
+	const locked = $derived(matchData?.isConfirmed === true || matchComplete);
 
 	function uebernehmeMatchDaten(md: BinocularMatch) {
 		matchData = md;

@@ -247,8 +247,8 @@
 		"inaktiv": "INAKTIV",
 		"freigeben_btn": "Freigeben",
 		"scheibe_label": "Scheibe {n}",
-		"bestaetigt": "bestätigt",
-		"ausstehend": "ausstehend"
+		"abgeschlossen": "Abgeschlossen",
+		"laeuft": "Läuft ({satz})"
 	},
 	"bildschirme": {
 		"title": "Bildschirm- und Tablet-Verwaltung",
