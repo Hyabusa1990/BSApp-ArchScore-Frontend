@@ -11,8 +11,8 @@
 	let mainEl = $state<HTMLElement | null>(null);
 	let fontSize = $state('1.5rem');
 
-	// Server liefert `rank` explizit (Gleichstand = gleicher Platz). Bei `rank === 0` (vor der ersten
-	// Berechnung) zählt die Reihenfolge der API-Antwort aufsteigend, ohne Trendanzeige.
+	// Server liefert `rank` explizit (Gleichstand = gleicher Platz). Haben alle Mannschaften denselben
+	// Rang (initiale Tabelle), gilt die API-Reihenfolge mit aufsteigenden Plätzen, ohne Trendanzeige.
 	const tabelle = $derived(orderLeagueTable(eintraege));
 	const sortiert = $derived(tabelle.rows);
 	const hatRang = $derived(tabelle.ranked);
