@@ -20,16 +20,24 @@ test('eindeutige Ränge: nach Rang sortiert', () => {
 	assert.deepEqual(names(rows), ['A', 'B', 'C']);
 });
 
-test('alle Ränge 0: API-Reihenfolge, kein Rang', () => {
+test('alle Ränge 0: API-Reihenfolge, aufsteigende Plätze, kein Trend', () => {
 	const { rows, ranked } = orderLeagueTable([pos('B', 0), pos('A', 0), pos('C', 0)]);
 	assert.equal(ranked, false);
 	assert.deepEqual(names(rows), ['B', 'A', 'C']);
+	assert.deepEqual(
+		rows.map((r) => r.position),
+		[1, 2, 3]
+	);
 });
 
-test('doppelter Rang: API-Reihenfolge, kein Rang', () => {
+test('doppelter Rang: Backend-Rang bleibt, nach Rang sortiert', () => {
 	const { rows, ranked } = orderLeagueTable([pos('C', 3), pos('A', 1), pos('B', 1)]);
-	assert.equal(ranked, false);
-	assert.deepEqual(names(rows), ['C', 'A', 'B']);
+	assert.equal(ranked, true);
+	assert.deepEqual(names(rows), ['A', 'B', 'C']);
+	assert.deepEqual(
+		rows.map((r) => r.position),
+		[1, 1, 3]
+	);
 });
 
 test('leere Liste', () => {

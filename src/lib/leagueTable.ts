@@ -1,22 +1,25 @@
 import type { LeagueTablePosition } from '$lib/api/display';
 
+export type LeagueTableRow = LeagueTablePosition & { position: number };
+
 /**
  * Fawkes liefert vor der ersten Berechnung `rank: 0` für alle Mannschaften (Display liest nur die
- * Live-Spalten, nicht `InitialRank`). Sind die Ränge nicht eindeutig oder < 1, ist der Rang
- * unbrauchbar: dann bleibt die Reihenfolge der API-Antwort erhalten und es wird kein Rang gezeigt.
+ * Live-Spalten, nicht `InitialRank`). Sind nicht alle Ränge ≥ 1, bleibt die Reihenfolge der
+ * API-Antwort erhalten. Angezeigt wird der Backend-Rang (auch bei Gleichstand, mehrere Teams
+ * teilen sich dann denselben Platz); bei `rank === 0` die aufsteigende Position.
  */
 export function hasValidRanks(entries: LeagueTablePosition[]): boolean {
-	const ranks = entries.map((e) => e.rank);
-	return ranks.every((r) => r >= 1) && new Set(ranks).size === ranks.length;
+	return entries.every((e) => e.rank >= 1);
 }
 
 export function orderLeagueTable(entries: LeagueTablePosition[]): {
-	rows: LeagueTablePosition[];
+	rows: LeagueTableRow[];
 	ranked: boolean;
 } {
 	const ranked = hasValidRanks(entries);
+	const ordered = ranked ? [...entries].sort((a, b) => a.rank - b.rank) : [...entries];
 	return {
-		rows: ranked ? [...entries].sort((a, b) => a.rank - b.rank) : [...entries],
+		rows: ordered.map((e, i) => ({ ...e, position: e.rank > 0 ? e.rank : i + 1 })),
 		ranked
 	};
 }
