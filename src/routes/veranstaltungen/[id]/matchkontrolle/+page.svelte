@@ -4,7 +4,13 @@
 	import { resolve } from '$app/paths';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { veranstaltungApi, type Veranstaltung } from '$lib/api/veranstaltung';
-	import { matchkontrolleApi, type Match, type ScheibenStatusMap } from '$lib/api/matchkontrolle';
+	import {
+		matchkontrolleApi,
+		type Match,
+		type Begegnung,
+		type ScheibenStatus,
+		type ScheibenStatusMap
+	} from '$lib/api/matchkontrolle';
 	import {
 		Container,
 		Card,
@@ -36,6 +42,29 @@
 
 	function scheibenFuer(match: Match): number[] {
 		return match.begegnungen.flatMap((b) => [b.scheibe_a, b.scheibe_b]);
+	}
+
+	// Scheiben einer Begegnung dürfen höchstens einen Satz auseinanderliegen. Technisch möglich,
+	// aber ein Fehlerzustand (Spotter einer Scheibe hat zu früh/falsch bestätigt oder freigegeben).
+	function satzAbweichung(b: Begegnung): [number, number] | null {
+		const sa = scheibenStatus[b.scheibe_a];
+		const sb = scheibenStatus[b.scheibe_b];
+		if (!sa || !sb) return null;
+		return Math.abs(sa.currentSetNo - sb.currentSetNo) > 1
+			? [sa.currentSetNo, sb.currentSetNo]
+			: null;
+	}
+
+	// Beide Scheiben einer Begegnung gehören zum selben Match und werden als Paar angezeigt:
+	// abgeschlossen erst, wenn beide es sind; sonst der niedrigere laufende Satz.
+	function paarStatus(b: Begegnung): ScheibenStatus | null {
+		const stati = [scheibenStatus[b.scheibe_a], scheibenStatus[b.scheibe_b]].filter(
+			(st): st is ScheibenStatus => st != null
+		);
+		if (stati.length === 0) return null;
+		const laufend = stati.filter((st) => !st.matchComplete);
+		if (laufend.length === 0) return stati[0];
+		return laufend.reduce((a, b) => (b.currentSetNo < a.currentSetNo ? b : a));
 	}
 
 	// Confirm-Status kommt aus keinem eigenen Matchkontrolle-Endpunkt (Fawkes kennt keinen),
@@ -139,14 +168,27 @@
 							</Badge>
 							{#if match.aktiv}
 								<div class="d-flex flex-wrap justify-content-center gap-2 mt-1">
-									{#each scheibenFuer(match) as scheibe (scheibe)}
-										{@const status = scheibenStatus[scheibe]}
+									{#each match.begegnungen as begegnung (begegnung.scheibe_a)}
+										{@const status = paarStatus(begegnung)}
+										{@const abweichung = satzAbweichung(begegnung)}
 										<Badge
-											color={status?.matchComplete ? 'success' : status ? 'primary' : 'secondary'}
+											color={abweichung
+												? 'danger'
+												: status?.matchComplete
+													? 'success'
+													: status
+														? 'primary'
+														: 'secondary'}
 											class="fw-normal"
 										>
-											{$_('matchkontrolle.scheibe_label', { values: { n: scheibe } })}:
-											{#if status?.matchComplete}
+											{$_('matchkontrolle.scheiben_label', {
+												values: { a: begegnung.scheibe_a, b: begegnung.scheibe_b }
+											})}:
+											{#if abweichung}
+												{$_('matchkontrolle.satz_abweichung', {
+													values: { a: abweichung[0], b: abweichung[1] }
+												})}
+											{:else if status?.matchComplete}
 												{$_('matchkontrolle.abgeschlossen')}
 											{:else if status}
 												{$_('matchkontrolle.laeuft', { values: { satz: status.currentSetNo } })}
