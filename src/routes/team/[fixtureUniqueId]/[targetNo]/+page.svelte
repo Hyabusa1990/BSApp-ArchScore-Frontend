@@ -173,15 +173,6 @@
 	<title>{$_('team.page_title')}</title>
 </svelte:head>
 
-<button
-	type="button"
-	class="qr-trigger-btn"
-	aria-label={$_('qr_scan.title')}
-	onclick={() => (qrModalOpen = true)}
->
-	<i class="bi bi-qr-code-scan"></i>
-</button>
-
 <QrScanModal kind="team" isOpen={qrModalOpen} onClose={() => (qrModalOpen = false)} />
 
 <ConnectivityBanner variant="prominent" />
@@ -215,6 +206,13 @@
 			<h5 class="fw-bold mb-2">{$_('team.waiting_title')}</h5>
 			<p class="mb-0 small">{$_('team.waiting_release_hint')}</p>
 		</Alert>
+		<button
+			type="button"
+			class="btn btn-outline-secondary mt-4"
+			onclick={() => (qrModalOpen = true)}
+		>
+			<i class="bi bi-qr-code-scan me-2"></i>{$_('team.scan_next_btn')}
+		</button>
 	</div>
 {:else if view === 'READY' && matchData}
 	<div class="team-page d-flex flex-column">
@@ -228,6 +226,13 @@
 
 		<!-- Mitte: Satzsumme + Statushinweise. -->
 		<div class="flex-grow-1 d-flex flex-column align-items-center justify-content-center p-3">
+			<button
+				type="button"
+				class="btn btn-outline-secondary mb-4"
+				onclick={() => (qrModalOpen = true)}
+			>
+				<i class="bi bi-qr-code-scan me-2"></i>{$_('team.scan_next_btn')}
+			</button>
 			<div class="small text-muted text-uppercase mb-2">{$_('team.sum_label')}</div>
 			<div class="sum-value" class:sum-muted={!complete}>{complete ? sum : '–'}</div>
 
@@ -291,31 +296,10 @@
 {/if}
 
 <style>
-	.qr-trigger-btn {
-		position: fixed;
-		top: 0.5rem;
-		left: 50%;
-		transform: translateX(-50%);
-		z-index: 1050;
-		width: 36px;
-		height: 36px;
-		padding: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		border: none;
-		border-radius: 50%;
-		background: rgba(0, 0, 0, 0.06);
-		color: rgba(0, 0, 0, 0.45);
-		font-size: 1.1rem;
-	}
-
 	.team-page {
 		max-width: 32rem;
 		margin: 0 auto;
 		min-height: 100dvh;
-		/* Platz für den fixen QR-Trigger oben mittig */
-		padding-top: 3rem;
 	}
 
 	.sum-value {

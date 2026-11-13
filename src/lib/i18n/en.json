@@ -140,6 +140,7 @@
 		"lane_label": "Target {lane}",
 		"set_label": "Set {n}",
 		"sum_label": "Set total",
+		"scan_next_btn": "Scan next lane",
 		"sum_decrease": "Decrease total",
 		"sum_increase": "Increase total",
 		"confirm_btn": "Confirm",

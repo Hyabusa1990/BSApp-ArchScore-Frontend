@@ -141,6 +141,7 @@
 		"lane_label": "Scheibe {lane}",
 		"set_label": "Satz {n}",
 		"sum_label": "Satzsumme",
+		"scan_next_btn": "Nächste Scheibe scannen",
 		"sum_decrease": "Summe verringern",
 		"sum_increase": "Summe erhöhen",
 		"confirm_btn": "Bestätigen",
