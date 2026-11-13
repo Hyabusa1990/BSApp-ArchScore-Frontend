@@ -136,6 +136,24 @@
 		"expired_hint": "Dieser Pairing-Link ist nicht mehr gültig. Scanne den aktuellen QR-Code, um fortzufahren.",
 		"expired_rescan_btn": "QR-Code scannen"
 	},
+	"team": {
+		"page_title": "Mannschaft – Satzsumme",
+		"lane_label": "Scheibe {lane}",
+		"set_label": "Satz {n}",
+		"sum_label": "Satzsumme",
+		"sum_decrease": "Summe verringern",
+		"sum_increase": "Summe erhöhen",
+		"confirm_btn": "Bestätigen",
+		"waiting_title": "Warte auf Freigabe",
+		"waiting_release_hint": "Diese Scheibe hat aktuell keine freigegebene Begegnung. Sobald die Runde freigegeben wird, geht es automatisch weiter.",
+		"waiting_spotter": "Warte auf den Spotter — {count} von 6 Pfeilen erfasst",
+		"confirmed_waiting": "Bestätigt — warte auf die Turnierleitung",
+		"match_complete": "Match beendet",
+		"load_error": "Scheibe nicht gefunden oder Serverfehler.",
+		"confirm_error": "Speichern fehlgeschlagen. Bitte erneut versuchen.",
+		"expired_title": "Veranstaltung abgelaufen",
+		"expired_hint": "Dieser Link ist nicht mehr gültig. Bitte den aktuellen QR-Code an der Scheibe scannen."
+	},
 	"qr_scan": {
 		"title": "QR-Code scannen",
 		"camera_error": "Kamera konnte nicht gestartet werden.",

@@ -100,6 +100,13 @@ export const binocularApi = {
 		);
 	},
 
+	// Setzt den kompletten shots-String des aktuellen Satzes in einem Rutsch (Team-Ansicht:
+	// Summenkorrektur durch die Schützen, siehe `$lib/set-score.ts`).
+	putShots: async (token: string, scheibennummer: number, shots: string) =>
+		clean(
+			await apiClient.put<BinocularMatch>(`${spotterPath(token, scheibennummer)}/shots`, { shots })
+		),
+
 	postBestaetigeSatz: async (token: string, scheibennummer: number) =>
 		clean(
 			await apiClient.put<BinocularMatch>(

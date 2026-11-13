@@ -135,6 +135,24 @@
 		"expired_hint": "This pairing link is no longer valid. Scan the current QR code to continue.",
 		"expired_rescan_btn": "Scan QR code"
 	},
+	"team": {
+		"page_title": "Team – set total",
+		"lane_label": "Target {lane}",
+		"set_label": "Set {n}",
+		"sum_label": "Set total",
+		"sum_decrease": "Decrease total",
+		"sum_increase": "Increase total",
+		"confirm_btn": "Confirm",
+		"waiting_title": "Waiting for release",
+		"waiting_release_hint": "This target has no released match right now. Once the round is released, this continues automatically.",
+		"waiting_spotter": "Waiting for the spotter — {count} of 6 arrows recorded",
+		"confirmed_waiting": "Confirmed — waiting for the tournament director",
+		"match_complete": "Match complete",
+		"load_error": "Target not found or server error.",
+		"confirm_error": "Saving failed. Please try again.",
+		"expired_title": "Event expired",
+		"expired_hint": "This link is no longer valid. Please scan the current QR code at the target."
+	},
 	"qr_scan": {
 		"title": "Scan QR code",
 		"camera_error": "Camera could not be started.",
