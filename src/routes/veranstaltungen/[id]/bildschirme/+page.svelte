@@ -12,7 +12,7 @@
 	import { veranstaltungApi, type Veranstaltung } from '$lib/api/veranstaltung';
 	import { APIError } from '$lib/api/client';
 	import QRCode from 'qrcode';
-	import { sortDevicesByField } from '$lib/bildschirme-order';
+	import { applyCustomOrder, moveDevice, sortDevicesByField } from '$lib/bildschirme-order';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import AppModal from '$lib/components/AppModal.svelte';
 	import {
@@ -36,9 +36,77 @@
 	const fixtureId = $derived(Number(veranstaltungId));
 
 	let devices = $state<Device[]>([]);
-	// Anzeige in Feldreihenfolge, nach gespeichertem Zustand (nicht nach drafts), damit Karten
-	// beim Bearbeiten nicht springen.
-	const sortedDevices = $derived(sortDevicesByField(devices));
+	let customOrder = $state<number[] | null>(null);
+	// Anzeige in Feldreihenfolge bzw. eigener Reihenfolge, nach gespeichertem Zustand (nicht nach
+	// drafts), damit Karten beim Bearbeiten nicht springen.
+	const sortedDevices = $derived(applyCustomOrder(devices, customOrder));
+
+	// Eigene Kartenreihenfolge (Issue #43): bewusst rein clientseitig und nur in diesem Browser —
+	// Fawkes hat kein Feld dafür. `null` = automatische Feldreihenfolge.
+	let dragId = $state<number | null>(null);
+	let dragOverId = $state<number | null>(null);
+
+	function orderKey(): string {
+		return `bildschirme:${fixtureId}:order`;
+	}
+
+	function recallOrder(): number[] | null {
+		try {
+			const raw = localStorage.getItem(orderKey());
+			if (!raw) return null;
+			const parsed: unknown = JSON.parse(raw);
+			return Array.isArray(parsed) && parsed.every((x) => typeof x === 'number') ? parsed : null;
+		} catch {
+			return null;
+		}
+	}
+
+	function persistOrder(order: number[] | null) {
+		customOrder = order;
+		try {
+			if (order) localStorage.setItem(orderKey(), JSON.stringify(order));
+			else localStorage.removeItem(orderKey());
+		} catch {
+			// kein Storage-Zugriff — Reihenfolge gilt dann nur für diese Session.
+		}
+	}
+
+	function reorder(fromId: number, toId: number) {
+		const current = sortedDevices.map((d) => d.id);
+		const next = moveDevice(current, fromId, toId);
+		if (next.some((id, i) => id !== current[i])) persistOrder(next);
+	}
+
+	function moveBy(deviceId: number, delta: -1 | 1) {
+		const current = sortedDevices.map((d) => d.id);
+		const target = current[current.indexOf(deviceId) + delta];
+		if (target !== undefined) reorder(deviceId, target);
+	}
+
+	function onDragStart(e: DragEvent, deviceId: number) {
+		dragId = deviceId;
+		if (e.dataTransfer) {
+			e.dataTransfer.effectAllowed = 'move';
+			e.dataTransfer.setData('text/plain', String(deviceId));
+		}
+	}
+
+	function onDragOver(e: DragEvent, deviceId: number) {
+		if (dragId === null) return;
+		e.preventDefault();
+		dragOverId = deviceId;
+	}
+
+	function onDrop(e: DragEvent, deviceId: number) {
+		e.preventDefault();
+		if (dragId !== null) reorder(dragId, deviceId);
+		onDragEnd();
+	}
+
+	function onDragEnd() {
+		dragId = null;
+		dragOverId = null;
+	}
 	// Nur für `veranstaltung.uniqueId` gebraucht — das Tablet-QR kodiert sie direkt (Issue #22),
 	// kein eigener Token-Endpunkt mehr nötig, siehe openTabletModal.
 	let veranstaltung = $state<Veranstaltung | null>(null);
@@ -241,6 +309,7 @@
 				if (d.matchNo !== null) rememberMatchNo(d.id, d.matchNo);
 			}
 			customNames = Object.fromEntries(devices.map((d) => [d.id, recallCustomName(d.id)]));
+			customOrder = recallOrder();
 		} catch {
 			loadError = $_('bildschirme.error_load');
 		} finally {
@@ -533,15 +602,60 @@
 			<Alert color="danger">{saveError}</Alert>
 		{/if}
 
-		<h6 class="text-muted text-uppercase small fw-semibold mb-3">
-			{$_('bildschirme.screens_heading')}
-		</h6>
+		<div class="d-flex justify-content-between align-items-center mb-3">
+			<h6 class="text-muted text-uppercase small fw-semibold mb-0">
+				{$_('bildschirme.screens_heading')}
+			</h6>
+			{#if customOrder}
+				<Button size="sm" color="outline-secondary" onclick={() => persistOrder(null)}>
+					<i class="bi bi-arrow-counterclockwise me-1"></i>
+					{$_('bildschirme.reset_order_btn')}
+				</Button>
+			{/if}
+		</div>
 		<Row>
 			{#each sortedDevices as d (d.id)}
 				{@const draft = drafts[d.id]}
 				<Col md={4} sm={6} class="mb-3">
-					<Card class="shadow-sm h-100">
+					<Card
+						class="shadow-sm h-100 {dragId === d.id ? 'opacity-50' : ''} {dragOverId === d.id &&
+						dragId !== d.id
+							? 'drop-target'
+							: ''}"
+						ondragover={(e: DragEvent) => onDragOver(e, d.id)}
+						ondrop={(e: DragEvent) => onDrop(e, d.id)}
+					>
 						<CardHeader class="d-flex justify-content-between align-items-center">
+							<span class="d-inline-flex align-items-center flex-shrink-0 me-2">
+								<span
+									class="drag-handle text-muted"
+									role="presentation"
+									draggable="true"
+									title={$_('bildschirme.drag_handle')}
+									ondragstart={(e) => onDragStart(e, d.id)}
+									ondragend={onDragEnd}
+								>
+									<i class="bi bi-grip-vertical"></i>
+								</span>
+								<button
+									type="button"
+									class="btn btn-sm btn-link p-0 text-muted"
+									aria-label={$_('bildschirme.move_left_btn')}
+									disabled={sortedDevices[0]?.id === d.id}
+									onclick={() => moveBy(d.id, -1)}
+								>
+									<i class="bi bi-chevron-left"></i>
+								</button>
+								<button
+									type="button"
+									class="btn btn-sm btn-link p-0 text-muted"
+									aria-label={$_('bildschirme.move_right_btn')}
+									disabled={sortedDevices[sortedDevices.length - 1]?.id === d.id}
+									onclick={() => moveBy(d.id, 1)}
+								>
+									<i class="bi bi-chevron-right"></i>
+								</button>
+							</span>
 							<div class="fw-bold flex-grow-1 me-2" style="min-width: 0;">
 								{#if editingNameId === d.id}
 									<input
@@ -956,6 +1070,12 @@
 />
 
 <style>
+	:global(.drop-target) {
+		outline: 2px dashed var(--bs-primary);
+	}
+	.drag-handle {
+		cursor: grab;
+	}
 	:global(.border-dashed) {
 		border-style: dashed !important;
 	}
