@@ -12,6 +12,7 @@
 	import { veranstaltungApi, type Veranstaltung } from '$lib/api/veranstaltung';
 	import { APIError } from '$lib/api/client';
 	import QRCode from 'qrcode';
+	import { buildTabletQrPdf } from '$lib/tablet-qr-pdf';
 	import { applyCustomOrder, moveDevice, sortDevicesByField } from '$lib/bildschirme-order';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import AppModal from '$lib/components/AppModal.svelte';
@@ -508,6 +509,37 @@
 	// Kein Token-Request mehr nötig (Issue #22) — das QR kodiert direkt die `fixtureUniqueId` der
 	// Veranstaltung + Scheibennummer, genau das, was der Bearer-freie Spotter-Endpunkt laut
 	// Fawkes-Spec ohnehin schon erwartet (siehe binocular.ts).
+	// Gemeinsame URL für Modal und PDF, damit beide nie auseinanderlaufen.
+	function tabletUrl(scheibennummer: number): string {
+		if (!veranstaltung) throw new Error('Veranstaltung noch nicht geladen');
+		return `${window.location.origin}${resolve('/tablet/[fixtureUniqueId]/[scheibennummer]', {
+			fixtureUniqueId: veranstaltung.uniqueId,
+			scheibennummer: String(scheibennummer)
+		})}`;
+	}
+
+	let pdfLoading = $state(false);
+	let pdfError = $state<string | null>(null);
+
+	async function printQrPdf() {
+		pdfLoading = true;
+		pdfError = null;
+		try {
+			if (!veranstaltung) throw new Error('Veranstaltung noch nicht geladen');
+			await buildTabletQrPdf({
+				eventLabel: `${veranstaltung.leagueName} – ${veranstaltung.fixtureName}`,
+				fixtureName: veranstaltung.fixtureName,
+				scheiben,
+				urlFor: tabletUrl,
+				heading: (n) => $_('bildschirme.qr_pdf_heading', { values: { n } })
+			});
+		} catch {
+			pdfError = $_('bildschirme.qr_pdf_error');
+		} finally {
+			pdfLoading = false;
+		}
+	}
+
 	async function openTabletModal(scheibennummer: number) {
 		qrScheibennummer = scheibennummer;
 		qrModalOpen = true;
@@ -517,14 +549,7 @@
 		qrUrl = null;
 		resetQrCopyState();
 		try {
-			if (!veranstaltung) throw new Error('Veranstaltung noch nicht geladen');
-			const url = `${window.location.origin}${resolve(
-				'/tablet/[fixtureUniqueId]/[scheibennummer]',
-				{
-					fixtureUniqueId: veranstaltung.uniqueId,
-					scheibennummer: String(scheibennummer)
-				}
-			)}`;
+			const url = tabletUrl(scheibennummer);
 			qrDataUrl = await QRCode.toDataURL(url, { width: 280, margin: 1 });
 			qrUrl = url;
 		} catch {
@@ -988,7 +1013,15 @@
 					{$_('bildschirme.tablet_scheibe_btn', { values: { n: nummer } })}
 				</Button>
 			{/each}
+			<Button color="primary" size="sm" disabled={pdfLoading} onclick={printQrPdf}>
+				{#if pdfLoading}<Spinner size="sm" class="me-1" />{:else}<i class="bi bi-printer me-1"
+					></i>{/if}
+				{$_('bildschirme.qr_pdf_btn')}
+			</Button>
 		</div>
+		{#if pdfError}
+			<Alert color="danger" class="mt-2">{pdfError}</Alert>
+		{/if}
 	{/if}
 </Container>
 
