@@ -1,7 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { Container, Row, Col, Card, CardBody } from '@sveltestrap/sveltestrap';
-	import logo from '$lib/assets/logo.png';
 
 	let { title, children }: { title: string; children: Snippet } = $props();
 </script>
@@ -10,13 +9,6 @@
 	<Container>
 		<Row class="justify-content-center">
 			<Col xs={12} sm={10} md={7} lg={5} xl={4}>
-				<img
-					src={logo}
-					alt="Fawkes"
-					class="auth-logo d-block mx-auto mb-3"
-					width="64"
-					height="64"
-				/>
 				<Card class="shadow-sm">
 					<CardBody class="p-4">
 						<h4 class="mb-4">{title}</h4>
