@@ -546,6 +546,7 @@
 					$_(kind === 'team' ? 'bildschirme.team_qr_pdf_heading' : 'bildschirme.qr_pdf_heading', {
 						values: { n }
 					}),
+				format: kind === 'team' ? 'a6' : 'a5',
 				filePrefix: kind === 'team' ? 'team-qr' : undefined
 			});
 		} catch {
