@@ -218,7 +218,7 @@ export const veranstaltungHandlers = [
 		const fixtureId = Number(params.fixtureId);
 		const v = findVeranstaltung(user, fixtureId);
 		if (!v) return notFound();
-		const roundNo = getCurrentRoundNo(String(v.id)) ?? 1;
+		const roundNo = getCurrentRoundNo(String(v.id)) ?? 0;
 		return HttpResponse.json({ roundNo, fixtureId, roundCount: countRounds(String(v.id)) });
 	}),
 

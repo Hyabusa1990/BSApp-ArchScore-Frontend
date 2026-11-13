@@ -153,6 +153,8 @@ export const matchkontrolleApi = {
 	getPhase: (token: string, fixtureId: number) =>
 		apiClient.get<Phase>(`/fixtures/${fixtureId}/phase`, token),
 
+	// roundNo 0 = keine Runde freigegeben (Startzustand bzw. Wettkampf beendet: Tablets gesperrt,
+	// Backend berechnet die endgültige Tabelle neu).
 	// Setzt ausschließlich roundNo — keine Satz-Auswahl mehr bei der Freigabe selbst (#10).
 	setPhase: (token: string, fixtureId: number, roundNo: number) =>
 		apiClient.put<Phase>(`/fixtures/${fixtureId}/phase`, { roundNo }, token),
