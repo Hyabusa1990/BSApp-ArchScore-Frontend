@@ -3,6 +3,7 @@
 	import { APIError } from '$lib/api/client';
 	import { adjustSetScore, SET_ARROWS, setScoreOf } from '$lib/set-score';
 	import { normalizeShots } from '$lib/shots';
+	import QrScanModal from '$lib/components/QrScanModal.svelte';
 	import ConnectivityBanner from '$lib/components/ConnectivityBanner.svelte';
 	import { connectivity } from '$lib/stores/connectivity.svelte';
 	import { _ } from 'svelte-i18n';
@@ -35,6 +36,8 @@
 	let matchData = $state<BinocularMatch | null>(null);
 	let actionError = $state<string | null>(null);
 	let saving = $state(false);
+	// Scheibenwechsel: neuen Team-QR scannen (oben mittig, auch bei abgelaufenem Link nutzbar).
+	let qrModalOpen = $state(false);
 
 	// Lokale Korrektur: `edited` ist der geänderte shots-String, `editBase` der Serverstand
 	// (shots + Satznummer), auf dem die Änderung aufsetzt. Ändert sich der Serverstand
@@ -170,6 +173,17 @@
 	<title>{$_('team.page_title')}</title>
 </svelte:head>
 
+<button
+	type="button"
+	class="qr-trigger-btn"
+	aria-label={$_('qr_scan.title')}
+	onclick={() => (qrModalOpen = true)}
+>
+	<i class="bi bi-qr-code-scan"></i>
+</button>
+
+<QrScanModal kind="team" isOpen={qrModalOpen} onClose={() => (qrModalOpen = false)} />
+
 <ConnectivityBanner variant="prominent" />
 
 {#if view === 'LOADING'}
@@ -185,7 +199,10 @@
 		<Alert color="warning" class="text-center py-4 w-100 mb-0">
 			<i class="bi bi-qr-code-scan fs-1 d-block mb-3"></i>
 			<h5 class="fw-bold mb-2">{$_('team.expired_title')}</h5>
-			<p class="mb-0 small">{$_('team.expired_hint')}</p>
+			<p class="mb-3 small">{$_('team.expired_hint')}</p>
+			<button type="button" class="btn btn-warning" onclick={() => (qrModalOpen = true)}>
+				{$_('binocular.expired_rescan_btn')}
+			</button>
 		</Alert>
 	</div>
 {:else if view === 'WAITING'}
@@ -200,8 +217,8 @@
 		</Alert>
 	</div>
 {:else if view === 'READY' && matchData}
-	<div class="team-page d-flex flex-column min-vh-100">
-		<div class="border-bottom px-3 py-2">
+	<div class="team-page d-flex flex-column">
+		<div class="border-bottom px-3 pb-2 text-center">
 			<span class="small text-muted">
 				{$_('team.lane_label', { values: { lane: targetNo } })} ·
 				{$_('team.set_label', { values: { n: matchData.currentSetNo } })}
@@ -209,29 +226,10 @@
 			<div class="fw-bold text-truncate">{matchData.teamName}</div>
 		</div>
 
+		<!-- Mitte: Satzsumme + Statushinweise. -->
 		<div class="flex-grow-1 d-flex flex-column align-items-center justify-content-center p-3">
 			<div class="small text-muted text-uppercase mb-2">{$_('team.sum_label')}</div>
-			<div class="sum-row">
-				<button
-					type="button"
-					class="btn btn-outline-danger sum-btn"
-					aria-label={$_('team.sum_decrease')}
-					disabled={!canDecrease}
-					onclick={() => change(-1)}
-				>
-					<i class="bi bi-dash-lg"></i>
-				</button>
-				<div class="sum-value" class:sum-muted={!complete}>{complete ? sum : '–'}</div>
-				<button
-					type="button"
-					class="btn btn-outline-success sum-btn"
-					aria-label={$_('team.sum_increase')}
-					disabled={!canIncrease}
-					onclick={() => change(1)}
-				>
-					<i class="bi bi-plus-lg"></i>
-				</button>
-			</div>
+			<div class="sum-value" class:sum-muted={!complete}>{complete ? sum : '–'}</div>
 
 			{#if actionError}
 				<Alert color="danger" class="py-2 mt-3 mb-0 w-100">{actionError}</Alert>
@@ -252,41 +250,77 @@
 					<i class="bi bi-hourglass-split fs-2 d-block mb-2"></i>
 					{$_('team.waiting_spotter', { values: { count: arrowCount } })}
 				</Alert>
-			{:else}
+			{/if}
+		</div>
+
+		<!-- Unteres Drittel: Bedienelemente in Daumenreichweite (einhändig am Smartphone). -->
+		<div class="team-controls px-3 pb-3 d-flex flex-column justify-content-end gap-3">
+			<div class="sum-row">
 				<button
 					type="button"
-					class="btn btn-success w-100 py-3 fw-bold fs-4 mt-4"
-					disabled={saving}
-					onclick={confirm}
+					class="btn btn-outline-danger sum-btn"
+					aria-label={$_('team.sum_decrease')}
+					disabled={!canDecrease}
+					onclick={() => change(-1)}
 				>
-					{#if saving}
-						<Spinner size="sm" class="me-2" />
-					{/if}
-					{$_('team.confirm_btn')}
+					<i class="bi bi-dash-lg"></i>
 				</button>
-			{/if}
+				<button
+					type="button"
+					class="btn btn-outline-success sum-btn"
+					aria-label={$_('team.sum_increase')}
+					disabled={!canIncrease}
+					onclick={() => change(1)}
+				>
+					<i class="bi bi-plus-lg"></i>
+				</button>
+			</div>
+			<button
+				type="button"
+				class="btn btn-success w-100 py-3 fw-bold fs-4"
+				disabled={!editable}
+				onclick={confirm}
+			>
+				{#if saving}
+					<Spinner size="sm" class="me-2" />
+				{/if}
+				{$_('team.confirm_btn')}
+			</button>
 		</div>
 	</div>
 {/if}
 
 <style>
-	.team-page {
-		max-width: 32rem;
-		margin: 0 auto;
-	}
-
-	.sum-row {
+	.qr-trigger-btn {
+		position: fixed;
+		top: 0.5rem;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 1050;
+		width: 36px;
+		height: 36px;
+		padding: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: 1rem;
-		width: 100%;
+		border: none;
+		border-radius: 50%;
+		background: rgba(0, 0, 0, 0.06);
+		color: rgba(0, 0, 0, 0.45);
+		font-size: 1.1rem;
+	}
+
+	.team-page {
+		max-width: 32rem;
+		margin: 0 auto;
+		min-height: 100dvh;
+		/* Platz für den fixen QR-Trigger oben mittig */
+		padding-top: 3rem;
 	}
 
 	.sum-value {
-		min-width: 6rem;
 		text-align: center;
-		font-size: clamp(4rem, 22vw, 7rem);
+		font-size: clamp(5rem, 28vw, 9rem);
 		font-weight: 800;
 		line-height: 1;
 	}
@@ -295,10 +329,21 @@
 		color: #adb5bd;
 	}
 
+	/* Unteres Drittel des Bildschirms: ± und Bestätigen. */
+	.team-controls {
+		min-height: 33dvh;
+		padding-bottom: max(1rem, env(safe-area-inset-bottom)) !important;
+	}
+
+	.sum-row {
+		display: flex;
+		gap: 1rem;
+	}
+
 	.sum-btn {
-		width: clamp(64px, 20vw, 96px);
-		height: clamp(64px, 20vw, 96px);
-		font-size: 2rem;
+		flex: 1;
+		height: clamp(80px, 14dvh, 120px);
+		font-size: 2.5rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
