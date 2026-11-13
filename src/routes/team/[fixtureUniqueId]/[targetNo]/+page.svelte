@@ -224,15 +224,15 @@
 			<div class="fw-bold text-truncate">{matchData.teamName}</div>
 		</div>
 
-		<!-- Mitte: Satzsumme + Statushinweise. -->
-		<div class="flex-grow-1 d-flex flex-column align-items-center justify-content-center p-3">
-			<button
-				type="button"
-				class="btn btn-outline-secondary mb-4"
-				onclick={() => (qrModalOpen = true)}
-			>
+		<!-- Oben, direkt unter dem Trenner: Scheibenwechsel. -->
+		<div class="px-3 pt-3 d-flex justify-content-center">
+			<button type="button" class="btn btn-outline-secondary" onclick={() => (qrModalOpen = true)}>
 				<i class="bi bi-qr-code-scan me-2"></i>{$_('team.scan_next_btn')}
 			</button>
+		</div>
+
+		<!-- Mitte: Satzsumme + Statushinweise. -->
+		<div class="flex-grow-1 d-flex flex-column align-items-center justify-content-center p-3">
 			<div class="small text-muted text-uppercase mb-2">{$_('team.sum_label')}</div>
 			<div class="sum-value" class:sum-muted={!complete}>{complete ? sum : '–'}</div>
 
@@ -304,7 +304,7 @@
 
 	.sum-value {
 		text-align: center;
-		font-size: clamp(5rem, 28vw, 9rem);
+		font-size: clamp(7rem, 40vw, 13rem);
 		font-weight: 800;
 		line-height: 1;
 	}
