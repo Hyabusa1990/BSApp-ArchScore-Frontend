@@ -1,4 +1,4 @@
-# ArchScore — Frontend
+# Fawkes — Frontend
 
 > Live-Anzeigesystem für Bogenschießen-Liga-Wettkämpfe.  
 > Zeigt während eines Satzes die laufend gespotteten Pfeilwerte sowie nach jedem Satz das Satzergebnis — für Zuschauer vor Ort.

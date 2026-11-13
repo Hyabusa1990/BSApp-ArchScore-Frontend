@@ -12,7 +12,7 @@
 			<Col xs={12} sm={10} md={7} lg={5} xl={4}>
 				<img
 					src={logo}
-					alt="ArchScore"
+					alt="Fawkes"
 					class="auth-logo d-block mx-auto mb-3"
 					width="64"
 					height="64"

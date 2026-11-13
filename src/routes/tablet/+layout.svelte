@@ -40,11 +40,11 @@
 	{#if pwaInfo}
 		{@html pwaInfo.webManifest.linkTag}
 	{/if}
-	<!-- theme-color/apple-touch-icon kommen schon site-weit aus app.html (ArchScore-Branding) —
+	<!-- theme-color/apple-touch-icon kommen schon site-weit aus app.html (Fawkes-Branding) —
 	     hier nur, was für den installierten Standalone-Modus zusätzlich nötig ist. -->
 	<meta name="apple-mobile-web-app-capable" content="yes" />
 	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-	<meta name="apple-mobile-web-app-title" content="ArchScore Spotter" />
+	<meta name="apple-mobile-web-app-title" content="Fawkes Spotter" />
 </svelte:head>
 
 {@render children()}

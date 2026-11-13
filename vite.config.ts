@@ -28,9 +28,9 @@ export default defineConfig({
 			// dieses hier ersetzt.
 			manifestFilename: 'tablet-manifest.webmanifest',
 			manifest: {
-				name: 'ArchScore Spotter',
+				name: 'Fawkes Spotter',
 				short_name: 'Spotter',
-				description: 'Pfeilwerte-Erfassung für Spotter (ArchScore)',
+				description: 'Pfeilwerte-Erfassung für Spotter (Fawkes)',
 				scope: '/tablet/',
 				// Bewusst kein start_url: /tablet/ existiert als Route nicht (nur .../[token]/
 				// [scheibennummer]). Fehlt der Key im Manifest, nutzt der Browser laut Web-App-

@@ -16,7 +16,7 @@
 </script>
 
 <svelte:head>
-	<title>ArchScore</title>
+	<title>Fawkes</title>
 </svelte:head>
 
 {#if !auth.isAuthenticated}

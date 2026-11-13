@@ -63,7 +63,7 @@
 	<Navbar color="white" light expand="md" class="border-bottom px-3 px-md-4">
 		<NavbarBrand href="/" class="d-flex align-items-center gap-2">
 			<img src={logo} alt="" width="28" height="28" />
-			ArchScore
+			Fawkes
 		</NavbarBrand>
 		<NavbarToggler onclick={() => (isNavOpen = !isNavOpen)} />
 		<div class="collapse navbar-collapse" class:show={isNavOpen}>
