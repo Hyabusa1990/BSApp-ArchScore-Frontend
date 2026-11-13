@@ -40,6 +40,12 @@
 	// Ownership passiert in der API/im Mock, siehe FACHLICHKEIT.md/Issue #6.
 	const showVerwaltungLink = $derived(auth.isAuthenticated);
 
+	// `<svelte:body class:...>` wurde nicht ins Bundle übernommen — Klasse daher per Effect setzen.
+	$effect(() => {
+		document.body.classList.toggle('fawkes-bg', !isChromelessRoute);
+		return () => document.body.classList.remove('fawkes-bg');
+	});
+
 	onMount(() => {
 		auth.init();
 	});
@@ -138,3 +144,20 @@
 <main>
 	{@render children()}
 </main>
+
+<style>
+	/* Logo als leicht durchscheinendes Hintergrundbild auf den normalen Seiten (nicht auf
+	   Display/Tablet). Fixiert, damit es beim Scrollen stehen bleibt; hinter allem Inhalt. */
+	:global(body.fawkes-bg) {
+		background: #f8fafc;
+	}
+	:global(body.fawkes-bg)::before {
+		content: '';
+		position: fixed;
+		inset: 0;
+		z-index: -1;
+		pointer-events: none;
+		background: url('/icon-512.png') center / min(70vmin, 520px) no-repeat;
+		opacity: 0.08;
+	}
+</style>

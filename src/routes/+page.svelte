@@ -42,6 +42,5 @@
 		display: flex;
 		align-items: center;
 		min-height: calc(100vh - 56px);
-		background: #f8fafc;
 	}
 </style>
