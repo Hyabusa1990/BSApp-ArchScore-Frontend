@@ -9,6 +9,7 @@
 		rechtsOrientiert = false,
 		satzpunkteFuehrt = false,
 		satzpunkteZurueck = false,
+		satzpunkteUnentschieden = false,
 		gegnerSetScores = null,
 		verbleibendeSaetze = 0
 	} = $props<{
@@ -16,6 +17,7 @@
 		rechtsOrientiert?: boolean;
 		satzpunkteFuehrt?: boolean;
 		satzpunkteZurueck?: boolean;
+		satzpunkteUnentschieden?: boolean;
 		/** setScores der gegnerischen Seite, für den Positionsvergleich in ZWISCHEN_SAETZEN
 		 * (siehe Issue #16) — von +page.svelte durchgereicht. */
 		gegnerSetScores?: number[] | null;
@@ -94,7 +96,13 @@
 	);
 
 	const satzpunkteBoxClass = $derived(
-		satzpunkteFuehrt ? 'punkte-fuehrend' : satzpunkteZurueck ? 'punkte-rueckstand' : ''
+		satzpunkteFuehrt
+			? 'punkte-fuehrend'
+			: satzpunkteZurueck
+				? 'punkte-rueckstand'
+				: satzpunkteUnentschieden
+					? 'punkte-gleich'
+					: ''
 	);
 
 	// Pfeilgröße wird in JS aus der tatsächlich gemessenen Breite/Höhe des Containers
