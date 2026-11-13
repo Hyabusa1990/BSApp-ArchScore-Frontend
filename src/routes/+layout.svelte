@@ -32,7 +32,9 @@
 	// teilen das Bedürfnis nach unverstellter Fullscreen-Ansicht ohne Site-Navigation, siehe
 	// dasselbe Pattern im scoring-Referenzprojekt (dort "isMobileRoute").
 	const isChromelessRoute = $derived(
-		page.url.pathname.startsWith('/display') || page.url.pathname.startsWith('/tablet')
+		page.url.pathname.startsWith('/display') ||
+			page.url.pathname.startsWith('/tablet') ||
+			page.url.pathname.startsWith('/team')
 	);
 
 	// Veranstaltungs-Verwaltung ist für jeden eingeloggten Account sichtbar (user verwaltet
