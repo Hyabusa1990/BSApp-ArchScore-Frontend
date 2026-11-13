@@ -12,6 +12,7 @@
 	import { veranstaltungApi, type Veranstaltung } from '$lib/api/veranstaltung';
 	import { APIError } from '$lib/api/client';
 	import QRCode from 'qrcode';
+	import { sortDevicesByField } from '$lib/bildschirme-order';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import AppModal from '$lib/components/AppModal.svelte';
 	import {
@@ -35,6 +36,9 @@
 	const fixtureId = $derived(Number(veranstaltungId));
 
 	let devices = $state<Device[]>([]);
+	// Anzeige in Feldreihenfolge, nach gespeichertem Zustand (nicht nach drafts), damit Karten
+	// beim Bearbeiten nicht springen.
+	const sortedDevices = $derived(sortDevicesByField(devices));
 	// Nur für `veranstaltung.uniqueId` gebraucht — das Tablet-QR kodiert sie direkt (Issue #22),
 	// kein eigener Token-Endpunkt mehr nötig, siehe openTabletModal.
 	let veranstaltung = $state<Veranstaltung | null>(null);
@@ -61,6 +65,7 @@
 	let otherVeranstaltungenLoading = $state(true);
 	let transferSourceId = $state<number | null>(null);
 	let transferDevices = $state<Device[]>([]);
+	const sortedTransferDevices = $derived(sortDevicesByField(transferDevices));
 	let transferDevicesLoading = $state(false);
 	let transferDevicesError = $state<string | null>(null);
 	let transferSelected = $state<Record<number, boolean>>({});
@@ -532,7 +537,7 @@
 			{$_('bildschirme.screens_heading')}
 		</h6>
 		<Row>
-			{#each devices as d (d.id)}
+			{#each sortedDevices as d (d.id)}
 				{@const draft = drafts[d.id]}
 				<Col md={4} sm={6} class="mb-3">
 					<Card class="shadow-sm h-100">
@@ -830,7 +835,7 @@
 							<p class="text-muted small mb-0">{$_('bildschirme.transfer_no_devices')}</p>
 						{:else}
 							<div class="mb-3">
-								{#each transferDevices as d (d.id)}
+								{#each sortedTransferDevices as d (d.id)}
 									<div class="form-check">
 										<input
 											type="checkbox"
