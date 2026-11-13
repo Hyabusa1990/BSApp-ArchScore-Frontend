@@ -618,6 +618,8 @@
 
 	<h4 class="mb-4">{$_('bildschirme.title')}</h4>
 
+	<Alert color="warning">{$_('bildschirme.standby_hint')}</Alert>
+
 	{#if loading}
 		<div class="d-flex justify-content-center py-5"><Spinner /></div>
 	{:else if loadError}

@@ -253,6 +253,7 @@
 	},
 	"bildschirme": {
 		"title": "Bildschirm- und Tablet-Verwaltung",
+		"standby_hint": "Hinweis: Den automatischen Standby bzw. Ruhezustand der Bildschirme/TVs vor dem Wettkampf abschalten, sonst schalten sie sich während der Veranstaltung aus.",
 		"back_btn": "Zurück zur Veranstaltung",
 		"error_load": "Geräte konnten nicht geladen werden.",
 		"error_save": "Speichern fehlgeschlagen.",

@@ -252,6 +252,7 @@
 	},
 	"bildschirme": {
 		"title": "Screen and Tablet Management",
+		"standby_hint": "Note: Turn off automatic standby/sleep mode on the screens/TVs before the competition, otherwise they will switch off during the event.",
 		"back_btn": "Back to event",
 		"error_load": "Could not load devices.",
 		"error_save": "Saving failed.",
