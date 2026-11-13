@@ -332,6 +332,12 @@
 		"qr_link_label": "Link to copy",
 		"qr_copy_btn": "Copy",
 		"qr_copied": "Link copied.",
-		"qr_copy_manual": "Automatic copy not available — the link is selected, please copy it manually."
+		"qr_copy_manual": "Automatic copy not available — the link is selected, please copy it manually.",
+		"team_heading": "Team (archers)",
+		"team_scheibe_btn": "Team lane {n}",
+		"team_qr_pdf_btn": "Print team QR codes as PDF",
+		"team_qr_pdf_heading": "Team lane {n}",
+		"team_qr_title": "Team lane {n} — QR code",
+		"team_qr_hint": "Hang it at the lane: the archers scan it to correct and confirm the set total."
 	}
 }

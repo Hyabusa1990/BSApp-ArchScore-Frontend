@@ -279,6 +279,9 @@
 	let qrError = $state<string | null>(null);
 	let qrDataUrl = $state<string | null>(null);
 	let qrScheibennummer = $state<number | null>(null);
+	// Welche QR-Art das Modal zeigt: Spotter-Tablet oder Mannschaft (Schützen-Ansicht).
+	type QrKind = 'tablet' | 'team';
+	let qrKind = $state<QrKind>('tablet');
 	// Issue #26: Link im Klartext zum Kopieren, z. B. für ein Smartphone, das den QR-Code nicht
 	// scannen kann.
 	let qrUrl = $state<string | null>(null);
@@ -518,10 +521,18 @@
 		})}`;
 	}
 
+	function teamUrl(scheibennummer: number): string {
+		if (!veranstaltung) throw new Error('Veranstaltung noch nicht geladen');
+		return `${window.location.origin}${resolve('/team/[fixtureUniqueId]/[targetNo]', {
+			fixtureUniqueId: veranstaltung.uniqueId,
+			targetNo: String(scheibennummer)
+		})}`;
+	}
+
 	let pdfLoading = $state(false);
 	let pdfError = $state<string | null>(null);
 
-	async function printQrPdf() {
+	async function printQrPdf(kind: QrKind) {
 		pdfLoading = true;
 		pdfError = null;
 		try {
@@ -530,8 +541,12 @@
 				eventLabel: `${veranstaltung.leagueName} – ${veranstaltung.fixtureName}`,
 				fixtureName: veranstaltung.fixtureName,
 				scheiben,
-				urlFor: tabletUrl,
-				heading: (n) => $_('bildschirme.qr_pdf_heading', { values: { n } })
+				urlFor: kind === 'team' ? teamUrl : tabletUrl,
+				heading: (n) =>
+					$_(kind === 'team' ? 'bildschirme.team_qr_pdf_heading' : 'bildschirme.qr_pdf_heading', {
+						values: { n }
+					}),
+				filePrefix: kind === 'team' ? 'team-qr' : undefined
 			});
 		} catch {
 			pdfError = $_('bildschirme.qr_pdf_error');
@@ -540,7 +555,8 @@
 		}
 	}
 
-	async function openTabletModal(scheibennummer: number) {
+	async function openQrModal(kind: QrKind, scheibennummer: number) {
+		qrKind = kind;
 		qrScheibennummer = scheibennummer;
 		qrModalOpen = true;
 		qrLoading = true;
@@ -549,7 +565,7 @@
 		qrUrl = null;
 		resetQrCopyState();
 		try {
-			const url = tabletUrl(scheibennummer);
+			const url = kind === 'team' ? teamUrl(scheibennummer) : tabletUrl(scheibennummer);
 			qrDataUrl = await QRCode.toDataURL(url, { width: 280, margin: 1 });
 			qrUrl = url;
 		} catch {
@@ -1011,14 +1027,29 @@
 		</h6>
 		<div class="d-flex flex-wrap gap-2">
 			{#each scheiben as nummer (nummer)}
-				<Button color="dark" size="sm" onclick={() => openTabletModal(nummer)}>
+				<Button color="dark" size="sm" onclick={() => openQrModal('tablet', nummer)}>
 					{$_('bildschirme.tablet_scheibe_btn', { values: { n: nummer } })}
 				</Button>
 			{/each}
-			<Button color="primary" size="sm" disabled={pdfLoading} onclick={printQrPdf}>
+			<Button color="primary" size="sm" disabled={pdfLoading} onclick={() => printQrPdf('tablet')}>
 				{#if pdfLoading}<Spinner size="sm" class="me-1" />{:else}<i class="bi bi-printer me-1"
 					></i>{/if}
 				{$_('bildschirme.qr_pdf_btn')}
+			</Button>
+		</div>
+		<h6 class="text-muted text-uppercase small fw-semibold mb-3 mt-4">
+			{$_('bildschirme.team_heading')}
+		</h6>
+		<div class="d-flex flex-wrap gap-2">
+			{#each scheiben as nummer (nummer)}
+				<Button color="secondary" size="sm" onclick={() => openQrModal('team', nummer)}>
+					{$_('bildschirme.team_scheibe_btn', { values: { n: nummer } })}
+				</Button>
+			{/each}
+			<Button color="primary" size="sm" disabled={pdfLoading} onclick={() => printQrPdf('team')}>
+				{#if pdfLoading}<Spinner size="sm" class="me-1" />{:else}<i class="bi bi-printer me-1"
+					></i>{/if}
+				{$_('bildschirme.team_qr_pdf_btn')}
 			</Button>
 		</div>
 		{#if pdfError}
@@ -1029,15 +1060,24 @@
 
 <AppModal isOpen={qrModalOpen} toggle={closeQrModal} bodyClass="text-center">
 	{#snippet header()}
-		{$_('bildschirme.qr_title', { values: { n: qrScheibennummer } })}
+		{$_(qrKind === 'team' ? 'bildschirme.team_qr_title' : 'bildschirme.qr_title', {
+			values: { n: qrScheibennummer }
+		})}
 	{/snippet}
 	{#if qrLoading}
 		<Spinner />
 	{:else if qrError}
 		<Alert color="danger">{qrError}</Alert>
 	{:else if qrDataUrl}
-		<img src={qrDataUrl} alt={$_('bildschirme.qr_title', { values: { n: qrScheibennummer } })} />
-		<p class="text-muted small mt-2 mb-0">{$_('bildschirme.qr_hint')}</p>
+		<img
+			src={qrDataUrl}
+			alt={$_(qrKind === 'team' ? 'bildschirme.team_qr_title' : 'bildschirme.qr_title', {
+				values: { n: qrScheibennummer }
+			})}
+		/>
+		<p class="text-muted small mt-2 mb-0">
+			{$_(qrKind === 'team' ? 'bildschirme.team_qr_hint' : 'bildschirme.qr_hint')}
+		</p>
 		{#if qrUrl}
 			<div class="text-start mt-3">
 				<label class="form-label small mb-1" for="qr-url">

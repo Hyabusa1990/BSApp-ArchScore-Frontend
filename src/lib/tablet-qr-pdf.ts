@@ -43,12 +43,12 @@ export function groupPairs(scheiben: number[]): [number, number | null][] {
 	return pairs;
 }
 
-export function pdfFileName(fixtureName: string): string {
+export function pdfFileName(fixtureName: string, prefix = 'spotter-qr'): string {
 	const safe = fixtureName
 		.normalize('NFKD')
 		.replace(/[^\w-]+/g, '_')
 		.replace(/^_+|_+$/g, '');
-	return `spotter-qr-${safe || 'veranstaltung'}.pdf`;
+	return `${prefix}-${safe || 'veranstaltung'}.pdf`;
 }
 
 export async function buildTabletQrPdf(opts: {
@@ -57,6 +57,8 @@ export async function buildTabletQrPdf(opts: {
 	scheiben: number[];
 	urlFor: (scheibennummer: number) => string;
 	heading: (scheibennummer: number) => string;
+	/** Dateiname-Präfix, Standard `spotter-qr` (Team-QR: `team-qr`). */
+	filePrefix?: string;
 }): Promise<void> {
 	const { jsPDF } = await import('jspdf');
 	const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
@@ -87,5 +89,5 @@ export async function buildTabletQrPdf(opts: {
 		doc.line(HALF_W, 0, HALF_W, PAGE_H);
 		doc.setLineDashPattern([], 0);
 	}
-	doc.save(pdfFileName(opts.fixtureName));
+	doc.save(pdfFileName(opts.fixtureName, opts.filePrefix));
 }

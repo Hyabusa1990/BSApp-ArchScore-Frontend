@@ -43,3 +43,7 @@ test('Dateiname bereinigt', () => {
 	assert.equal(pdfFileName('Spieltag 1/2: Ü'), 'spotter-qr-Spieltag_1_2_U.pdf');
 	assert.equal(pdfFileName('///'), 'spotter-qr-veranstaltung.pdf');
 });
+
+test('Dateiname mit eigenem Präfix', () => {
+	assert.equal(pdfFileName('Spieltag 1', 'team-qr'), 'team-qr-Spieltag_1.pdf');
+});
