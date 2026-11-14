@@ -332,7 +332,7 @@ function seedState(): State {
 				]
 			}
 		],
-		currentRoundNo: { '1001': 1 },
+		currentRoundNo: { '1001': 0 },
 		fixtureUsers: {
 			'1001': [{ userName: users.admin.email, isOwner: true }],
 			'1002': [{ userName: users.member.email, isOwner: true }]
@@ -586,7 +586,7 @@ function ensureDemoMatch(state: State, v: Veranstaltung, teams: MatchPlayChartTe
 			}
 		]
 	});
-	state.currentRoundNo[id] = 1;
+	state.currentRoundNo[id] = 0;
 }
 
 /**

@@ -22,7 +22,11 @@
 		Badge,
 		Alert,
 		Button,
-		Spinner
+		Spinner,
+		Modal,
+		ModalHeader,
+		ModalBody,
+		ModalFooter
 	} from '@sveltestrap/sveltestrap';
 
 	let { data } = $props<{ data: { id: string } }>();
@@ -35,6 +39,8 @@
 	let loadError = $state<string | null>(null);
 	// Match-ID, deren Freigabe-Anfrage gerade läuft — verhindert Doppelklicks/Parallel-Freigaben.
 	let freigebend = $state<string | null>(null);
+	let beendenOffen = $state(false);
+	let beendend = $state(false);
 
 	$effect(() => {
 		if (auth.initialized && !auth.isAuthenticated) goto(resolve('/login'));
@@ -130,6 +136,26 @@
 			freigebend = null;
 		}
 	}
+
+	// Runde 0 = keine Runde freigegeben: Tablets gesperrt, Backend berechnet die Endtabelle.
+	async function beenden() {
+		if (!veranstaltung || beendend || freigebend) return;
+		beendend = true;
+
+		const vorherigeMatches = matches;
+		matches = matches.map((m) => ({ ...m, aktiv: false }));
+
+		try {
+			await matchkontrolleApi.setPhase(auth.accessToken!, veranstaltung.id, 0);
+			await ladeScheibenStatus();
+		} catch {
+			loadError = $_('matchkontrolle.error_beenden');
+			matches = vorherigeMatches;
+		} finally {
+			beendend = false;
+			beendenOffen = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -144,7 +170,19 @@
 		&larr; {$_('matchkontrolle.back_btn')}
 	</a>
 
-	<h4 class="mb-4">{$_('matchkontrolle.title')}</h4>
+	<div class="d-flex justify-content-between align-items-center mb-4">
+		<h4 class="mb-0">{$_('matchkontrolle.title')}</h4>
+		{#if !loading && !loadError && matches.some((m) => m.aktiv)}
+			<Button
+				color="danger"
+				outline
+				disabled={freigebend !== null || beendend}
+				onclick={() => (beendenOffen = true)}
+			>
+				<i class="bi bi-stop-circle-fill me-2"></i>{$_('matchkontrolle.beenden_btn')}
+			</Button>
+		{/if}
+	</div>
 
 	{#if loading}
 		<div class="d-flex justify-content-center py-5"><Spinner /></div>
@@ -216,7 +254,7 @@
 								<Button
 									color="success"
 									class="w-100"
-									disabled={freigebend !== null}
+									disabled={freigebend !== null || beendend}
 									onclick={() => freigeben(match)}
 								>
 									{#if freigebend === match.id}
@@ -234,3 +272,19 @@
 		</Row>
 	{/if}
 </Container>
+
+<Modal isOpen={beendenOffen} toggle={() => !beendend && (beendenOffen = false)}>
+	<ModalHeader toggle={() => !beendend && (beendenOffen = false)}>
+		{$_('matchkontrolle.beenden_title')}
+	</ModalHeader>
+	<ModalBody>{$_('matchkontrolle.beenden_text')}</ModalBody>
+	<ModalFooter>
+		<Button color="secondary" outline disabled={beendend} onclick={() => (beendenOffen = false)}>
+			{$_('matchkontrolle.beenden_cancel')}
+		</Button>
+		<Button color="danger" disabled={beendend} onclick={beenden}>
+			{#if beendend}<Spinner size="sm" class="me-2" />{/if}
+			{$_('matchkontrolle.beenden_confirm')}
+		</Button>
+	</ModalFooter>
+</Modal>

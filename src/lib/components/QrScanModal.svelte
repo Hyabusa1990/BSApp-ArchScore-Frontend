@@ -16,8 +16,10 @@
 	interface Props {
 		isOpen: boolean;
 		onClose: () => void;
+		/** Welche Art Link erwartet wird: Spotter-Tablet (`/tablet/…`) oder Mannschaft (`/team/…`). */
+		kind?: 'tablet' | 'team';
 	}
-	let { isOpen, onClose }: Props = $props();
+	let { isOpen, onClose, kind = 'tablet' }: Props = $props();
 
 	type ScanState = 'scanning' | 'confirm';
 	let scanState = $state<ScanState>('scanning');
@@ -30,7 +32,10 @@
 	// UUID4), kein eigenes Pairing-Token mehr — Regex bleibt bewusst locker (kein strenges
 	// UUID4-Pattern) statt das Format hier zu duplizieren, das ist weiterhin Sache des Backends
 	// (401 beim Laden bei unbekannter `fixtureUniqueId`).
-	const TABLET_PATH_RE = /^\/tablet\/([^/]+)\/(\d+)$/;
+	const PATH_RE = {
+		tablet: /^\/tablet\/([^/]+)\/(\d+)$/,
+		team: /^\/team\/([^/]+)\/(\d+)$/
+	} as const;
 
 	function handleDecoded(text: string) {
 		if (scanState !== 'scanning') return;
@@ -41,7 +46,7 @@
 			errorMsg = $_('qr_scan.invalid_code');
 			return;
 		}
-		const match = url.origin === window.location.origin && TABLET_PATH_RE.exec(url.pathname);
+		const match = url.origin === window.location.origin && PATH_RE[kind].exec(url.pathname);
 		if (!match) {
 			errorMsg = $_('qr_scan.invalid_code');
 			return;
@@ -84,10 +89,16 @@
 
 	function confirmSwitch() {
 		if (!pendingToken || !pendingScheibennummer) return;
-		const path = resolve('/tablet/[fixtureUniqueId]/[scheibennummer]', {
-			fixtureUniqueId: pendingToken,
-			scheibennummer: pendingScheibennummer
-		});
+		const path =
+			kind === 'team'
+				? resolve('/team/[fixtureUniqueId]/[targetNo]', {
+						fixtureUniqueId: pendingToken,
+						targetNo: pendingScheibennummer
+					})
+				: resolve('/tablet/[fixtureUniqueId]/[scheibennummer]', {
+						fixtureUniqueId: pendingToken,
+						scheibennummer: pendingScheibennummer
+					});
 		onClose();
 		goto(path);
 	}

@@ -9,6 +9,7 @@
 		rechtsOrientiert = false,
 		satzpunkteFuehrt = false,
 		satzpunkteZurueck = false,
+		satzpunkteUnentschieden = false,
 		gegnerSetScores = null,
 		verbleibendeSaetze = 0
 	} = $props<{
@@ -16,6 +17,7 @@
 		rechtsOrientiert?: boolean;
 		satzpunkteFuehrt?: boolean;
 		satzpunkteZurueck?: boolean;
+		satzpunkteUnentschieden?: boolean;
 		/** setScores der gegnerischen Seite, für den Positionsvergleich in ZWISCHEN_SAETZEN
 		 * (siehe Issue #16) — von +page.svelte durchgereicht. */
 		gegnerSetScores?: number[] | null;
@@ -94,7 +96,13 @@
 	);
 
 	const satzpunkteBoxClass = $derived(
-		satzpunkteFuehrt ? 'punkte-fuehrend' : satzpunkteZurueck ? 'punkte-rueckstand' : ''
+		satzpunkteFuehrt
+			? 'punkte-fuehrend'
+			: satzpunkteZurueck
+				? 'punkte-rueckstand'
+				: satzpunkteUnentschieden
+					? 'punkte-gleich'
+					: ''
 	);
 
 	// Pfeilgröße wird in JS aus der tatsächlich gemessenen Breite/Höhe des Containers
@@ -185,18 +193,18 @@
 	</div>
 
 	{#if status === 'VOR_DEM_MATCH'}
-		{#if seite.shooters && seite.shooters.length > 0}
-			<div class="monitor-schuetzen-grid">
-				{#each seite.shooters as name (name)}
+		<!-- Immer 3 Plätze (ein Platz je Schütze): fehlende Namen als graue Platzhalter-Kachel,
+		     gleiche Geometrie wie der Namens-Chip, damit nichts springt, wenn Namen eintreffen. -->
+		<div class="monitor-schuetzen-grid">
+			{#each [0, 1, 2] as i (i)}
+				{@const name = seite.shooters?.[i]}
+				{#if name}
 					<div class="monitor-schuetze-chip">{name}</div>
-				{/each}
-			</div>
-		{:else}
-			<div class="monitor-center-content">
-				<div class="monitor-placeholder">⏳</div>
-				<div class="monitor-status-label">{$_('display.status_wartet')}</div>
-			</div>
-		{/if}
+				{:else}
+					<div class="monitor-schuetze-chip monitor-schuetze-platzhalter"></div>
+				{/if}
+			{/each}
+		</div>
 	{:else}
 		<div class="monitor-satz-row">
 			<div class="monitor-arrows" bind:clientWidth={arrowsWidth} bind:clientHeight={arrowsHeight}>
@@ -296,27 +304,6 @@
 		min-width: 0;
 	}
 
-	.monitor-center-content {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		justify-content: center;
-		gap: 1rem;
-	}
-
-	.monitor-placeholder {
-		font-size: clamp(3rem, 12vh, 8rem);
-		opacity: 0.5;
-	}
-
-	.monitor-status-label {
-		font-size: clamp(1.2rem, 3.5vh, 2.5rem);
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--monitor-muted);
-	}
-
 	.monitor-schuetzen-grid {
 		flex: 1;
 		display: grid;
@@ -338,6 +325,10 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	.monitor-schuetze-platzhalter {
+		background: var(--monitor-slot-bg);
 	}
 
 	.monitor-satz-row {

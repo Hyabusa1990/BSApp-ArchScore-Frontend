@@ -13,6 +13,7 @@
 	import DisplayLeagueTable from '$lib/components/DisplayLeagueTable.svelte';
 	import ConnectivityBanner from '$lib/components/ConnectivityBanner.svelte';
 	import { connectivity } from '$lib/stores/connectivity.svelte';
+	import { isMatchBeendet, SIEG_SATZPUNKTE } from '$lib/matchResult';
 	import type { ThemeHint } from './+page';
 
 	let { data } = $props<{ data: { theme: ThemeHint } }>();
@@ -39,16 +40,14 @@
 	let activeTheme = $state<DisplayTheme>(data.theme === 'light' ? 'Light' : 'Dark');
 	const isLight = $derived(activeTheme === 'Light');
 
-	// Satzpunkte kommen unverändert aus der aufbereiteten Backend-Antwort — Vergleich nur zur
-	// Einfärbung (grün/rot), keine eigene Ergebnisberechnung (siehe FACHLICHKEIT.md).
-	const satzpunkteVergleichbar = $derived(
-		scheibeA?.setPoints != null && scheibeB?.setPoints != null
-	);
-	const aSatzpunkteFuehrt = $derived(
-		satzpunkteVergleichbar && scheibeA!.setPoints! > scheibeB!.setPoints!
-	);
-	const bSatzpunkteFuehrt = $derived(
-		satzpunkteVergleichbar && scheibeB!.setPoints! > scheibeA!.setPoints!
+	// Satzpunkte kommen unverändert aus der aufbereiteten Backend-Antwort. Grün/Rot (und das
+	// graue Unentschieden bei 5:5) gibt es erst nach Matchende, vorher bleibt der Kasten neutral
+	// (siehe FACHLICHKEIT.md) — sonst suggeriert die Farbe ein Ergebnis mitten im Match.
+	const matchBeendet = $derived(isMatchBeendet(scheibeA?.setPoints, scheibeB?.setPoints));
+	const aSatzpunkteFuehrt = $derived(matchBeendet && scheibeA!.setPoints! > scheibeB!.setPoints!);
+	const bSatzpunkteFuehrt = $derived(matchBeendet && scheibeB!.setPoints! > scheibeA!.setPoints!);
+	const satzpunkteUnentschieden = $derived(
+		matchBeendet && scheibeA!.setPoints! === scheibeB!.setPoints!
 	);
 
 	// Platzhalter für die noch zu schießenden Sätze (keine eigene Ergebnisberechnung): ein Match
@@ -58,7 +57,6 @@
 	// verbleibend: 0:0 -> 3, 2:0 -> 3, 2:2 -> 4, 4:2 -> 4, 4:4 -> 5, 5:3 -> 5, 6:0 -> 3. Gespielt =
 	// der weitere der beiden Spotter-Stände, Obergrenze 5 Sätze insgesamt.
 	const MAX_SAETZE = 5;
-	const SIEG_SATZPUNKTE = 6;
 	const SATZPUNKTE_PRO_SATZ = 2;
 	const verbleibendeSaetze = $derived.by(() => {
 		const gespielt = Math.max(scheibeA?.setScores?.length ?? 0, scheibeB?.setScores?.length ?? 0);
@@ -231,6 +229,7 @@
 				seite={scheibeA}
 				satzpunkteFuehrt={aSatzpunkteFuehrt}
 				satzpunkteZurueck={bSatzpunkteFuehrt}
+				{satzpunkteUnentschieden}
 				gegnerSetScores={scheibeB.setScores ?? null}
 				{verbleibendeSaetze}
 			/>
@@ -240,6 +239,7 @@
 				rechtsOrientiert
 				satzpunkteFuehrt={bSatzpunkteFuehrt}
 				satzpunkteZurueck={aSatzpunkteFuehrt}
+				{satzpunkteUnentschieden}
 				gegnerSetScores={scheibeA.setScores ?? null}
 				{verbleibendeSaetze}
 			/>

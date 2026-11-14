@@ -12,6 +12,8 @@
 	import { veranstaltungApi, type Veranstaltung } from '$lib/api/veranstaltung';
 	import { APIError } from '$lib/api/client';
 	import QRCode from 'qrcode';
+	import { buildTabletQrPdf } from '$lib/tablet-qr-pdf';
+	import { applyCustomOrder, moveDevice, sortDevicesByField } from '$lib/bildschirme-order';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import AppModal from '$lib/components/AppModal.svelte';
 	import {
@@ -35,6 +37,77 @@
 	const fixtureId = $derived(Number(veranstaltungId));
 
 	let devices = $state<Device[]>([]);
+	let customOrder = $state<number[] | null>(null);
+	// Anzeige in Feldreihenfolge bzw. eigener Reihenfolge, nach gespeichertem Zustand (nicht nach
+	// drafts), damit Karten beim Bearbeiten nicht springen.
+	const sortedDevices = $derived(applyCustomOrder(devices, customOrder));
+
+	// Eigene Kartenreihenfolge (Issue #43): bewusst rein clientseitig und nur in diesem Browser —
+	// Fawkes hat kein Feld dafür. `null` = automatische Feldreihenfolge.
+	let dragId = $state<number | null>(null);
+	let dragOverId = $state<number | null>(null);
+
+	function orderKey(): string {
+		return `bildschirme:${fixtureId}:order`;
+	}
+
+	function recallOrder(): number[] | null {
+		try {
+			const raw = localStorage.getItem(orderKey());
+			if (!raw) return null;
+			const parsed: unknown = JSON.parse(raw);
+			return Array.isArray(parsed) && parsed.every((x) => typeof x === 'number') ? parsed : null;
+		} catch {
+			return null;
+		}
+	}
+
+	function persistOrder(order: number[] | null) {
+		customOrder = order;
+		try {
+			if (order) localStorage.setItem(orderKey(), JSON.stringify(order));
+			else localStorage.removeItem(orderKey());
+		} catch {
+			// kein Storage-Zugriff — Reihenfolge gilt dann nur für diese Session.
+		}
+	}
+
+	function reorder(fromId: number, toId: number) {
+		const current = sortedDevices.map((d) => d.id);
+		const next = moveDevice(current, fromId, toId);
+		if (next.some((id, i) => id !== current[i])) persistOrder(next);
+	}
+
+	function moveBy(deviceId: number, delta: -1 | 1) {
+		const current = sortedDevices.map((d) => d.id);
+		const target = current[current.indexOf(deviceId) + delta];
+		if (target !== undefined) reorder(deviceId, target);
+	}
+
+	function onDragStart(e: DragEvent, deviceId: number) {
+		dragId = deviceId;
+		if (e.dataTransfer) {
+			e.dataTransfer.effectAllowed = 'move';
+			e.dataTransfer.setData('text/plain', String(deviceId));
+		}
+	}
+
+	function onDragOver(e: DragEvent, deviceId: number) {
+		if (dragId === null) return;
+		e.preventDefault();
+		dragOverId = deviceId;
+	}
+
+	function onDrop(e: DragEvent, deviceId: number) {
+		e.preventDefault();
+		if (dragId !== null) reorder(dragId, deviceId);
+		onDragEnd();
+	}
+
+	function onDragEnd() {
+		dragId = null;
+		dragOverId = null;
+	}
 	// Nur für `veranstaltung.uniqueId` gebraucht — das Tablet-QR kodiert sie direkt (Issue #22),
 	// kein eigener Token-Endpunkt mehr nötig, siehe openTabletModal.
 	let veranstaltung = $state<Veranstaltung | null>(null);
@@ -61,6 +134,7 @@
 	let otherVeranstaltungenLoading = $state(true);
 	let transferSourceId = $state<number | null>(null);
 	let transferDevices = $state<Device[]>([]);
+	const sortedTransferDevices = $derived(sortDevicesByField(transferDevices));
 	let transferDevicesLoading = $state(false);
 	let transferDevicesError = $state<string | null>(null);
 	let transferSelected = $state<Record<number, boolean>>({});
@@ -205,6 +279,9 @@
 	let qrError = $state<string | null>(null);
 	let qrDataUrl = $state<string | null>(null);
 	let qrScheibennummer = $state<number | null>(null);
+	// Welche QR-Art das Modal zeigt: Spotter-Tablet oder Mannschaft (Schützen-Ansicht).
+	type QrKind = 'tablet' | 'team';
+	let qrKind = $state<QrKind>('tablet');
 	// Issue #26: Link im Klartext zum Kopieren, z. B. für ein Smartphone, das den QR-Code nicht
 	// scannen kann.
 	let qrUrl = $state<string | null>(null);
@@ -236,6 +313,7 @@
 				if (d.matchNo !== null) rememberMatchNo(d.id, d.matchNo);
 			}
 			customNames = Object.fromEntries(devices.map((d) => [d.id, recallCustomName(d.id)]));
+			customOrder = recallOrder();
 		} catch {
 			loadError = $_('bildschirme.error_load');
 		} finally {
@@ -434,7 +512,52 @@
 	// Kein Token-Request mehr nötig (Issue #22) — das QR kodiert direkt die `fixtureUniqueId` der
 	// Veranstaltung + Scheibennummer, genau das, was der Bearer-freie Spotter-Endpunkt laut
 	// Fawkes-Spec ohnehin schon erwartet (siehe binocular.ts).
-	async function openTabletModal(scheibennummer: number) {
+	// Gemeinsame URL für Modal und PDF, damit beide nie auseinanderlaufen.
+	function tabletUrl(scheibennummer: number): string {
+		if (!veranstaltung) throw new Error('Veranstaltung noch nicht geladen');
+		return `${window.location.origin}${resolve('/tablet/[fixtureUniqueId]/[scheibennummer]', {
+			fixtureUniqueId: veranstaltung.uniqueId,
+			scheibennummer: String(scheibennummer)
+		})}`;
+	}
+
+	function teamUrl(scheibennummer: number): string {
+		if (!veranstaltung) throw new Error('Veranstaltung noch nicht geladen');
+		return `${window.location.origin}${resolve('/team/[fixtureUniqueId]/[targetNo]', {
+			fixtureUniqueId: veranstaltung.uniqueId,
+			targetNo: String(scheibennummer)
+		})}`;
+	}
+
+	let pdfLoading = $state(false);
+	let pdfError = $state<string | null>(null);
+
+	async function printQrPdf(kind: QrKind) {
+		pdfLoading = true;
+		pdfError = null;
+		try {
+			if (!veranstaltung) throw new Error('Veranstaltung noch nicht geladen');
+			await buildTabletQrPdf({
+				eventLabel: `${veranstaltung.leagueName} – ${veranstaltung.fixtureName}`,
+				fixtureName: veranstaltung.fixtureName,
+				scheiben,
+				urlFor: kind === 'team' ? teamUrl : tabletUrl,
+				heading: (n) =>
+					$_(kind === 'team' ? 'bildschirme.team_qr_pdf_heading' : 'bildschirme.qr_pdf_heading', {
+						values: { n }
+					}),
+				format: kind === 'team' ? 'a6' : 'a5',
+				filePrefix: kind === 'team' ? 'team-qr' : undefined
+			});
+		} catch {
+			pdfError = $_('bildschirme.qr_pdf_error');
+		} finally {
+			pdfLoading = false;
+		}
+	}
+
+	async function openQrModal(kind: QrKind, scheibennummer: number) {
+		qrKind = kind;
 		qrScheibennummer = scheibennummer;
 		qrModalOpen = true;
 		qrLoading = true;
@@ -443,14 +566,7 @@
 		qrUrl = null;
 		resetQrCopyState();
 		try {
-			if (!veranstaltung) throw new Error('Veranstaltung noch nicht geladen');
-			const url = `${window.location.origin}${resolve(
-				'/tablet/[fixtureUniqueId]/[scheibennummer]',
-				{
-					fixtureUniqueId: veranstaltung.uniqueId,
-					scheibennummer: String(scheibennummer)
-				}
-			)}`;
+			const url = kind === 'team' ? teamUrl(scheibennummer) : tabletUrl(scheibennummer);
 			qrDataUrl = await QRCode.toDataURL(url, { width: 280, margin: 1 });
 			qrUrl = url;
 		} catch {
@@ -519,6 +635,8 @@
 
 	<h4 class="mb-4">{$_('bildschirme.title')}</h4>
 
+	<Alert color="warning">{$_('bildschirme.standby_hint')}</Alert>
+
 	{#if loading}
 		<div class="d-flex justify-content-center py-5"><Spinner /></div>
 	{:else if loadError}
@@ -528,15 +646,60 @@
 			<Alert color="danger">{saveError}</Alert>
 		{/if}
 
-		<h6 class="text-muted text-uppercase small fw-semibold mb-3">
-			{$_('bildschirme.screens_heading')}
-		</h6>
+		<div class="d-flex justify-content-between align-items-center mb-3">
+			<h6 class="text-muted text-uppercase small fw-semibold mb-0">
+				{$_('bildschirme.screens_heading')}
+			</h6>
+			{#if customOrder}
+				<Button size="sm" color="outline-secondary" onclick={() => persistOrder(null)}>
+					<i class="bi bi-arrow-counterclockwise me-1"></i>
+					{$_('bildschirme.reset_order_btn')}
+				</Button>
+			{/if}
+		</div>
 		<Row>
-			{#each devices as d (d.id)}
+			{#each sortedDevices as d (d.id)}
 				{@const draft = drafts[d.id]}
 				<Col md={4} sm={6} class="mb-3">
-					<Card class="shadow-sm h-100">
+					<Card
+						class="shadow-sm h-100 {dragId === d.id ? 'opacity-50' : ''} {dragOverId === d.id &&
+						dragId !== d.id
+							? 'drop-target'
+							: ''}"
+						ondragover={(e: DragEvent) => onDragOver(e, d.id)}
+						ondrop={(e: DragEvent) => onDrop(e, d.id)}
+					>
 						<CardHeader class="d-flex justify-content-between align-items-center">
+							<span class="d-inline-flex align-items-center flex-shrink-0 me-2">
+								<span
+									class="drag-handle text-muted"
+									role="presentation"
+									draggable="true"
+									title={$_('bildschirme.drag_handle')}
+									ondragstart={(e) => onDragStart(e, d.id)}
+									ondragend={onDragEnd}
+								>
+									<i class="bi bi-grip-vertical"></i>
+								</span>
+								<button
+									type="button"
+									class="btn btn-sm btn-link p-0 text-muted"
+									aria-label={$_('bildschirme.move_left_btn')}
+									disabled={sortedDevices[0]?.id === d.id}
+									onclick={() => moveBy(d.id, -1)}
+								>
+									<i class="bi bi-chevron-left"></i>
+								</button>
+								<button
+									type="button"
+									class="btn btn-sm btn-link p-0 text-muted"
+									aria-label={$_('bildschirme.move_right_btn')}
+									disabled={sortedDevices[sortedDevices.length - 1]?.id === d.id}
+									onclick={() => moveBy(d.id, 1)}
+								>
+									<i class="bi bi-chevron-right"></i>
+								</button>
+							</span>
 							<div class="fw-bold flex-grow-1 me-2" style="min-width: 0;">
 								{#if editingNameId === d.id}
 									<input
@@ -830,7 +993,7 @@
 							<p class="text-muted small mb-0">{$_('bildschirme.transfer_no_devices')}</p>
 						{:else}
 							<div class="mb-3">
-								{#each transferDevices as d (d.id)}
+								{#each sortedTransferDevices as d (d.id)}
 									<div class="form-check">
 										<input
 											type="checkbox"
@@ -865,25 +1028,57 @@
 		</h6>
 		<div class="d-flex flex-wrap gap-2">
 			{#each scheiben as nummer (nummer)}
-				<Button color="dark" size="sm" onclick={() => openTabletModal(nummer)}>
+				<Button color="dark" size="sm" onclick={() => openQrModal('tablet', nummer)}>
 					{$_('bildschirme.tablet_scheibe_btn', { values: { n: nummer } })}
 				</Button>
 			{/each}
+			<Button color="primary" size="sm" disabled={pdfLoading} onclick={() => printQrPdf('tablet')}>
+				{#if pdfLoading}<Spinner size="sm" class="me-1" />{:else}<i class="bi bi-printer me-1"
+					></i>{/if}
+				{$_('bildschirme.qr_pdf_btn')}
+			</Button>
 		</div>
+		<h6 class="text-muted text-uppercase small fw-semibold mb-3 mt-4">
+			{$_('bildschirme.team_heading')}
+		</h6>
+		<div class="d-flex flex-wrap gap-2">
+			{#each scheiben as nummer (nummer)}
+				<Button color="secondary" size="sm" onclick={() => openQrModal('team', nummer)}>
+					{$_('bildschirme.team_scheibe_btn', { values: { n: nummer } })}
+				</Button>
+			{/each}
+			<Button color="primary" size="sm" disabled={pdfLoading} onclick={() => printQrPdf('team')}>
+				{#if pdfLoading}<Spinner size="sm" class="me-1" />{:else}<i class="bi bi-printer me-1"
+					></i>{/if}
+				{$_('bildschirme.team_qr_pdf_btn')}
+			</Button>
+		</div>
+		{#if pdfError}
+			<Alert color="danger" class="mt-2">{pdfError}</Alert>
+		{/if}
 	{/if}
 </Container>
 
 <AppModal isOpen={qrModalOpen} toggle={closeQrModal} bodyClass="text-center">
 	{#snippet header()}
-		{$_('bildschirme.qr_title', { values: { n: qrScheibennummer } })}
+		{$_(qrKind === 'team' ? 'bildschirme.team_qr_title' : 'bildschirme.qr_title', {
+			values: { n: qrScheibennummer }
+		})}
 	{/snippet}
 	{#if qrLoading}
 		<Spinner />
 	{:else if qrError}
 		<Alert color="danger">{qrError}</Alert>
 	{:else if qrDataUrl}
-		<img src={qrDataUrl} alt={$_('bildschirme.qr_title', { values: { n: qrScheibennummer } })} />
-		<p class="text-muted small mt-2 mb-0">{$_('bildschirme.qr_hint')}</p>
+		<img
+			src={qrDataUrl}
+			alt={$_(qrKind === 'team' ? 'bildschirme.team_qr_title' : 'bildschirme.qr_title', {
+				values: { n: qrScheibennummer }
+			})}
+		/>
+		<p class="text-muted small mt-2 mb-0">
+			{$_(qrKind === 'team' ? 'bildschirme.team_qr_hint' : 'bildschirme.qr_hint')}
+		</p>
 		{#if qrUrl}
 			<div class="text-start mt-3">
 				<label class="form-label small mb-1" for="qr-url">
@@ -951,6 +1146,12 @@
 />
 
 <style>
+	:global(.drop-target) {
+		outline: 2px dashed var(--bs-primary);
+	}
+	.drag-handle {
+		cursor: grab;
+	}
 	:global(.border-dashed) {
 		border-style: dashed !important;
 	}

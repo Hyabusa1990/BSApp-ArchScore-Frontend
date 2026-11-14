@@ -7,7 +7,7 @@
 		"veranstaltungen": "Events"
 	},
 	"home": {
-		"welcome": "Welcome to ArchScore",
+		"welcome": "Welcome to Fawkes",
 		"tagline": "Live scoring for archery league matches — spotted arrow values, visible to spectators before they're official."
 	},
 	"login": {
@@ -104,7 +104,6 @@
 		"pairing_waiting": "Waiting for assignment…",
 		"idle_hint": "No match assigned",
 		"no_team": "–",
-		"status_wartet": "Waiting for release",
 		"tabelle_pos": "Rank",
 		"tabelle_mannschaft": "Team",
 		"tabelle_mp": "Match Pts.",
@@ -135,6 +134,25 @@
 		"expired_title": "Event expired",
 		"expired_hint": "This pairing link is no longer valid. Scan the current QR code to continue.",
 		"expired_rescan_btn": "Scan QR code"
+	},
+	"team": {
+		"page_title": "Team – set total",
+		"lane_label": "Target {lane}",
+		"set_label": "Set {n}",
+		"sum_label": "Set total",
+		"scan_next_btn": "Scan next lane",
+		"sum_decrease": "Decrease total",
+		"sum_increase": "Increase total",
+		"confirm_btn": "Confirm",
+		"waiting_title": "Waiting for release",
+		"waiting_release_hint": "This target has no released match right now. Once the round is released, this continues automatically.",
+		"waiting_spotter": "Waiting for the spotter — {count} of 6 arrows recorded",
+		"confirmed_waiting": "Confirmed — waiting for the tournament director",
+		"match_complete": "Match complete",
+		"load_error": "Target not found or server error.",
+		"confirm_error": "Saving failed. Please try again.",
+		"expired_title": "Event expired",
+		"expired_hint": "This link is no longer valid. Please scan the current QR code at the target."
 	},
 	"qr_scan": {
 		"title": "Scan QR code",
@@ -245,6 +263,12 @@
 		"aktiv": "ACTIVE",
 		"inaktiv": "INACTIVE",
 		"freigeben_btn": "Release",
+		"beenden_btn": "End competition",
+		"beenden_title": "End competition?",
+		"beenden_text": "No match will be active afterwards and the tablets will be locked. The final league table is calculated.",
+		"beenden_confirm": "End competition",
+		"beenden_cancel": "Cancel",
+		"error_beenden": "Ending failed. State reloaded.",
 		"scheiben_label": "Target {a} & {b}",
 		"satz_abweichung": "Error: set {a} / {b}",
 		"abgeschlossen": "Completed",
@@ -252,6 +276,7 @@
 	},
 	"bildschirme": {
 		"title": "Screen and Tablet Management",
+		"standby_hint": "Note: Turn off automatic standby/sleep mode on the screens/TVs before the competition, otherwise they will switch off during the event.",
 		"back_btn": "Back to event",
 		"error_load": "Could not load devices.",
 		"error_save": "Saving failed.",
@@ -265,6 +290,10 @@
 		"mode_none": "Off",
 		"mode_match": "Match",
 		"mode_league_table": "League table",
+		"drag_handle": "Drag to reorder",
+		"move_left_btn": "Move left",
+		"move_right_btn": "Move right",
+		"reset_order_btn": "Restore field order",
 		"rename_btn": "Edit name",
 		"name_match": "Match - {scheiben}",
 		"name_league_table": "Table",
@@ -295,12 +324,21 @@
 		"transfer_result_close_btn": "Close result",
 		"tablets_heading": "Tablet pairing",
 		"tablet_scheibe_btn": "Tablet lane {n}",
+		"qr_pdf_btn": "Print QR codes as PDF",
+		"qr_pdf_heading": "Lane {n}",
+		"qr_pdf_error": "PDF could not be generated.",
 		"qr_title": "Lane {n} — QR code",
 		"qr_hint": "Scan with the tablet to pair it to this lane.",
 		"qr_error": "Could not generate QR code.",
 		"qr_link_label": "Link to copy",
 		"qr_copy_btn": "Copy",
 		"qr_copied": "Link copied.",
-		"qr_copy_manual": "Automatic copy not available — the link is selected, please copy it manually."
+		"qr_copy_manual": "Automatic copy not available — the link is selected, please copy it manually.",
+		"team_heading": "Team (archers)",
+		"team_scheibe_btn": "Team lane {n}",
+		"team_qr_pdf_btn": "Print team QR codes as PDF",
+		"team_qr_pdf_heading": "Team lane {n}",
+		"team_qr_title": "Team lane {n} — QR code",
+		"team_qr_hint": "Hang it at the lane: the archers scan it to correct and confirm the set total."
 	}
 }

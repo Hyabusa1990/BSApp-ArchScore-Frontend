@@ -7,7 +7,7 @@
 		"veranstaltungen": "Veranstaltungen"
 	},
 	"home": {
-		"welcome": "Willkommen bei ArchScore",
+		"welcome": "Willkommen bei Fawkes",
 		"tagline": "Live-Ergebnisanzeige für Bogensport-Liga-Wettkämpfe — gespottete Pfeilwerte, sichtbar für Zuschauer, bevor sie offiziell sind."
 	},
 	"login": {
@@ -105,7 +105,6 @@
 		"pairing_waiting": "Warte auf Zuordnung…",
 		"idle_hint": "Kein Match zugewiesen",
 		"no_team": "–",
-		"status_wartet": "Wartet auf Freigabe",
 		"tabelle_pos": "Platz",
 		"tabelle_mannschaft": "Mannschaft",
 		"tabelle_mp": "Match-Pkt.",
@@ -136,6 +135,25 @@
 		"expired_title": "Veranstaltung abgelaufen",
 		"expired_hint": "Dieser Pairing-Link ist nicht mehr gültig. Scanne den aktuellen QR-Code, um fortzufahren.",
 		"expired_rescan_btn": "QR-Code scannen"
+	},
+	"team": {
+		"page_title": "Mannschaft – Satzsumme",
+		"lane_label": "Scheibe {lane}",
+		"set_label": "Satz {n}",
+		"sum_label": "Satzsumme",
+		"scan_next_btn": "Nächste Scheibe scannen",
+		"sum_decrease": "Summe verringern",
+		"sum_increase": "Summe erhöhen",
+		"confirm_btn": "Bestätigen",
+		"waiting_title": "Warte auf Freigabe",
+		"waiting_release_hint": "Diese Scheibe hat aktuell keine freigegebene Begegnung. Sobald die Runde freigegeben wird, geht es automatisch weiter.",
+		"waiting_spotter": "Warte auf den Spotter — {count} von 6 Pfeilen erfasst",
+		"confirmed_waiting": "Bestätigt — warte auf die Turnierleitung",
+		"match_complete": "Match beendet",
+		"load_error": "Scheibe nicht gefunden oder Serverfehler.",
+		"confirm_error": "Speichern fehlgeschlagen. Bitte erneut versuchen.",
+		"expired_title": "Veranstaltung abgelaufen",
+		"expired_hint": "Dieser Link ist nicht mehr gültig. Bitte den aktuellen QR-Code an der Scheibe scannen."
 	},
 	"qr_scan": {
 		"title": "QR-Code scannen",
@@ -246,6 +264,12 @@
 		"aktiv": "AKTIV",
 		"inaktiv": "INAKTIV",
 		"freigeben_btn": "Freigeben",
+		"beenden_btn": "Wettkampf beenden",
+		"beenden_title": "Wettkampf beenden?",
+		"beenden_text": "Kein Match ist danach mehr aktiv und die Tablets werden gesperrt. Die endgültige Tabelle wird berechnet.",
+		"beenden_confirm": "Wettkampf beenden",
+		"beenden_cancel": "Abbrechen",
+		"error_beenden": "Beenden fehlgeschlagen. Stand wurde neu geladen.",
 		"scheiben_label": "Scheibe {a} & {b}",
 		"satz_abweichung": "Fehler: Satz {a} / {b}",
 		"abgeschlossen": "Abgeschlossen",
@@ -253,6 +277,7 @@
 	},
 	"bildschirme": {
 		"title": "Bildschirm- und Tablet-Verwaltung",
+		"standby_hint": "Hinweis: Den automatischen Standby bzw. Ruhezustand der Bildschirme/TVs vor dem Wettkampf abschalten, sonst schalten sie sich während der Veranstaltung aus.",
 		"back_btn": "Zurück zur Veranstaltung",
 		"error_load": "Geräte konnten nicht geladen werden.",
 		"error_save": "Speichern fehlgeschlagen.",
@@ -266,6 +291,10 @@
 		"mode_none": "Aus",
 		"mode_match": "Match",
 		"mode_league_table": "Ligatabelle",
+		"drag_handle": "Karte verschieben",
+		"move_left_btn": "Nach links verschieben",
+		"move_right_btn": "Nach rechts verschieben",
+		"reset_order_btn": "Feldreihenfolge wiederherstellen",
 		"rename_btn": "Namen bearbeiten",
 		"name_match": "Match - {scheiben}",
 		"name_league_table": "Tabelle",
@@ -296,12 +325,21 @@
 		"transfer_result_close_btn": "Ergebnis schließen",
 		"tablets_heading": "Tablet-Pairing",
 		"tablet_scheibe_btn": "Tablet Scheibe {n}",
+		"qr_pdf_btn": "QR-Codes als PDF drucken",
+		"qr_pdf_heading": "Scheibe {n}",
+		"qr_pdf_error": "PDF konnte nicht erzeugt werden.",
 		"qr_title": "Scheibe {n} — QR-Code",
 		"qr_hint": "Mit dem Tablet scannen, um es dieser Scheibe zuzuordnen.",
 		"qr_error": "QR-Code konnte nicht erzeugt werden.",
 		"qr_link_label": "Link zum Kopieren",
 		"qr_copy_btn": "Kopieren",
 		"qr_copied": "Link kopiert.",
-		"qr_copy_manual": "Automatisches Kopieren nicht möglich — Link ist markiert, bitte manuell kopieren."
+		"qr_copy_manual": "Automatisches Kopieren nicht möglich — Link ist markiert, bitte manuell kopieren.",
+		"team_heading": "Mannschaft (Schützen)",
+		"team_scheibe_btn": "Mannschaft Scheibe {n}",
+		"team_qr_pdf_btn": "Mannschafts-QR-Codes als PDF drucken",
+		"team_qr_pdf_heading": "Mannschaft Scheibe {n}",
+		"team_qr_title": "Mannschaft Scheibe {n} — QR-Code",
+		"team_qr_hint": "An der Scheibe aufhängen: Die Schützen scannen ihn, um die Satzsumme zu korrigieren und zu bestätigen."
 	}
 }

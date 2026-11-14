@@ -16,7 +16,7 @@
 </script>
 
 <svelte:head>
-	<title>ArchScore</title>
+	<title>Fawkes</title>
 </svelte:head>
 
 {#if !auth.isAuthenticated}
@@ -42,6 +42,5 @@
 		display: flex;
 		align-items: center;
 		min-height: calc(100vh - 56px);
-		background: #f8fafc;
 	}
 </style>

@@ -103,8 +103,15 @@ function buildSeiteForScheibe(scheibennummer: number | null): DisplaySeite {
 	// existiert dann noch gar nicht (peekScoringState legt ihn bewusst nicht an, siehe
 	// shared-state.ts). shots/setScores bleiben leer -> deriveMonitorStatus liefert
 	// VOR_DEM_MATCH. shooters ist reiner Mock-Platzhalter (das Admin-Modell kennt keine echte
-	// Schützen-Aufstellung, siehe binoculars.ts) — nur damit der Chip-Zweig testbar ist.
+	// Schützen-Aufstellung, siehe binoculars.ts) — nur damit alle Zustände testbar sind: je nach
+	// Scheibe volle, partielle (2 Namen) oder keine Liste (nur Platzhalter-Kacheln).
 	if (!scoringOwn) {
+		const shooters =
+			scheibennummer % 3 === 1
+				? ['Schütze 1', 'Schütze 2', 'Schütze 3']
+				: scheibennummer % 3 === 2
+					? ['Schütze 1', 'Schütze 2']
+					: undefined;
 		return {
 			targetNo: scheibennummer,
 			teamName: mannschaft,
@@ -113,7 +120,7 @@ function buildSeiteForScheibe(scheibennummer: number | null): DisplaySeite {
 			currentSetScore: null,
 			currentSetConfirmed: false,
 			setPoints: null,
-			shooters: ['Schütze 1', 'Schütze 2', 'Schütze 3']
+			shooters
 		};
 	}
 
